@@ -61,8 +61,7 @@ def fixture(test, store='apple'):
               'provider': {'kind': 'command', 'argv': [sys.executable, '{root}/helpers/provider.py']}}
     if store == 'google':
         target.update(track='alpha', release_status='completed')
-    listing = {'schema_version': 1, 'type': 'metadata', 'target': {
-        k: target[k] for k in ('store', 'platform', 'account', 'app_id', 'flavor', 'stage', 'version')},
+    listing = {'schema_version': 1, 'type': 'metadata', 'target': module(test, 'profiles').target_identity(target),
         'fields': {'en-US': {'description': 'Approved description'}}, 'images': {}}
     write_json(root / 'metadata/listing.json', listing)
     remote = {'schema_version': 1, 'target': listing['target'], 'revision': 'remote-1',

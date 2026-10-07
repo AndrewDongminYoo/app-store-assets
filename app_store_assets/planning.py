@@ -5,8 +5,8 @@ from .identity import git, python_identity, runtime_identity
 from .commands import executable_identity
 from .catalog import CATALOG_FILE, validate_fields, validate_images
 from .metadata import remote_observation
-from .profiles import exact_keys, load_profile, target_identity
-from .records import file_digest, inventory, read_json, record_digest, safe_path, verify_inventory
+from .profiles import exact_keys, load_profile, provider_input_paths, target_identity
+from .records import file_digest, inventory, read_json, record_digest, safe_path
 from .snapshots import validate_snapshot
 
 OPERATIONS = {'binary', 'metadata', 'images'}
@@ -50,9 +50,7 @@ def make_plan(root, profile_path, target_name, operation):
     if operation == 'binary' and target['stage'] == 'development':
         raise ValueError('development store binary transfer is blocked')
     runtime = runtime_identity(safe_path(root, profile['runtime']['path']), profile['runtime'])
-    paths = [profile_path, *target['inputs'], *target['provider'].get('inputs', [])]
-    if target['provider'].get('gemfile'):
-        paths += [target['provider']['gemfile'], target['provider']['gemfile'] + '.lock']
+    paths = provider_input_paths(profile_path, target)
     if 'version_source' in target:
         paths.append(target['version_source']['file'])
     artifact = None
@@ -61,12 +59,13 @@ def make_plan(root, profile_path, target_name, operation):
         paths += list(target['artifact'].values())
     listing = None
     assets = None
+    if operation in ('metadata', 'images') and not target.get('metadata'):
+        raise ValueError('metadata/image operations require a declared listing')
     if target.get('metadata'):
         paths.append(target['metadata'])
         listing = read_json(safe_path(root, target['metadata']))
-        for key in ('store', 'platform', 'account', 'app_id', 'flavor', 'stage', 'version'):
-            if listing.get('target', {}).get(key) != target[key]:
-                raise ValueError(f'metadata target/version differs: {key}')
+        if listing.get('target') != target_identity(target):
+            raise ValueError('metadata target/account/track/version differs')
         listing['fields'] = validate_fields(listing.get('fields', {}), target['store'])
         if operation == 'images':
             exact_keys(target.get('replacement'), {'locales', 'slots', 'allow_delete'}, ('locales', 'slots', 'allow_delete'))

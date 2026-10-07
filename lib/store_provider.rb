@@ -401,6 +401,7 @@ end
 
 if $PROGRAM_NAME == __FILE__
   begin
+    $stdin.set_encoding(Encoding::UTF_8)
     request = JSON.parse($stdin.read)
     result = StoreProvider.run(request)
     puts JSON.generate(result)

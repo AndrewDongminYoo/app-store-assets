@@ -27,6 +27,13 @@ def target_identity(target):
     return result
 
 
+def provider_input_paths(profile_path, target):
+    paths = [profile_path, *target['inputs'], *target['provider'].get('inputs', [])]
+    if target['provider'].get('gemfile'):
+        paths += [target['provider']['gemfile'], target['provider']['gemfile'] + '.lock']
+    return paths
+
+
 def load_profile(root, path, name):
     profile = read_json(safe_path(root, path))
     exact_keys(profile, TOP_KEYS, ('schema_version', 'project', 'mode', 'runtime', 'targets'))

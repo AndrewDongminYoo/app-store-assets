@@ -246,6 +246,9 @@ class ProviderTests(unittest.TestCase):
                 target = profile['targets']['production']
                 if target['store'] == 'google':
                     target['track'] = 'internal'
+                    listing = json.loads((root / 'metadata/listing.json').read_text())
+                    listing['target'] = module(self, 'profiles').target_identity(target)
+                    write_json(root / 'metadata/listing.json', listing)
                 files = {item['file']: b'synthetic-image' for groups in value['record']['images'].values()
                          for images in groups.values() for item in images}
                 snapshot = module(self, 'snapshots').publish_snapshot(root / 'downloads', value['record'], files)

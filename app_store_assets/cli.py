@@ -10,7 +10,7 @@ from .execution import execute, readback_matches, stage_inventory, write_record
 from .identity import runtime_identity, runtime_inventory
 from .metadata import download_snapshot, metadata_diff
 from .planning import make_plan
-from .profiles import load_profile, target_identity
+from .profiles import load_profile, provider_input_paths, target_identity
 from .providers import CAPABILITIES, CommandProvider
 from .records import read_json, record_digest, safe_path, verify_inventory
 from .snapshots import validate_snapshot
@@ -147,7 +147,7 @@ def main(argv=None):
                 with tempfile.TemporaryDirectory(prefix='.read-', dir=state) as tmp:
                     scratch = Path(tmp)
                     from .records import inventory
-                    stage_inventory(root, scratch / 'inputs', inventory(root, [args.profile, *target['inputs'], *target['provider'].get('inputs', [])]))
+                    stage_inventory(root, scratch / 'inputs', inventory(root, provider_input_paths(args.profile, target)))
                     stage_inventory(safe_path(root, profile['runtime']['path']), scratch / 'runtime', runtime['files'])
                     provider.bind_stage(scratch / 'inputs', scratch / 'runtime')
                     path = download_snapshot(provider, identity, state / 'downloads')
