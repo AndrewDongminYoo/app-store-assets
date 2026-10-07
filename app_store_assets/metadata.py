@@ -12,7 +12,7 @@ from .snapshots import publish_snapshot
 PUBLIC_FIELDS = {'name', 'title', 'subtitle', 'description', 'full_description', 'short_description',
                  'keywords', 'promotional_text', 'release_notes', 'support_url', 'marketing_url',
                  'privacy_url', 'copyright', 'video'}
-IMAGE_FIELDS = {'id', 'file', 'sha256', 'source_sha256', 'processing_state', 'width', 'height'}
+IMAGE_FIELDS = {'id', 'file', 'sha256', 'source_sha256', 'provider_sha256', 'processing_state', 'width', 'height'}
 
 
 def normalize_fields(fields):
@@ -44,7 +44,7 @@ def normalize_remote(record, target):
         raise ValueError('download must be read-only; commit/write effect is forbidden')
     result = {'schema_version': 1, 'type': 'metadata-snapshot', 'origin': 'remote',
               'target': copy.deepcopy(target), 'fields': normalize_fields(record.get('fields', {})), 'images': {}}
-    for key in ('revision', 'version_id', 'editable', 'review_active'):
+    for key in ('revision', 'version_id', 'editable', 'review_active', 'app_info_id', 'binary', 'build_exists', 'releases', 'effects'):
         if key in record:
             result[key] = copy.deepcopy(record[key])
     for locale, groups in record.get('images', {}).items():

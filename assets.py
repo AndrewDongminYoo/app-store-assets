@@ -169,6 +169,10 @@ def prepare(args):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in {'doctor', 'plan', 'diff', 'generate', 'build', 'download', 'execute', 'verify'}:
+        sys.dont_write_bytecode = True
+        from app_store_assets.cli import main as pipeline_main
+        return pipeline_main(sys.argv[1:])
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     command = commands.add_parser('prepare-screenshots')

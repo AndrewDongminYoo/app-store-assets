@@ -155,6 +155,17 @@ class ExecutionTests(unittest.TestCase):
             self.execute(plan)
         self.assertEqual(len(self.provider.writes), 1)
 
+    def test_null_remote_binary_is_processing_pending(self):
+        self.provider.readback = lambda plan, result: {'target': plan['payload']['target'], 'observed': {'binary': None}}
+        self.assertEqual(self.execute()['status'], 'accepted_pending_verification')
+
+    def test_readback_preserves_unselected_public_metadata_fields(self):
+        def readback(plan, result):
+            return {'target': plan['payload']['target'], 'observed': {'fields': {
+                'en-US': {'description': 'Approved description', 'keywords': 'preserved,remote'}}}}
+        self.provider.readback = readback
+        self.assertEqual(self.execute(self.plan('metadata'))['status'], 'verified')
+
     def test_partial_failure_retains_attempt_and_blocks_blind_retry(self):
         def fail(_):
             raise RuntimeError('synthetic failure after possible external write')

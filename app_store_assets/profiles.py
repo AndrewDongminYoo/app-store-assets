@@ -6,7 +6,7 @@ from .records import read_json, safe_path
 TOP_KEYS = {'schema_version', 'project', 'mode', 'runtime', 'targets', 'recipes', 'builds'}
 TARGET_KEYS = {'store', 'platform', 'account', 'app_id', 'flavor', 'stage', 'version', 'version_source',
                'inputs', 'artifact', 'metadata', 'remote', 'track', 'release_status', 'replacement',
-               'provider', 'changelogs', 'assets', 'build', 'recipe'}
+               'provider', 'changelogs', 'assets', 'build', 'recipe', 'account_id'}
 IDENTITY_KEYS = ('store', 'platform', 'account', 'app_id', 'flavor', 'stage', 'version')
 
 
@@ -21,6 +21,8 @@ def target_identity(target):
     result = {key: target[key] for key in IDENTITY_KEYS}
     if target['store'] == 'google':
         result['track'] = target['track']
+    if target.get('account_id'):
+        result['account_id'] = target['account_id']
     return result
 
 
@@ -58,7 +60,7 @@ def load_profile(root, path, name):
         raise ValueError('Google requires explicit track and release_status')
     if not isinstance(target['inputs'], list) or not target['inputs']:
         raise ValueError('declared input inventory is required')
-    exact_keys(target['provider'], {'kind', 'argv', 'inputs'}, ('kind', 'argv'))
+    exact_keys(target['provider'], {'kind', 'argv', 'inputs', 'gemfile'}, ('kind', 'argv'))
     if target['provider']['kind'] != 'command' or not isinstance(target['provider']['argv'], list):
         raise ValueError('provider requires an explicit command adapter')
     return profile, target

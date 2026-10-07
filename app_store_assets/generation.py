@@ -1,5 +1,4 @@
 """Normalize app-composed inputs reproducibly within a locked toolchain."""
-import os
 import platform
 import shutil
 import subprocess
@@ -9,15 +8,11 @@ from pathlib import Path
 from assets import image_info
 from .catalog import CATALOG_FILE, encoded_format, slot_rule, validate_images
 from .execution import stage_inventory
+from .environment import local_environment
 from .identity import runtime_inventory
 from .profiles import exact_keys, target_identity
 from .records import file_digest, inventory, record_digest, safe_path
 from .snapshots import publish_snapshot
-
-
-def local_environment(home):
-    return {'PATH': os.environ.get('PATH', os.defpath), 'HOME': str(home), 'LANG': 'C', 'LC_ALL': 'C',
-            'MAGICK_THREAD_LIMIT': '1', 'OMP_NUM_THREADS': '1', 'PYTHONDONTWRITEBYTECODE': '1'}
 
 
 def toolchain(optimize=False):

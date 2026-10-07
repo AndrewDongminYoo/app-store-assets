@@ -61,7 +61,7 @@ def readback_matches(payload, report, result):
         return False
     observed = report.get('observed', {})
     if payload['operation'] == 'binary':
-        binary = observed.get('binary', {})
+        binary = observed.get('binary') or {}
         if binary.get('app_id') != payload['target']['app_id'] or binary.get('version') != payload['target']['version']:
             return False
         if binary.get('processing_state') != 'processed':
@@ -72,7 +72,10 @@ def readback_matches(payload, report, result):
             return False
         return observed.get('release_notes', {}) == payload['release_notes']
     if payload['operation'] == 'metadata':
-        return observed.get('fields') == (payload['listing'] or {}).get('fields')
+        actual = observed.get('fields', {})
+        expected = (payload['listing'] or {}).get('fields', {})
+        return all(actual.get(locale, {}).get(key) == value for locale, fields in expected.items()
+                   for key, value in fields.items())
     expected = (payload['listing'] or {}).get('images', {})
     actual = observed.get('images', {})
     uploaded = result.get('image_ids', {})

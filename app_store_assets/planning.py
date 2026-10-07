@@ -2,9 +2,11 @@
 from pathlib import Path
 
 from .identity import python_identity, runtime_identity
+from .commands import executable_identity
 from .catalog import CATALOG_FILE, validate_fields, validate_images
 from .profiles import exact_keys, load_profile, target_identity
 from .records import file_digest, inventory, read_json, record_digest, safe_path
+from .snapshots import validate_snapshot
 
 OPERATIONS = {'binary', 'metadata', 'images'}
 
@@ -13,6 +15,8 @@ def artifact_record(root, profile, target):
     descriptor = target.get('artifact')
     exact_keys(descriptor, {'path', 'record'}, ('path', 'record'))
     record = read_json(safe_path(root, descriptor['record']))
+    if record.get('type') == 'snapshot':
+        record = validate_snapshot(safe_path(root, descriptor['record']).parent)['record']
     for key in ('app_id', 'platform', 'flavor', 'version'):
         if record.get(key) != target[key]:
             raise ValueError(f'artifact build identity differs: {key}')
@@ -36,6 +40,8 @@ def make_plan(root, profile_path, target_name, operation):
         raise ValueError('development store binary transfer is blocked')
     runtime = runtime_identity(safe_path(root, profile['runtime']['path']), profile['runtime'])
     paths = [profile_path, *target['inputs'], *target['provider'].get('inputs', [])]
+    if target['provider'].get('gemfile'):
+        paths += [target['provider']['gemfile'], target['provider']['gemfile'] + '.lock']
     if 'version_source' in target:
         paths.append(target['version_source']['file'])
     artifact = None
@@ -61,6 +67,8 @@ def make_plan(root, profile_path, target_name, operation):
     if target.get('remote'):
         paths.append(target['remote'])
         remote = read_json(safe_path(root, target['remote']))
+        if remote.get('type') == 'snapshot':
+            remote = validate_snapshot(safe_path(root, target['remote']).parent)['record']
         if remote.get('target') != target_identity(target):
             raise ValueError('remote snapshot target differs')
     notes = {}
@@ -82,6 +90,7 @@ def make_plan(root, profile_path, target_name, operation):
                'listing': listing, 'remote': remote, 'release_notes': notes,
                'replacement': target.get('replacement'), 'release_status': target.get('release_status'),
                'provider': target['provider']}
+    payload['provider_executable'] = executable_identity(target['provider']['argv'])
     return {'payload': payload, 'digest': record_digest(payload)}
 
 
