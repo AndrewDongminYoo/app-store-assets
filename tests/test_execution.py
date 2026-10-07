@@ -1,10 +1,12 @@
 import copy
+import hashlib
 import json
 import os
 import unittest
 from unittest.mock import patch
 
 from pipeline_support import fixture, module, write_json
+from test_assets import png
 
 
 class FakeProvider:
@@ -84,7 +86,9 @@ class ExecutionTests(unittest.TestCase):
 
     def test_remote_only_ipad_class_blocks_partial_replacement(self):
         listing = json.loads((self.root / 'metadata/listing.json').read_text())
-        listing['images'] = {'en-US': {'APP_IPHONE_65': [{'file': 'images/01.png', 'sha256': 'a'*64}]}}
+        (self.root / 'images').mkdir()
+        (self.root / 'images/01.png').write_bytes(png())
+        listing['images'] = {'en-US': {'APP_IPHONE_65': [{'file': 'images/01.png', 'sha256': hashlib.sha256(png()).hexdigest()}]}}
         write_json(self.root / 'metadata/listing.json', listing)
         remote = json.loads((self.root / 'remote.json').read_text())
         remote['images'] = {'en-US': {'APP_IPAD_PRO_129': [{'id': 'remote-ipad'}]}}

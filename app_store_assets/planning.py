@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from .identity import python_identity, runtime_identity
+from .catalog import CATALOG_FILE, validate_fields, validate_images
 from .profiles import exact_keys, load_profile, target_identity
 from .records import file_digest, inventory, read_json, record_digest, safe_path
 
@@ -48,6 +49,14 @@ def make_plan(root, profile_path, target_name, operation):
         for key in ('store', 'platform', 'account', 'app_id', 'flavor', 'stage', 'version'):
             if listing.get('target', {}).get(key) != target[key]:
                 raise ValueError(f'metadata target/version differs: {key}')
+        validate_fields(listing.get('fields', {}), target['store'])
+        if operation == 'images':
+            entries = [dict(item, locale=locale, slot=slot) for locale, groups in listing.get('images', {}).items()
+                       for slot, images in groups.items() for item in images]
+            if not entries:
+                raise ValueError('empty image listing')
+            validated = validate_images(root, entries, target['store'])
+            paths += [item['file'] for item in validated]
     remote = None
     if target.get('remote'):
         paths.append(target['remote'])
@@ -68,6 +77,7 @@ def make_plan(root, profile_path, target_name, operation):
                'mode': profile['mode'], 'target': target_identity(target), 'operation': operation,
                'effects': effects, 'runtime': runtime, 'runtime_path': profile['runtime']['path'],
                'python': python_identity(), 'input_paths': sorted(set(paths)), 'inputs': inventory(root, paths),
+               'catalog_sha256': file_digest(CATALOG_FILE),
                'artifact': target.get('artifact') if artifact else None, 'build': artifact,
                'listing': listing, 'remote': remote, 'release_notes': notes,
                'replacement': target.get('replacement'), 'release_status': target.get('release_status'),
