@@ -1,14 +1,24 @@
+import errno
 import hashlib
+import importlib.util
 import json
 import struct
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location('assets', ROOT / 'assets.py')
+ASSETS = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(ASSETS)
 
 
 def png(width=1242, height=2688, alpha=False, opacity=255):
@@ -117,6 +127,110 @@ class PrepareTests(unittest.TestCase):
         result = self.prepare()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('outside source', result.stderr)
+
+    def test_hidden_ipad_image_is_rejected_before_publication(self):
+        (self.source / 'en-US/.02.png').write_bytes(png(2048, 2732))
+        result = self.prepare()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('hidden screenshot', result.stderr)
+        self.assertFalse(list((self.root / 'bundles').glob('*/manifest.json')))
+
+    def test_format_and_extension_must_match_fastlane(self):
+        for filename, message in [('01.jpg', 'format'), ('01.Png', 'extension')]:
+            with self.subTest(filename=filename):
+                image = self.image.with_name(filename)
+                self.image.rename(image)
+                try:
+                    result = self.prepare()
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(message, result.stderr)
+                    self.assertFalse(list((self.root / 'bundles').glob('*/manifest.json')))
+                finally:
+                    image.rename(self.image)
+
+    def test_validation_also_rejects_hidden_screenshots(self):
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        bundle = Path(json.loads(result.stdout)['bundle'])
+        image = bundle / 'screenshots/en-US/01.png'
+        image.rename(image.with_name('.02.png'))
+        manifest_file = bundle / 'manifest.json'
+        manifest = json.loads(manifest_file.read_text())
+        manifest['assets'][0]['file'] = 'screenshots/en-US/.02.png'
+        manifest_file.write_text(json.dumps(manifest))
+        checked = self.run_cli('validate', str(bundle))
+        self.assertNotEqual(checked.returncode, 0)
+        self.assertIn('hidden screenshot', checked.stderr)
+
+    def test_cache_image_and_manifest_cannot_be_changed_together(self):
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        bundle = Path(json.loads(result.stdout)['bundle'])
+        image = bundle / 'screenshots/en-US/01.png'
+        image.write_bytes(png(1284, 2778))
+        manifest_file = bundle / 'manifest.json'
+        manifest = json.loads(manifest_file.read_text())
+        manifest['assets'][0]['sha256'] = hashlib.sha256(image.read_bytes()).hexdigest()
+        manifest['assets'][0]['size'] = [1284, 2778]
+        manifest_file.write_text(json.dumps(manifest))
+        self.assertEqual(self.run_cli('validate', str(bundle)).returncode, 0)
+        repeated = self.prepare()
+        self.assertNotEqual(repeated.returncode, 0)
+        self.assertIn('expected manifest', repeated.stderr)
+        self.assertEqual(image.read_bytes(), png(1284, 2778))
+
+    def test_normalization_is_reproducible_across_clock_ticks(self):
+        self.image.write_bytes(png(alpha=True))
+        first = self.prepare('--normalize-alpha')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        first_bundle = Path(json.loads(first.stdout)['bundle'])
+        time.sleep(1.1)
+        second = self.prepare('--normalize-alpha', '--out', str(self.root / 'fresh-bundles'))
+        self.assertEqual(second.returncode, 0, second.stderr)
+        second_bundle = Path(json.loads(second.stdout)['bundle'])
+        self.assertEqual(first_bundle.name, second_bundle.name)
+        self.assertEqual((first_bundle / 'manifest.json').read_bytes(), (second_bundle / 'manifest.json').read_bytes())
+        final = first_bundle / 'screenshots/en-US/01.png'
+        self.assertEqual(final.read_bytes(), (second_bundle / 'screenshots/en-US/01.png').read_bytes())
+        pixels = subprocess.run(['magick', str(final), '-depth', '8', 'rgb:-'], capture_output=True, timeout=30)
+        self.assertEqual(pixels.returncode, 0, pixels.stderr)
+        self.assertEqual(pixels.stdout, b'\x20\x40\x60' * 1242 * 2688)
+
+    def test_concurrent_preparations_reuse_the_validated_winner(self):
+        args = SimpleNamespace(source=self.source, out=self.root / 'bundles', subdir='.', project='fixture', bundle_id='com.example.fixture', normalize_alpha=False)
+        barrier = threading.Barrier(2)
+        rename = Path.rename
+
+        def simultaneous_rename(folder, destination):
+            barrier.wait(timeout=10)
+            return rename(folder, destination)
+
+        with patch.object(Path, 'rename', simultaneous_rename), ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(ASSETS.prepare, args) for _ in range(2)]
+            results = [future.result(timeout=30) for future in futures]
+        self.assertEqual(results[0], results[1])
+        ASSETS.validate(results[0]['bundle'])
+        self.assertEqual([p.resolve() for p in (self.root / 'bundles').iterdir()], [Path(results[0]['bundle'])])
+
+    def test_rename_race_does_not_reuse_a_corrupt_winner(self):
+        args = SimpleNamespace(source=self.source, out=self.root / 'bundles', subdir='.', project='fixture', bundle_id='com.example.fixture', normalize_alpha=False)
+
+        def corrupt_winner(folder, destination):
+            destination.mkdir()
+            (destination / 'manifest.json').write_text('{}')
+            raise OSError(errno.ENOTEMPTY, 'Directory not empty')
+
+        with patch.object(Path, 'rename', corrupt_winner):
+            with self.assertRaisesRegex(ValueError, 'unsupported manifest'):
+                ASSETS.prepare(args)
+
+    def test_unrelated_rename_error_is_not_treated_as_a_race(self):
+        args = SimpleNamespace(source=self.source, out=self.root / 'bundles', subdir='.', project='fixture', bundle_id='com.example.fixture', normalize_alpha=False)
+        error = OSError(errno.EACCES, 'Permission denied')
+        with patch.object(Path, 'rename', side_effect=error):
+            with self.assertRaises(OSError) as raised:
+                ASSETS.prepare(args)
+        self.assertIs(raised.exception, error)
 
 
 if __name__ == '__main__':
