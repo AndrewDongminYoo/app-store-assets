@@ -2,6 +2,7 @@
 """Prepare immutable App Store image bundles without changing capture inputs."""
 import argparse
 import collections
+import errno
 import hashlib
 import json
 import shutil
@@ -22,6 +23,7 @@ SCREENSHOT_SIZES = {
     (2064, 2752): 'ipad-large', (2048, 2732): 'ipad-large',
 }
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg'}
+FORMAT_EXTENSIONS = {'PNG': {'.png', '.PNG'}, 'JPEG': {'.jpg', '.JPG', '.jpeg', '.JPEG'}}
 
 
 def digest(file):
@@ -29,14 +31,20 @@ def digest(file):
 
 
 def image_info(file):
+    if file.name.startswith('.'):
+        raise ValueError(f'hidden screenshot would be skipped by Fastlane: {file}')
+    if file.suffix not in set().union(*FORMAT_EXTENSIONS.values()):
+        raise ValueError(f'unsupported Fastlane image extension: {file}')
     # Decode the pixel stream, not just the IHDR header. Warnings also reject
     # truncated images that ImageMagick might otherwise recover.
-    result = subprocess.run(['magick', str(file), '-regard-warnings', '-format', '%w|%h|%[channels]\n', 'info:'], capture_output=True, text=True, timeout=60)
+    result = subprocess.run(['magick', str(file), '-regard-warnings', '-format', '%w|%h|%[channels]|%m\n', 'info:'], capture_output=True, text=True, timeout=60)
     if result.returncode or result.stderr:
         raise ValueError(f'cannot decode image: {file}')
     values = result.stdout.strip().split('|')
-    if len(values) != 3 or '\n' in result.stdout.strip():
+    if len(values) != 4 or '\n' in result.stdout.strip():
         raise ValueError(f'expected one still image: {file}')
+    if file.suffix not in FORMAT_EXTENSIONS.get(values[3], set()):
+        raise ValueError(f'image format does not match extension: {file}')
     width, height = map(int, values[:2])
     header = file.read_bytes()[:26]
     alpha = values[2].split()[0].lower().endswith('a')
@@ -135,7 +143,7 @@ def prepare(args):
                 opaque = subprocess.run(['magick', str(file), '-format', '%[opaque]', 'info:'], capture_output=True, text=True, timeout=60)
                 if opaque.returncode or opaque.stdout.strip().lower() != 'true':
                     raise ValueError(f'transparent pixels require an explicit composition background: {file}')
-                result = subprocess.run(['magick', str(file), '-alpha', 'off', '-depth', '8', 'PNG24:' + str(final)], capture_output=True, text=True, timeout=60)
+                result = subprocess.run(['magick', str(file), '-alpha', 'off', '-depth', '8', '-define', 'png:exclude-chunk=date,time', 'PNG24:' + str(final)], capture_output=True, text=True, timeout=60)
                 if result.returncode:
                     raise ValueError(f'normalization failed: {file}')
             else:
@@ -147,10 +155,16 @@ def prepare(args):
         (folder / 'manifest.json').write_text(encoded)
         validate(folder)
         destination = output / hashlib.sha256(encoded.encode()).hexdigest()
-        if destination.exists():
-            validate(destination)
-        else:
-            folder.rename(destination)
+        if not destination.exists():
+            try:
+                folder.rename(destination)
+            except OSError as error:
+                # Another preparer may have atomically published this bundle.
+                # Permission, I/O and other rename failures must still fail.
+                if error.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+                    raise
+        if validate(destination) != manifest:
+            raise ValueError(f'cached bundle differs from expected manifest: {destination}')
         return dict(bundle=str(destination), screenshots_path=str(destination / 'screenshots'), assets=len(assets))
 
 

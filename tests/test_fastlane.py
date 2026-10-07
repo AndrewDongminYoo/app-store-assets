@@ -12,7 +12,7 @@ PERSONAL = Path(os.environ['APP_STORE_ASSETS_PERSONAL_ROOT']) if os.environ.get(
 
 @unittest.skipUnless(PERSONAL, 'set APP_STORE_ASSETS_PERSONAL_ROOT for actual personal Fastfile integration')
 class FastlaneIntegrationTests(unittest.TestCase):
-    def lane(self, project, image=None, **options):
+    def lane(self, project, image=None, filename='01.png', extra_images=None, **options):
         with tempfile.TemporaryDirectory() as scratch:
             repo = Path(scratch) / project
             location = 'fastlane/Fastfile' if project == 'kkomkkomi' else 'ios/fastlane/Fastfile'
@@ -21,7 +21,9 @@ class FastlaneIntegrationTests(unittest.TestCase):
             shutil.copyfile(PERSONAL / project / location, fastfile)
             source = repo / ('fastlane/metadata/ios/en-US/images/iphone65' if project == 'mirae' else 'fastlane/screenshots/ios/en-US')
             source.mkdir(parents=True)
-            (source / '01.png').write_bytes(image if image is not None else png())
+            (source / filename).write_bytes(image if image is not None else png())
+            for extra_name, data in (extra_images or {}).items():
+                (source / extra_name).write_bytes(data)
             (repo / 'pubspec.yaml').write_text('version: 1.0.0+1\n')
             env = dict(os.environ, APP_STORE_ASSETS_ROOT=str(ROOT))
             result = subprocess.run(['ruby', str(ROOT / 'tests/fastlane_harness.rb'), str(fastfile), json.dumps(options)], capture_output=True, text=True, env=env, timeout=30)
@@ -55,6 +57,21 @@ class FastlaneIntegrationTests(unittest.TestCase):
         result, report = self.lane('ttush_push', image=png(alpha=True))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(report.get('uploaded_png_color'), 2)
+
+    def test_reader_incompatible_inputs_stop_before_external_calls(self):
+        cases = [
+            ({'extra_images': {'.02.png': png(2048, 2732)}}, 'hidden screenshot'),
+            ({'filename': '01.jpg'}, 'format'),
+            ({'filename': '01.Png'}, 'extension'),
+        ]
+        for project in ('mirae', 'ttush_push', 'kkomkkomi'):
+            for inputs, message in cases:
+                with self.subTest(project=project, inputs=message):
+                    result, report = self.lane(project, **inputs)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(report['uploads'], [])
+                    self.assertEqual(report['review_reads'], 0)
+                    self.assertIn(message, result.stderr)
 
     def test_metadata_only_option_does_not_require_a_screenshot_tool(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
