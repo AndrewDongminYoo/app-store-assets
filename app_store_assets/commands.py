@@ -16,12 +16,17 @@ def executable_identity(argv):
     if not executable:
         raise ValueError('declared adapter tool is unavailable')
     executable = str(Path(executable).resolve())
+    with Path(executable).open('rb') as stream:
+        if stream.read(2) == b'#!':
+            raise ValueError('direct script adapters must use an installed interpreter and staged script path')
     return {'path': executable, 'sha256': file_digest(executable)}
 
 
-def validate_adapter_argv(argv):
+def validate_adapter_argv(argv, source_root=None):
     if not isinstance(argv, list) or not argv or any(not isinstance(a, str) or '\x00' in a for a in argv):
         raise ValueError('adapter argv must be a nonempty string array')
+    if source_root is not None and Path(executable_identity(argv)['path']).is_relative_to(Path(source_root).resolve()):
+        raise ValueError('adapter executable inside source inputs must use a staged script and installed interpreter')
     for arg in argv[1:]:
         path = arg.split('=', 1)[-1] if arg.startswith('-') and '=' in arg else arg
         compact_option = re.fullmatch(r'-[A-Za-z]+(/.*)', path)

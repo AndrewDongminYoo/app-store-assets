@@ -87,8 +87,11 @@ def validate_fields(fields, store):
                 if 'full_description' in values and values['full_description'] != values['description']:
                     raise ValueError('conflicting Google description alias')
                 values['full_description'] = values.pop('description')
-    limits = rules()['stores'].get(store, {}).get('text_limits', {})
+    store_rules = rules()['stores'].get(store, {})
+    limits = store_rules.get('text_limits', {})
     for values in clean.values():
+        if store in ('apple', 'google') and set(values) - set(store_rules['supported_fields']):
+            raise ValueError(f'unsupported {store} metadata field')
         for key, value in values.items():
             if key in limits:
                 limit, unit = limits[key]

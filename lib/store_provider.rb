@@ -228,6 +228,7 @@ module StoreProvider
   end
 
   class Google
+    METADATA_FIELDS = %w(title short_description full_description video).freeze
     IMAGE_TYPES = %w(phoneScreenshots sevenInchScreenshots tenInchScreenshots tvScreenshots wearScreenshots icon featureGraphic tvBanner).freeze
     def initialize(client); @client = client; end
 
@@ -288,7 +289,7 @@ module StoreProvider
           @client.update_track(target.fetch("track"), track)
         elsif payload.fetch("operation") == "metadata"
           fields = payload.fetch("listing").fetch("fields")
-          fields.each_value { |values| raise "unsupported Google metadata field" unless (values.keys - %w(title short_description full_description video)).empty? }
+          fields.each_value { |values| raise "unsupported Google metadata field" unless (values.keys - METADATA_FIELDS).empty? }
           fields.each do |locale, values|
             listing = @client.listing_for_language(locale)
             values.each { |k, v| listing.public_send(k + "=", v) }

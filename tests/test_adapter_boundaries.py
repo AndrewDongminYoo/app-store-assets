@@ -1,5 +1,6 @@
 """Host contracts for adapters and offline store prerequisites."""
 import json
+import shutil
 import sys
 import unittest
 from unittest.mock import patch
@@ -19,6 +20,26 @@ class AdapterBoundaryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'staged|adapter.*path'):
                 module(self, 'profiles').load_profile(self.root, 'store-upload.json', 'production')
         self.assertFalse((self.root / 'build/store-assets').exists())
+
+    def test_direct_provider_script_is_rejected_before_request_or_effects(self):
+        script = self.root / 'helpers/provider.py'
+        script.write_text('#!/usr/bin/env python3\nraise AssertionError("mutable original executed")\n')
+        script.chmod(0o755)
+        self.profile['targets']['production']['provider']['argv'] = [str(script)]
+        write_json(self.root / 'store-upload.json', self.profile)
+        with patch('subprocess.run', side_effect=AssertionError('adapter must not run')):
+            with self.assertRaisesRegex(ValueError, 'direct script|staged'):
+                module(self, 'profiles').load_profile(self.root, 'store-upload.json', 'production')
+        self.assertFalse((self.root / 'build/store-assets').exists())
+
+    def test_executable_inside_mutable_source_cannot_be_used_as_installed_tool(self):
+        executable = self.root / 'helpers/python3'
+        shutil.copyfile(sys.executable, executable)
+        executable.chmod(0o755)
+        self.profile['targets']['production']['provider']['argv'][0] = str(executable)
+        write_json(self.root / 'store-upload.json', self.profile)
+        with self.assertRaisesRegex(ValueError, 'source inputs|staged'):
+            module(self, 'profiles').load_profile(self.root, 'store-upload.json', 'production')
 
     def test_expansion_rejects_absolute_options_and_parent_escapes(self):
         commands = module(self, 'commands')

@@ -81,5 +81,5 @@ def load_profile(root, path, name):
     exact_keys(target['provider'], {'kind', 'argv', 'inputs', 'gemfile'}, ('kind', 'argv'))
     if target['provider']['kind'] != 'command' or not isinstance(target['provider']['argv'], list):
         raise ValueError('provider requires an explicit command adapter')
-    validate_adapter_argv(target['provider']['argv'])
+    validate_adapter_argv(target['provider']['argv'], source_root=root)
     return profile, target

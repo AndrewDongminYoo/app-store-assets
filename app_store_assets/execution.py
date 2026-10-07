@@ -85,6 +85,12 @@ def readback_matches(payload, report, result):
                    for key, value in fields.items())
     expected = (payload['listing'] or {}).get('images', {})
     actual = observed.get('images', {})
+    expected_groups = {(locale, slot) for locale, groups in expected.items()
+                       for slot, images in groups.items() if images}
+    actual_groups = {(locale, slot) for locale, groups in actual.items()
+                     for slot, images in groups.items() if images}
+    if actual_groups != expected_groups:
+        return False
     uploaded = result.get('image_ids', {})
     for locale, groups in expected.items():
         for slot, images in groups.items():
