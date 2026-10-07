@@ -25,7 +25,8 @@ class FastlaneIntegrationTests(unittest.TestCase):
             for extra_name, data in (extra_images or {}).items():
                 (source / extra_name).write_bytes(data)
             (repo / 'pubspec.yaml').write_text('version: 1.0.0+1\n')
-            env = dict(os.environ, APP_STORE_ASSETS_ROOT=str(ROOT))
+            env = {'PATH': os.environ['PATH'], 'APP_STORE_ASSETS_ROOT': str(ROOT),
+                   'LANG': 'C.UTF-8', 'HOME': str(Path(scratch) / 'empty-home')}
             result = subprocess.run(['ruby', str(ROOT / 'tests/fastlane_harness.rb'), str(fastfile), json.dumps(options)], capture_output=True, text=True, env=env, timeout=30)
             report = json.loads(result.stdout)
             # Read the actual folder passed to the external upload action.

@@ -21,10 +21,12 @@ def godot_argv(executable, preset, output, root):
     return [executable, '--headless', '--path', str(root), '--export-release', preset, str(output)]
 
 
-def build(root, target, adapter, state, mode='live'):
+def build(root, target, adapter, state, mode='live', allow_build=False, signing_file=None):
     exact_keys(adapter, {'argv', 'inputs', 'artifact', 'inspect_argv'}, ('argv', 'inputs', 'artifact'))
     if mode != 'fixture' and not adapter.get('inspect_argv'):
         raise ValueError('live artifact requires an explicit native inspection adapter')
+    if mode != 'fixture' and allow_build is not True:
+        raise ValueError('native build requires explicit local authority: allow_build')
     root = Path(root).resolve()
     source_inputs = inventory(root, adapter['inputs'])
     tool = executable_identity(adapter['argv'])
@@ -38,17 +40,23 @@ def build(root, target, adapter, state, mode='live'):
         output.mkdir()
         stage_inventory(root, inputs, source_inputs)
         request = {'schema_version': 1, 'action': 'build', 'target': target_identity(target),
-                   'source_commit': source_commit, 'output': str(output), 'mode': mode}
+                   'source_commit': source_commit, 'source_inputs': source_inputs,
+                   'output': str(output), 'mode': mode, 'allow_build': allow_build,
+                   'signing_file': signing_file}
         result = run_command(expand_argv(adapter['argv'], inputs, output=output), request, inputs,
                              folder / 'home', expected=tool)
         verify_inventory(inputs, source_inputs, exact=True)
         if result.get('artifact') != adapter['artifact']:
             raise ValueError('build adapter artifact path differs')
         artifact = safe_path(output, result['artifact'])
+        inspected_sha256 = file_digest(artifact)
         inspection = result.get('inspection', {})
         if adapter.get('inspect_argv'):
             inspection = run_command(expand_argv(adapter['inspect_argv'], inputs, output=output),
                                      dict(request, action='inspect', artifact=str(artifact)), inputs, folder / 'home', expected=inspector)
+        if file_digest(artifact) != inspected_sha256:
+            raise ValueError('artifact changed during native inspection')
+        verify_inventory(inputs, source_inputs, exact=True)
         for key in ('app_id', 'platform', 'flavor', 'version'):
             if inspection.get(key) != target[key]:
                 raise ValueError(f'build native identity differs: {key}')
@@ -61,5 +69,7 @@ def build(root, target, adapter, state, mode='live'):
                   'flavor': target['flavor'], 'version': target['version'], 'sha256': file_digest(artifact),
                   'evidence': inspection['evidence'], 'native_guards': inspection.get('native_guards', {}),
                   'source_commit': source_commit, 'source_inputs': source_inputs, 'tool': tool, 'inspector': inspector,
-                  'adapter': adapter}
+                  'adapter': adapter, 'build_commands': result.get('commands', []),
+                  'derived_policy': result.get('derived_policy'),
+                  'native_tools': {'build': result.get('tools', {}), 'inspection': inspection.get('tools', {})}}
         return publish_snapshot(state, record, {adapter['artifact']: artifact})

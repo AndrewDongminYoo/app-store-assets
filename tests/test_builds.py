@@ -1,4 +1,3 @@
-import json
 import sys
 import unittest
 
@@ -62,7 +61,34 @@ print(json.dumps({'artifact':'app.bin','inspection':{'app_id':%s,'platform':t['p
             return result
         with patch.object(self.builds, 'git', return_value='a' * 40), patch.object(self.builds, 'run_command', side_effect=inspected):
             with self.assertRaisesRegex(ValueError, 'guard'):
-                self.builds.build(self.root, target, adapter, self.root / 'build-history', mode='live')
+                self.builds.build(self.root, target, adapter, self.root / 'build-history', mode='live', allow_build=True)
+
+    def test_live_build_needs_explicit_authority_before_adapter(self):
+        from unittest.mock import patch
+        adapter = self.adapter()
+        adapter['inspect_argv'] = adapter['argv']
+        with patch.object(self.builds, 'run_command', side_effect=AssertionError('adapter called')):
+            with self.assertRaisesRegex(ValueError, 'authority|allow_build'):
+                self.builds.build(self.root, self.profile['targets']['production'], adapter,
+                                  self.root / 'build-history', mode='live')
+
+    def test_inspector_cannot_change_the_artifact_it_just_verified(self):
+        from pathlib import Path
+        from unittest.mock import patch
+        adapter = self.adapter()
+        adapter['inspect_argv'] = adapter['argv']
+        original = self.builds.run_command
+        def mutate(*args, **kwargs):
+            if args[1]['action'] != 'inspect':
+                return original(*args, **kwargs)
+            request = args[1]
+            Path(request['artifact']).write_bytes(b'replaced after inspection')
+            return dict(request['target'], evidence='fixture', native_guards={'fixture-only': True})
+        with patch.object(self.builds, 'run_command', side_effect=mutate):
+            with self.assertRaisesRegex(ValueError, 'changed during native inspection'):
+                self.builds.build(self.root, self.profile['targets']['production'], adapter,
+                                  self.root / 'build-history', mode='fixture')
+        self.assertFalse((self.root / 'build-history').exists())
 
 
 if __name__ == '__main__':

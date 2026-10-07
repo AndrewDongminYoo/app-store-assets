@@ -37,6 +37,22 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual((a / 'images/en-US/01.png').read_bytes()[25], 2)
         self.assertEqual(record['assets'][0]['sha256'], hashlib.sha256((a / 'images/en-US/01.png').read_bytes()).hexdigest())
 
+    def test_manifest_regeneration_verifies_same_inputs_bytes_order_and_provenance(self):
+        original = self.generate()
+        report = self.generation.regenerate(self.root, self.recipe, original, self.root / 'history')
+        self.assertEqual(report['status'], 'verified')
+        self.assertEqual(report['snapshot'], original)
+        (self.root / 'helpers/version_guard.rb').write_text('changed helper')
+        with self.assertRaisesRegex(ValueError, 'input|recipe|identity'):
+            self.generation.regenerate(self.root, self.recipe, original, self.root / 'history')
+
+    def test_asset_identity_does_not_change_when_release_selection_changes(self):
+        original = self.generate()
+        recipe = copy.deepcopy(self.recipe)
+        recipe['target']['remote'] = 'selected/new-download/manifest.json'
+        recipe['target']['assets'] = {'manifest': str(original / 'manifest.json')}
+        self.assertEqual(original, self.generate(recipe))
+
     def test_changed_source_or_helper_produces_distinct_generation_identity(self):
         first = self.generate()
         (self.root / 'helpers/version_guard.rb').write_text('changed declared helper')

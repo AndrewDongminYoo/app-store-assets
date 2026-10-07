@@ -46,6 +46,28 @@ class CliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('effects', result.stderr)
 
+    def test_local_roundtrip_and_regeneration_dry_runs_read_no_source_and_write_nothing(self):
+        (self.root / 'helpers/provider.py').write_text('raise RuntimeError("adapter must not run")\n')
+        before = {p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        for command in ('export', 'import', 'regenerate'):
+            with self.subTest(command=command):
+                result = self.cli(command, '--source', 'missing-input', '--output', 'new-output', '--dry-run')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)['status'], 'dry-run')
+        after = {p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        self.assertEqual(before, after)
+
+    def test_build_dry_run_displays_adapter_without_reading_signing_or_launching_it(self):
+        argv = [sys.executable, '{root}/helpers/missing_build_adapter.py']
+        self.profile['targets']['production']['build'] = 'production'
+        self.profile['builds'] = {'production': {'argv': argv, 'inspect_argv': argv,
+                                               'inputs': ['missing-source'], 'artifact': 'app.bin'}}
+        write_json(self.root / 'store-upload.json', self.profile)
+        result = self.cli('build', '--dry-run', '--allow-build', '--signing-file', '/missing-protected/signing.json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['adapter_argv'], argv)
+        self.assertFalse((self.root / 'build/store-assets').exists())
+
     def test_existing_receipt_blocks_before_constructing_provider(self):
         from app_store_assets import cli
         plan = json.loads(self.cli('plan').stdout)

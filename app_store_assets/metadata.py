@@ -90,7 +90,14 @@ def metadata_diff(before, after):
                     kind = 'reorder'
             changes.append({'path': path, 'kind': kind, 'before': a, 'after': b})
     for key in ('fields', 'images'):
-        visit(key, before.get(key, {}), after.get(key, {}))
+        a, b = copy.deepcopy(before.get(key, {})), copy.deepcopy(after.get(key, {}))
+        if key == 'images':
+            for record in (a, b):
+                for groups in record.values():
+                    for images in groups.values():
+                        for image in images:
+                            image.pop('file', None)
+        visit(key, a, b)
     return changes
 
 

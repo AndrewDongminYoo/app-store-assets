@@ -6,8 +6,6 @@ import tempfile
 from pathlib import Path
 
 from .builds import build
-from .catalog import submission_readiness
-from .commands import executable_identity
 from .execution import execute, readback_matches, stage_inventory, write_record
 from .identity import runtime_identity, runtime_inventory
 from .metadata import download_snapshot, metadata_diff
@@ -16,12 +14,13 @@ from .profiles import load_profile, target_identity
 from .providers import CAPABILITIES, CommandProvider
 from .records import read_json, record_digest, safe_path, verify_inventory
 from .snapshots import validate_snapshot
-from .generation import generate
+from .generation import generate, regenerate
+from .metadata_io import export_metadata, import_metadata
 
 
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument('command', choices=('doctor', 'plan', 'diff', 'generate', 'build', 'download', 'execute', 'verify'))
+    result.add_argument('command', choices=('doctor', 'plan', 'diff', 'generate', 'regenerate', 'build', 'download', 'export', 'import', 'execute', 'verify'))
     result.add_argument('--root', default='.')
     result.add_argument('--profile', default='store-upload.json')
     result.add_argument('--target', required=True)
@@ -32,8 +31,13 @@ def parser():
     result.add_argument('--before')
     result.add_argument('--after')
     result.add_argument('--recipe')
+    result.add_argument('--source')
+    result.add_argument('--output')
+    result.add_argument('--metadata-only', action='store_true')
     result.add_argument('--state', default='build/store-assets')
     result.add_argument('--auth-file')
+    result.add_argument('--allow-build', action='store_true')
+    result.add_argument('--signing-file')
     result.add_argument('--allow-effects', action='store_true')
     result.add_argument('--dry-run', action='store_true')
     return result
@@ -60,9 +64,48 @@ def main(argv=None):
                 raise ValueError('diff requires --before and --after records')
             a, b = read_json(safe_path(root, args.before)), read_json(safe_path(root, args.after))
             result = metadata_diff(a.get('record', a), b.get('record', b))
+        elif args.command in ('export', 'import', 'regenerate'):
+            if args.dry_run:
+                result = {'status': 'dry-run', 'target': identity, 'effects': ['local-' + args.command]}
+            else:
+                if not args.source:
+                    raise ValueError(args.command + ' requires --source')
+                source = safe_path(root, args.source)
+                if args.command == 'import':
+                    if not args.output:
+                        raise ValueError('import requires a new --output listing file')
+                    result = import_metadata(root, source, identity, args.output, state, args.metadata_only)
+                else:
+                    if source.is_file():
+                        if source.name != 'manifest.json':
+                            raise ValueError('source must be a snapshot directory or its manifest.json')
+                        source = source.parent
+                    if args.command == 'export':
+                        if not args.output:
+                            raise ValueError('export requires a new --output directory')
+                        path = export_metadata(root, source, identity, args.output)
+                        result = {'directory': path.relative_to(root).as_posix()}
+                    else:
+                        if args.recipe:
+                            if args.recipe not in profile.get('recipes', {}):
+                                raise ValueError('select a declared generation recipe')
+                            recipe = read_json(safe_path(root, profile['recipes'][args.recipe]))
+                            recipe['target'] = target
+                        else:
+                            recipe = validate_snapshot(source)['record'].get('recipe')
+                        if not recipe or target_identity(recipe['target']) != identity:
+                            raise ValueError('regeneration requires the original recipe and exact selected target')
+                        result = regenerate(root, recipe, source, state / 'assets')
+                        result['snapshot'] = result['snapshot'].relative_to(root).as_posix()
         elif args.command in ('generate', 'build'):
             if args.dry_run:
                 result = {'status': 'dry-run', 'target': identity, 'effects': ['local-' + args.command]}
+                if args.command == 'build':
+                    adapter = profile.get('builds', {}).get(target.get('build'))
+                    if not adapter:
+                        raise ValueError('select a declared build-only adapter')
+                    result.update(adapter_argv=adapter['argv'], inspection_argv=adapter.get('inspect_argv'),
+                                  declared_inputs=adapter['inputs'], native_authority_required=profile['mode'] != 'fixture')
             elif args.command == 'generate':
                 name = args.recipe or target.get('recipe')
                 if name not in profile.get('recipes', {}):
@@ -77,7 +120,8 @@ def main(argv=None):
                 name = target.get('build')
                 if name not in profile.get('builds', {}):
                     raise ValueError('select a declared build-only adapter')
-                path = build(root, target, profile['builds'][name], state / 'builds', profile['mode'])
+                path = build(root, target, profile['builds'][name], state / 'builds', profile['mode'],
+                             args.allow_build, args.signing_file)
                 result = {'snapshot': path.relative_to(root).as_posix(), 'manifest': validate_snapshot(path)}
         elif args.command == 'execute':
             if not args.plan or not args.expected_digest:

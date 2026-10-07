@@ -62,7 +62,7 @@ def file_digest(path):
 
 def public_input_name(path):
     lower = Path(path).name.lower()
-    if lower == '.env' or lower.startswith('.env.') or lower.endswith(('.p8', '.p12', '.pem', '.jks', '.keystore')):
+    if lower in ('.env', 'key.properties') or lower.startswith('.env.') or lower.endswith(('.p8', '.p12', '.pem', '.jks', '.keystore', '.mobileprovision')):
         raise ValueError(f'credential/private input cannot enter a public inventory: {lower}')
     if any(word in lower for word in ('service-account', 'service_account', 'credentials.json')):
         raise ValueError('credential input cannot enter an inventory')

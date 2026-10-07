@@ -11,20 +11,20 @@ Status: local review candidate. Approved local design/sequence: 2026-10-07 15:39
 - Frozen Apple/Google catalog, decoded format/extension/alpha/dimension/count/text validation, locked ImageMagick/oxipng normalization, deterministic PNG/JPEG output and an app-owned staged composer protocol. Provenance remains widget/import.
 - Effect-separated CLI and argv JSON adapters, sanitized environments, build-only command construction, explicit native inspection/source/guard evidence for live artifacts.
 - Ruby Fastlane 2.240.1 adapters: exact Apple listing versions, scoped image deletion/upload/order; Google abort-only read sessions, write-edit recheck, explicit draft/track release effects and uploaded image IDs for transformed readback.
-- Mirae pinned launcher/profile, app-owned artwork adapter, fixture builder, default-blocked account/signing paths and legacy lane delegation. Other consumers are not migrated.
+- Mirae pinned launcher/profile, app-owned artwork adapter, native build/inspection driver with explicit local authority, fixture mode and legacy lane delegation. Other consumers are not migrated.
 
 ## Verification
 
-The shared suite runs 113 tests: **108 passed, five legacy personal Fastfile integrations skipped**. Real pinned Fastlane screenshot reader checks, the actual Supply image model and the actual Supply bundle return method with a fake transport are enabled. Ruby syntax and Git diff whitespace checks pass. Test providers replace external boundaries; no live authentication/network/store transfer was performed.
+The shared suite runs 127 tests: **127 passed, zero skipped**, including all five public Mirae/Ttush/Kkom Fastfile integrations in temporary repositories. Real pinned Fastlane screenshot reader checks, the actual Supply image model and the actual Supply bundle return method with a fake transport are enabled. Ruby syntax and Git diff whitespace checks pass. Test providers replace external boundaries; no live authentication/network/store transfer was performed.
 
 Meaningful RED/GREEN evidence includes the legacy bypass, plan/runtime/native identity mutations, AAB replacement during lookup, omitted image classes, pending/partial retry and concurrency, cache corruption, command environment/argv, actual SDK image fields, write-edit drift, transformed image readback, dry-run verify, receipt collisions, added staged executables, false native guards, ignored bytecode caches, incomplete live build evidence, composer/JPEG output explicit existing-image deletion policy and version-named changelog mismatch and mutation between dependency verification/import and asset-manifest cache/provenance tampering.
 
-The Mirae six host tests exercise native mappings, no-home doctor, legacy bypass blocking, build-only argv, and both Apple/Google fixture workflows through generate/build-record -> download/diff -> plan/dry-run -> two preflights -> immutable upload -> readback. Final clean-clone logs and original-state evidence are stored in the execution workspace rather than copied into this package. Clean-clone object transport is local; the declared remote URL/commit identity is checked. The local candidate commits are not remotely published yet.
+The Mirae six consumer tests exercise native mappings, no-home doctor, legacy bypass blocking, build-only argv, and both Apple/Google fixture workflows through generate/regenerate/build-record -> download/export/import/diff -> plan/dry-run -> two preflights -> immutable upload -> readback. Final clean-clone logs and original-state evidence are stored in the execution workspace rather than copied into this package. Clean-clone object transport is local; the declared remote URL/commit identity is checked. The local candidate commits are not remotely published yet.
 
 ## Remaining gates and limitations
 
 - No actual authentication/transfer, external processing/readback, account permission/group discovery, signed build, physical-device capture or app release validation.
-- Mirae signed live builds remain blocked until a reviewed protected signing/native artifact inspection adapter exists. Fixture artifacts cannot qualify as live builds.
+- Mirae native Flutter build and IPA/AAB/APK inspection paths are implemented; native commands/signing were stubbed during verification. Actual SDK/signing/device acceptance remains unverified. Android builds require an owner-reviewed public signer SHA-256 pin; release builds also require an explicit protected signing file. Fixture artifacts cannot qualify as live builds.
 - Native Firebase/Steam/Toss/browser/OTA adapters, unsupported/new image classes, new Apple locale/version creation and localized binary beta notes remain blocked.
 - Pending/partial attempts can be verified. If exact readback cannot reconcile partial effects, recovery needs a separately reviewed workflow; there is no implicit rollback or force-retry.
 - Local target locks do not coordinate other machines; remote rechecks/readback remain necessary. Provider sessions/readbacks do not prove an atomic cross-machine transaction.
@@ -44,9 +44,9 @@ The reviewer inspected initial shared commit `32ad52b` and Mirae commit `1062076
 
 Regressions live in `tests/test_provider.py`, `tests/test_execution.py` and `tests/test_planning.py`. The fixed SDK interface is exercised without authentication/network, and both Apple/Google nonempty download paths are covered. Source/runtime mutation, immutable downloaded bytes and original P1 regressions remain part of the full suite.
 
-## Exact skipped checks
+## Public cross-consumer regressions
 
-The five tests in `FastlaneIntegrationTests` are skipped because `APP_STORE_ASSETS_PERSONAL_ROOT` is unset:
+All five `FastlaneIntegrationTests` pass with `APP_STORE_ASSETS_PERSONAL_ROOT` set:
 
 - `test_legacy_metadata_lanes_are_blocked_before_replacement`
 - `test_invalid_images_stop_before_upload_or_account_lookup`
@@ -54,15 +54,24 @@ The five tests in `FastlaneIntegrationTests` are skipped because `APP_STORE_ASSE
 - `test_reader_incompatible_inputs_stop_before_external_calls`
 - `test_metadata_only_option_does_not_require_a_screenshot_tool`
 
-Their harness copies actual Mirae/Ttush/Kkom Fastfiles into temporary repositories. Current authorization permits reuse only from Mirae/app-store-assets, so the cross-consumer suite is not run or replaced with counterfeit personal checkouts. These are skipped legacy integration checks, not missing credential tests. Synthetic legacy-bridge tests and the migrated Mirae pilot run separately; unmodified original consumers remain unverified under this package.
+The user's clarified authorization allows copying public Mirae/Ttush/Kkom Fastfiles into temporary test repositories; only Cami remains structural-only. No consumer source is vendored into the shared product. The harness uses an empty HOME and no authentication environment, denies network and external processes, and stubs account lookup/transfer. These results prove legacy guards under isolated stubs, not native/store acceptance or migration of untouched consumers. The previous skipped-test interpretation is superseded.
+
+## Local workflow completion
+
+`export` maps an immutable exact-target Apple/Google download into a new Fastlane-format editing directory. `import` validates public filenames before inventory reads, rejects unlisted files, preserves provider image annotations and publishes immutable history plus a new listing/image manifest. Existing metadata/changelog files are never overwritten. Unsupported image upload groups require explicit metadata-only import. Diff compares changed text and image identities/order while ignoring relocated local paths.
+
+Generated asset manifests retain the public recipe, declared source/tool/runtime/catalog identities and ordered final hashes. `regenerate` replays the same recipe and requires complete manifest/final-byte equality. Changed input/runtime/toolchain fails before composition. Widget/import provenance remains unchanged.
+
+Mirae's app-owned adapter preserves all three native flavors and development/release modes. It stages public inputs into a fresh build workspace, enforces the frozen dependency lock, reproduces the existing codegen/localization commands and freezes name/build/Git SHA. Derived workspaces suppress existing automatic Crashlytics symbol/mapping uploads. Native inspection checks app/version/device/debug mode and public signer/entitlement binding. Eight native contract tests replace every native command/signing read with stubs. Actual native execution was not performed.
 
 ## Formatter evidence
 
-Trunk CLI 1.25.0 could not initialize: a writable `/tmp` cache retry failed DNS for `trunk.io`; a direct DNS lookup confirmed the failure. Existing cache tools were invoked directly, without installation or network: Prettier 3.9.9, markdownlint 0.49.1, isort 9.0.2, Ruff 0.16.10, shfmt 3.14.1 and ShellCheck 0.11.0. The pinned Black 26.5.1 cache directory is empty; installed Black 26.10.0 provides an explicitly different-version formatting check. Mirae's changed Markdown/JSON/YAML, launcher and four new Python files are checked directly with the repository lint configurations. This does not claim the unavailable exact Trunk/Black gate passed.
+Trunk CLI 1.25.0 could not initialize: a writable `/tmp` cache retry failed DNS for `trunk.io`; a direct DNS lookup confirmed the failure. Existing cache tools were invoked directly, without installation or network: Prettier 3.9.9, markdownlint 0.49.1, isort 9.0.2, Ruff 0.16.10, shfmt 3.14.1 and ShellCheck 0.11.0. The pinned Black 26.5.1 cache directory is empty; installed Black 26.10.0 provides an explicitly different-version formatting check. Mirae's changed Markdown/JSON/YAML, launcher and all changed Python files are checked directly with the repository lint configurations. This does not claim the unavailable exact Trunk/Black gate passed.
 
 ## Reproduce
 
 ```bash
+APP_STORE_ASSETS_PERSONAL_ROOT=/absolute/personal/root \
 APP_STORE_ASSETS_FASTLANE_SOURCE=/absolute/path/to/fastlane-2.240.1 \
 APP_STORE_ASSETS_READER_RUBY=/absolute/path/to/ruby \
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v

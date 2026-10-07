@@ -13,7 +13,7 @@ from .environment import local_environment
 from .identity import runtime_inventory
 from .profiles import exact_keys, target_identity
 from .records import file_digest, inventory, record_digest, safe_path, verify_inventory
-from .snapshots import publish_snapshot
+from .snapshots import publish_snapshot, validate_snapshot
 
 
 def toolchain(optimize=False):
@@ -32,6 +32,7 @@ def toolchain(optimize=False):
 
 
 def generate(root, recipe, state):
+    recipe = dict(recipe, target=target_identity(recipe['target']))
     exact_keys(recipe, {'schema_version', 'target', 'inputs', 'outputs', 'toolchain', 'provenance',
                         'normalize_alpha', 'optimize', 'composer'}, ('schema_version', 'target', 'inputs', 'outputs', 'toolchain', 'provenance'))
     if recipe['schema_version'] != 1 or not recipe['outputs']:
@@ -114,11 +115,28 @@ def generate(root, recipe, state):
                     raise ValueError('local image optimization failed')
             assets.append({k: entry[k] for k in ('file', 'locale', 'slot')})
         validated = validate_images(output, assets, store)
-        for item, entry in zip(validated, recipe['outputs']):
+        for item, entry in zip(validated, recipe['outputs'], strict=True):
             item['source_sha256'] = sources[entry['source']]
         record = {'schema_version': 1, 'type': 'asset-manifest', 'target': target_identity(recipe['target']),
-                  'recipe_sha256': record_digest(recipe), 'inputs': expected, 'toolchain': locked,
+                  'recipe_sha256': record_digest(recipe), 'recipe': recipe, 'inputs': expected, 'toolchain': locked,
                   'runtime': runtime_inventory(Path(__file__).resolve().parents[1]),
                   'catalog_sha256': file_digest(CATALOG_FILE), 'provenance': provenance, 'assets': validated,
                   'composer_tool': composer_tool, 'composed_inputs': composed_inputs}
         return publish_snapshot(state, record, {item['file']: output / item['file'] for item in validated})
+
+
+def regenerate(root, recipe, expected_snapshot, state):
+    original = validate_snapshot(expected_snapshot)
+    expected = original['record']
+    recipe = dict(recipe, target=target_identity(recipe['target']))
+    if expected.get('type') != 'asset-manifest' or expected.get('target') != recipe['target']:
+        raise ValueError('regeneration manifest target/type differs')
+    current = {'recipe_sha256': record_digest(recipe), 'inputs': inventory(root, recipe['inputs']),
+               'toolchain': toolchain(recipe.get('optimize', False)),
+               'runtime': runtime_inventory(Path(__file__).resolve().parents[1]), 'catalog_sha256': file_digest(CATALOG_FILE)}
+    if any(expected.get(k) != v for k, v in current.items()):
+        raise ValueError('regeneration input/recipe/toolchain/runtime identity differs')
+    actual_path = generate(root, recipe, state)
+    if validate_snapshot(actual_path) != original:
+        raise ValueError('regenerated manifest/final bytes/order/provenance differ')
+    return {'status': 'verified', 'snapshot': actual_path, 'manifest_digest': record_digest(original)}

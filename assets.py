@@ -169,7 +169,7 @@ def prepare(args):
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] in {'doctor', 'plan', 'diff', 'generate', 'build', 'download', 'execute', 'verify'}:
+    if len(sys.argv) > 1 and sys.argv[1] in {'doctor', 'plan', 'diff', 'generate', 'regenerate', 'build', 'download', 'export', 'import', 'execute', 'verify'}:
         sys.dont_write_bytecode = True
         from app_store_assets.cli import main as pipeline_main
         return pipeline_main(sys.argv[1:])
