@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Store Assets profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "mode", "runtime", "targets"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project": {"type": "string", "minLength": 1},
+    "mode": {"enum": ["fixture", "live"]},
+    "runtime": {"type": "object", "required": ["path", "url", "commit", "files"]},
+    "targets": {"type": "object", "minProperties": 1},
+    "recipes": {"type": "object"},
+    "builds": {"type": "object"}
+  }
+}
