@@ -1,5 +1,6 @@
 """Stage reviewed bytes before remote lookup; preserve precise attempt state."""
 import os
+import fcntl
 import shutil
 import uuid
 from pathlib import Path
@@ -128,12 +129,14 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
         return record_digest({'account': target.get('account_id') or target['account'],
                               **{k: target[k] for k in ('app_id', 'store', 'platform')}})
     key = target_key(payload['target'])
-    lock = locks / (key + '.lock')
+    lock = safe_path(root, (locks / (key + '.lock')).relative_to(root).as_posix())
+    handle = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
-        handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError:
-        raise ValueError('concurrent target execution lock exists') from None
-    try:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError('concurrent target execution lock exists') from None
+        os.ftruncate(handle, 0)
         os.write(handle, canonical({'pid': os.getpid(), 'digest': plan['digest']}))
         for file in attempts.glob('*/receipt.json'):
             prior = read_json(file)
@@ -186,5 +189,6 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
             write_record(attempt / 'receipt.json', receipt)
             raise
     finally:
+        # Keep the inode stable: unlinking lets another process lock a different
+        # inode under the same pathname. The OS releases ownership on close/exit.
         os.close(handle)
-        lock.unlink()
