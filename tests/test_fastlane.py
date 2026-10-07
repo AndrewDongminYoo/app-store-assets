@@ -36,13 +36,13 @@ class FastlaneIntegrationTests(unittest.TestCase):
                 report['uploaded_png_color'] = data[25] if len(data) > 25 else None
             return result, report
 
-    def test_metadata_lanes_pass_validated_tree_and_explicit_replacement(self):
+    def test_legacy_metadata_lanes_are_blocked_before_replacement(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
             with self.subTest(project=project):
                 result, report = self.lane(project)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue(report['uploads'][0].get('overwrite_screenshots'))
-                self.assertEqual(report['uploaded_files'], ['en-US/01.png'])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(report['uploads'], [])
+                self.assertIn('reviewed plan', result.stderr)
 
     def test_invalid_images_stop_before_upload_or_account_lookup(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
@@ -51,12 +51,12 @@ class FastlaneIntegrationTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(report['uploads'], [])
                 self.assertEqual(report['review_reads'], 0)
-                self.assertIn('unsupported screenshot size', result.stderr)
+                self.assertIn('reviewed plan', result.stderr)
 
-    def test_ttush_normalizes_opaque_alpha_in_the_upload_bundle(self):
+    def test_legacy_alpha_inputs_do_not_authorize_replacement(self):
         result, report = self.lane('ttush_push', image=png(alpha=True))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(report.get('uploaded_png_color'), 2)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(report['uploads'], [])
 
     def test_reader_incompatible_inputs_stop_before_external_calls(self):
         cases = [
@@ -71,7 +71,7 @@ class FastlaneIntegrationTests(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(report['uploads'], [])
                     self.assertEqual(report['review_reads'], 0)
-                    self.assertIn(message, result.stderr)
+                    self.assertIn('reviewed plan', result.stderr)
 
     def test_metadata_only_option_does_not_require_a_screenshot_tool(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
