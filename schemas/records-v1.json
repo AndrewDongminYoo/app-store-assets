@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Immutable local snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "type", "record", "files"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "type": {"const": "snapshot"},
+    "record": {"type": "object"},
+    "files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+  }
+}
