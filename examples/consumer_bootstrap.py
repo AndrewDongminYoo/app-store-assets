@@ -6,6 +6,8 @@ import os
 import re
 import subprocess
 import sys
+import shutil
+import tempfile
 from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
@@ -74,17 +76,26 @@ def verify():
             actual[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     if 'assets.py' not in actual or actual != pin['files']:
         raise ValueError('runtime inventory/hash differs from approval')
-    return runtime
+    return runtime, actual
 
 
 def main():
     try:
         if any(arg in ('--root', '--profile') or arg.startswith(('--root=', '--profile=')) for arg in sys.argv[1:]):
             raise ValueError('consumer root/profile overrides are forbidden')
-        runtime = verify()
-        sys.path.insert(0, str(runtime))
-        from app_store_assets.cli import main as run
-        return run([*sys.argv[1:], '--root', str(ROOT), '--profile', 'store-upload.json'])
+        runtime, expected = verify()
+        with tempfile.TemporaryDirectory(prefix='verified-store-runtime-') as temporary:
+            staged = Path(temporary)
+            for name, digest in expected.items():
+                source, destination = safe(runtime, name), safe(staged, name)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, destination, follow_symlinks=False)
+                if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+                    raise ValueError('runtime changed while staging before import')
+                destination.chmod(0o444)
+            sys.path.insert(0, str(staged))
+            from app_store_assets.cli import main as run
+            return run([*sys.argv[1:], '--root', str(ROOT), '--profile', 'store-upload.json'])
     except (ValueError, OSError, KeyError, TypeError) as error:
         print('FAIL: ' + str(error), file=sys.stderr)
         return 1

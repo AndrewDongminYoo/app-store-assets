@@ -33,6 +33,21 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('runtime', result.stderr)
         self.assertNotIn('AssertionError', result.stderr)
 
+    def test_mutation_after_verification_cannot_execute_modified_runtime(self):
+        wrapper = '''import importlib.util,pathlib,sys
+s=importlib.util.spec_from_file_location('bootstrap',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+verify=m.verify
+def changed():
+ result=verify();runtime=result[0] if isinstance(result,tuple) else result
+ (runtime/'assets.py').write_text('raise AssertionError("unverified runtime executed")')
+ return result
+m.verify=changed;sys.argv=[sys.argv[1],'doctor','--target','production'];sys.exit(m.main())
+'''
+        result = subprocess.run([sys.executable, '-I', '-S', '-c', wrapper, str(self.script)], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('AssertionError', result.stderr)
+        self.assertIn('runtime', result.stderr)
+
     def test_override_paths_and_home_runtime_are_rejected(self):
         for args, env in [(('--root', '/tmp'), None), (('--profile=foreign.json',), None),
                           ((), dict(os.environ, APP_STORE_ASSETS_ROOT='/tmp/unapproved'))]:
