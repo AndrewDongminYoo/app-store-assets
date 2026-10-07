@@ -143,6 +143,32 @@ print(json.dumps({'files':['composed.png']}))
 
 
 class ImagePlanTests(unittest.TestCase):
+    def test_selected_asset_manifest_is_bound_and_cache_tampering_blocks(self):
+        planning = module(self, 'planning')
+        root, profile = fixture(self)
+        (root / 'captures').mkdir()
+        (root / 'captures/01.png').write_bytes(png())
+        generation = module(self, 'generation')
+        recipe = {'schema_version': 1, 'target': profile['targets']['production'], 'inputs': ['captures'],
+                  'outputs': [{'source': 'captures/01.png', 'file': 'images/01.png', 'locale': 'en-US', 'slot': 'APP_IPHONE_65'}],
+                  'toolchain': generation.toolchain(), 'provenance': {'status': 'unverified-import'}}
+        snapshot = generation.generate(root, recipe, root / 'asset-history')
+        image = snapshot / 'images/01.png'
+        listing = json.loads((root / 'metadata/listing.json').read_text())
+        listing['images'] = {'en-US': {'APP_IPHONE_65': [{'file': image.relative_to(root).as_posix(), 'sha256': hashlib.sha256(image.read_bytes()).hexdigest()}]}}
+        write_json(root / 'metadata/listing.json', listing)
+        target = profile['targets']['production']
+        target['assets'] = {'manifest': (snapshot / 'manifest.json').relative_to(root).as_posix()}
+        target['replacement'] = {'locales': ['en-US'], 'slots': ['APP_IPHONE_65'], 'allow_delete': False}
+        write_json(root / 'store-upload.json', profile)
+        plan = planning.make_plan(root, 'store-upload.json', 'production', 'images')
+        self.assertIn(target['assets']['manifest'], plan['payload']['inputs'])
+        manifest = json.loads((snapshot / 'manifest.json').read_text())
+        manifest['record']['provenance'] = {'status': 'verified-native-capture'}
+        write_json(snapshot / 'manifest.json', manifest)
+        with self.assertRaisesRegex(ValueError, 'snapshot|manifest|address'):
+            planning.verify_plan(root, plan)
+
     def test_listing_image_bytes_and_inventory_are_bound_before_transfer(self):
         planning = module(self, 'planning')
         root, profile = fixture(self)

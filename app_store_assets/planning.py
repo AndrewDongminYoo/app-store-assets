@@ -59,6 +59,7 @@ def make_plan(root, profile_path, target_name, operation):
         artifact = artifact_record(root, profile, target)
         paths += list(target['artifact'].values())
     listing = None
+    assets = None
     if target.get('metadata'):
         paths.append(target['metadata'])
         listing = read_json(safe_path(root, target['metadata']))
@@ -77,6 +78,23 @@ def make_plan(root, profile_path, target_name, operation):
                 raise ValueError('empty image listing')
             validated = validate_images(root, entries, target['store'])
             paths += [item['file'] for item in validated]
+            descriptor = target.get('assets')
+            if profile['mode'] == 'live' and not descriptor:
+                raise ValueError('live images require a selected immutable asset manifest')
+            if descriptor:
+                exact_keys(descriptor, {'manifest'}, ('manifest',))
+                manifest_path = safe_path(root, descriptor['manifest'])
+                assets = validate_snapshot(manifest_path.parent)['record']
+                if assets.get('type') != 'asset-manifest' or assets.get('target') != target_identity(target):
+                    raise ValueError('asset manifest target/version differs')
+                if assets.get('provenance', {}).get('status') not in ('widget-rendered', 'unverified-import'):
+                    raise ValueError('asset manifest native capture evidence adapter is unsupported')
+                prefix = manifest_path.parent.relative_to(root)
+                intended = {(str(prefix / item['file']), item['locale'], item['slot'], item['sha256']) for item in assets['assets']}
+                actual = {(item['file'], item['locale'], item['slot'], item['sha256']) for item in validated}
+                if intended != actual or len(assets['assets']) != len(validated):
+                    raise ValueError('asset manifest inventory differs from listing')
+                paths.append(descriptor['manifest'])
     remote = None
     if target.get('remote'):
         paths.append(target['remote'])
@@ -103,7 +121,7 @@ def make_plan(root, profile_path, target_name, operation):
                'python': python_identity(), 'input_paths': sorted(set(paths)), 'inputs': inventory(root, paths),
                'catalog_sha256': file_digest(CATALOG_FILE),
                'artifact': target.get('artifact') if artifact else None, 'build': artifact,
-               'listing': listing, 'remote': remote, 'release_notes': notes,
+               'listing': listing, 'assets': assets, 'remote': remote, 'release_notes': notes,
                'replacement': target.get('replacement'), 'release_status': target.get('release_status'),
                'provider': target['provider']}
     payload['provider_executable'] = executable_identity(target['provider']['argv'])
