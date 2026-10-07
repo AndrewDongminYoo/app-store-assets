@@ -1,5 +1,6 @@
 """Strict public configuration and explicit application/target identities."""
 import re
+from pathlib import PurePosixPath
 
 from .records import read_json, safe_path
 
@@ -62,6 +63,11 @@ def load_profile(root, path, name):
     if target['store'] == 'google' and (target.get('release_status') not in ('draft', 'completed', 'inProgress', 'halted')
                                        or not target.get('track')):
         raise ValueError('Google requires explicit track and release_status')
+    if target['store'] == 'google':
+        for name in target.get('changelogs', {}).values():
+            path = PurePosixPath(name)
+            if 'changelogs' in path.parts and path.name != version['build'] + '.txt':
+                raise ValueError('version-named Google changelog differs from target build')
     if not isinstance(target['inputs'], list) or not target['inputs']:
         raise ValueError('declared input inventory is required')
     exact_keys(target['provider'], {'kind', 'argv', 'inputs', 'gemfile'}, ('kind', 'argv'))

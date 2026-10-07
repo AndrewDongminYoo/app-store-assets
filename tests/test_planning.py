@@ -68,6 +68,13 @@ class PlanningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'source|guard|inspection'):
             self.plan()
 
+    def test_google_version_named_changelog_must_match_build(self):
+        root, profile = fixture(self, store='google')
+        profile['targets']['production']['changelogs'] = {'en-US': 'metadata/en-US/changelogs/8.txt'}
+        write_json(root / 'store-upload.json', profile)
+        with self.assertRaisesRegex(ValueError, 'changelog|version'):
+            module(self, 'profiles').load_profile(root, 'store-upload.json', 'production')
+
     def test_artifact_native_identity_must_agree_with_selected_target(self):
         record = json.loads((self.root / 'artifact.json').read_text())
         for key, value in [('app_id', 'com.example.other'), ('flavor', 'staging'),
