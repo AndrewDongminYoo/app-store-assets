@@ -4,6 +4,7 @@ from pathlib import Path
 from .identity import git, python_identity, runtime_identity
 from .commands import executable_identity
 from .catalog import CATALOG_FILE, validate_fields, validate_images
+from .metadata import remote_observation
 from .profiles import exact_keys, load_profile, target_identity
 from .records import file_digest, inventory, read_json, record_digest, safe_path, verify_inventory
 from .snapshots import validate_snapshot
@@ -66,7 +67,7 @@ def make_plan(root, profile_path, target_name, operation):
         for key in ('store', 'platform', 'account', 'app_id', 'flavor', 'stage', 'version'):
             if listing.get('target', {}).get(key) != target[key]:
                 raise ValueError(f'metadata target/version differs: {key}')
-        validate_fields(listing.get('fields', {}), target['store'])
+        listing['fields'] = validate_fields(listing.get('fields', {}), target['store'])
         if operation == 'images':
             exact_keys(target.get('replacement'), {'locales', 'slots', 'allow_delete'}, ('locales', 'slots', 'allow_delete'))
             policy = target['replacement']
@@ -100,9 +101,12 @@ def make_plan(root, profile_path, target_name, operation):
         paths.append(target['remote'])
         remote = read_json(safe_path(root, target['remote']))
         if remote.get('type') == 'snapshot':
-            remote = validate_snapshot(safe_path(root, target['remote']).parent)['record']
+            snapshot = safe_path(root, target['remote']).parent
+            remote = validate_snapshot(snapshot)['record']
+            paths.append(snapshot.relative_to(root).as_posix())
         if remote.get('target') != target_identity(target):
             raise ValueError('remote snapshot target differs')
+        remote = remote_observation(remote)
     notes = {}
     if operation == 'binary':
         for locale, path in target.get('changelogs', {}).items():

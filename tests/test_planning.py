@@ -91,6 +91,19 @@ class PlanningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unknown'):
             self.plan()
 
+    def test_google_description_alias_is_canonical_before_approval_and_readback(self):
+        root, profile = fixture(self, store='google')
+        plan = self.planning.make_plan(root, 'store-upload.json', 'production', 'metadata')
+        self.assertEqual(plan['payload']['listing']['fields']['en-US'], {'full_description': 'Approved description'})
+        report = {'target': plan['payload']['target'], 'observed': {'fields': {
+            'en-US': {'full_description': 'Approved description'}}}}
+        self.assertTrue(module(self, 'execution').readback_matches(plan['payload'], report, {}))
+        listing = json.loads((root / 'metadata/listing.json').read_text())
+        listing['fields']['en-US']['full_description'] = 'conflicting text'
+        write_json(root / 'metadata/listing.json', listing)
+        with self.assertRaisesRegex(ValueError, 'alias|conflict'):
+            self.planning.make_plan(root, 'store-upload.json', 'production', 'metadata')
+
     def test_symlink_or_parent_escape_is_rejected(self):
         target = self.profile['targets']['production']
         for path in ('../outside', '/tmp/outside'):

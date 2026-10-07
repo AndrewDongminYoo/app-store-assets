@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- One implementer; no source/doc/fixture/asset copying from Cami or other consumers.
+- One implementer, plus one independently scoped reviewer authorized for the final check; no review cluster. No source/doc/fixture/asset copying from Cami or other consumers.
 - Reuse implementation only from Mirae and app-store-assets.
 - Original dirty repositories, HEADs and untracked inputs remain untouched.
 - No actual store authentication/transfer, credential reads or creation, public publication, visibility change, app release, PR or push.
@@ -95,19 +95,23 @@
 
 ## Task 7: Mirae pinned clean-clone pilot
 
-**Files (isolated Mirae):** `store-upload`, `store-upload.json`, `scripts/store_assets/{build,artwork}.py`, `scripts/test_store_assets.py`, `docs/notes/store-assets.md`, dependency gitlink/manifest.
+Host-only acceptance completed. Signed/native/device and actual store acceptance remain outside this completed slice.
+
+**Files (isolated Mirae):** `store-upload`, `store-upload.json`, `scripts/store_assets/{build,artwork}.py`, `scripts/test_store_assets.py`, `docs/notes/store-upload.md`, dependency gitlink/manifest.
 **Interfaces:** launcher verifies URL/commit/full inventory before importing CLI; actual production/staging/development identities stay in Mirae; app-specific composer stays owned by Mirae.
 
-- [ ] RED: fresh consumer clone without home/sibling state runs offline plan; altered dependency, artifact/native identity and helper/changelog fail; fixture transfer uses exact staged paths.
-- [ ] Integrate dependency and build-only/artwork adapters in isolated Mirae, including originally untracked required configuration in candidate commits.
-- [ ] Prove fixture workflow generate/build-record -> snapshots/diff -> plan -> fake target preflight -> upload -> readback from clean clones. No signed build/device run.
-- [ ] Commit only candidate consumer changes; retain full clean-clone evidence.
+- [x] RED: fresh consumer clone without home/sibling state runs offline plan; altered dependency, artifact/native identity and helper/changelog fail; fixture transfer uses exact staged paths.
+- [x] Integrate dependency and build-only/artwork adapters in isolated Mirae, including originally untracked required configuration in candidate commits.
+- [x] Prove fixture workflow generate/build-record -> snapshots/diff -> plan -> fake target preflight -> upload -> readback from clean clones. No signed build/device run.
+- [x] Commit only candidate consumer changes; retain full clean-clone evidence.
 
 ## Task 8: Review, checks and handoff
 
+Host-only checks completed with one implementer and one user-authorized independent reviewer. Direct installed formatter checks supplement the unavailable Trunk CLI; the exact pinned Black version remains unavailable.
+
 **Files:** operational docs, CI, runtime inventory, `docs/notes/2026-10-07-implementation.md`.
 
-- [ ] Self-review each contract/diff and pin all new executable/schema/catalog inputs.
-- [ ] Run entire suite, opt-in real Fastlane reader, Ruby syntax, Git diff checks and clean-clone pilot.
-- [ ] Compare original Mirae/app-store-assets state/hashes with baseline.
-- [ ] Report implemented capabilities, candidate commit/path, remaining provider/signing/device validations, LICENSE and separate PR/push authority. Do not merge/push/publish.
+- [x] Self-review each contract/diff and pin all new executable/schema/catalog inputs.
+- [x] Run entire suite, opt-in real Fastlane reader, Ruby syntax, Git diff checks and clean-clone pilot.
+- [x] Compare original Mirae/app-store-assets state/hashes with baseline.
+- [x] Report implemented capabilities, candidate commit/path, remaining provider/signing/device validations, LICENSE and separate PR/push authority. Do not merge/push/publish.

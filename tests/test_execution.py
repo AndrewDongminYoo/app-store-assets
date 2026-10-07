@@ -41,7 +41,7 @@ class FakeProvider:
             return {'target': payload['target'], 'observed': {'fields': payload['listing']['fields'],
                                                             'images': payload['listing']['images']}}
         return {'target': payload['target'], 'observed': {
-            'binary': {'app_id': payload['target']['app_id'], 'version': payload['target']['version'],
+            'binary': {'app_id': payload['target']['app_id'], 'version': payload['target']['version'], 'platform': payload['target']['platform'],
                        'source_sha256': payload['build']['sha256'], 'processing_state': 'processed'},
             'release_status': payload['release_status'], 'release_notes': payload['release_notes']}}
 
@@ -58,7 +58,7 @@ class ExecutionTests(unittest.TestCase):
 
     def execute(self, plan=None, **kwargs):
         plan = plan or self.plan()
-        return self.executor.execute(self.root, plan, plan['digest'], self.provider, self.root / 'state', **kwargs)
+        return self.executor.execute(self.root, plan, plan['digest'], self.provider, self.root / 'build/store-assets', **kwargs)
 
     def test_artifact_replaced_during_remote_lookup_uploads_reviewed_staged_bytes(self):
         self.provider.on_snapshot = lambda _: (self.root / 'artifacts/app.bin').write_bytes(b'replaced during lookup')
@@ -139,12 +139,12 @@ class ExecutionTests(unittest.TestCase):
         receipt = self.execute(dry_run=True)
         self.assertEqual(receipt['status'], 'dry-run')
         self.assertEqual(self.provider.writes, [])
-        self.assertFalse((self.root / 'state').exists())
+        self.assertFalse((self.root / 'build/store-assets').exists())
 
     def test_wrong_digest_blocks_before_remote_lookup(self):
         plan = self.plan()
         with self.assertRaisesRegex(ValueError, 'digest'):
-            self.executor.execute(self.root, plan, 'wrong', self.provider, self.root / 'state')
+            self.executor.execute(self.root, plan, 'wrong', self.provider, self.root / 'build/store-assets')
         self.assertEqual(self.provider.reads, [])
 
     def test_native_track_status_notes_cannot_inherit_environment_defaults(self):
@@ -170,6 +170,22 @@ class ExecutionTests(unittest.TestCase):
             self.execute(plan)
         self.assertEqual(len(self.provider.writes), 1)
 
+    def test_alternate_state_cannot_bypass_pending_or_concurrency_guards(self):
+        self.provider.pending = True
+        plan = self.plan()
+        self.execute(plan)
+        with self.assertRaisesRegex(ValueError, 'canonical|state|pending'):
+            self.executor.execute(self.root, plan, plan['digest'], self.provider, self.root / 'different-state')
+        self.assertEqual(len(self.provider.writes), 1)
+
+    def test_binary_readback_requires_actual_platform(self):
+        plan = self.plan()
+        report = self.provider.readback(plan, {})
+        report['observed']['binary']['platform'] = 'macos'
+        self.assertFalse(self.executor.readback_matches(plan['payload'], report, {}))
+        del report['observed']['binary']['platform']
+        self.assertFalse(self.executor.readback_matches(plan['payload'], report, {}))
+
     def test_null_remote_binary_is_processing_pending(self):
         self.provider.readback = lambda plan, result: {'target': plan['payload']['target'], 'observed': {'binary': None}}
         self.assertEqual(self.execute()['status'], 'accepted_pending_verification')
@@ -184,7 +200,7 @@ class ExecutionTests(unittest.TestCase):
 
     def test_added_staged_helper_blocks_before_transfer(self):
         def add_helper(provider):
-            staged = next((self.root / 'state/attempts').glob('*/inputs'))
+            staged = next((self.root / 'build/store-assets/attempts').glob('*/inputs'))
             (staged / 'helpers/extra.py').write_text('unreviewed executable')
         self.provider.on_snapshot = add_helper
         with self.assertRaisesRegex(ValueError, 'inventory|added'):
@@ -193,7 +209,8 @@ class ExecutionTests(unittest.TestCase):
 
     def test_state_symlink_blocks_before_read(self):
         (self.root / 'actual-state').mkdir()
-        (self.root / 'state').symlink_to(self.root / 'actual-state', target_is_directory=True)
+        (self.root / 'build').mkdir()
+        (self.root / 'build/store-assets').symlink_to(self.root / 'actual-state', target_is_directory=True)
         with self.assertRaisesRegex(ValueError, 'symlink'):
             self.execute()
         self.assertEqual(self.provider.reads, [])
@@ -212,7 +229,7 @@ class ExecutionTests(unittest.TestCase):
         plan = self.plan()
         with self.assertRaises(RuntimeError):
             self.execute(plan)
-        receipts = list((self.root / 'state/attempts').glob('*/receipt.json'))
+        receipts = list((self.root / 'build/store-assets/attempts').glob('*/receipt.json'))
         self.assertEqual(len(receipts), 1)
         self.assertEqual(json.loads(receipts[0].read_text())['status'], 'failed_partial')
         with self.assertRaisesRegex(ValueError, 'attempt|pending|already'):

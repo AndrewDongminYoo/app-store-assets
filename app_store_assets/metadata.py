@@ -15,6 +15,17 @@ PUBLIC_FIELDS = {'name', 'title', 'subtitle', 'description', 'full_description',
 IMAGE_FIELDS = {'id', 'file', 'sha256', 'source_sha256', 'provider_sha256', 'processing_state', 'width', 'height'}
 
 
+def remote_observation(record):
+    """Remove only local download annotations; retain provider state and order."""
+    result = copy.deepcopy(record)
+    for groups in result.get('images', {}).values():
+        for images in groups.values():
+            for image in images:
+                image.pop('file', None)
+                image.pop('sha256', None)
+    return result
+
+
 def normalize_fields(fields):
     result = {}
     for locale, values in fields.items():

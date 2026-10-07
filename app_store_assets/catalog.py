@@ -81,6 +81,12 @@ def validate_images(root, entries, store):
 
 def validate_fields(fields, store):
     clean = normalize_fields(fields)
+    if store == 'google':
+        for values in clean.values():
+            if 'description' in values:
+                if 'full_description' in values and values['full_description'] != values['description']:
+                    raise ValueError('conflicting Google description alias')
+                values['full_description'] = values.pop('description')
     limits = rules()['stores'].get(store, {}).get('text_limits', {})
     for values in clean.values():
         for key, value in values.items():

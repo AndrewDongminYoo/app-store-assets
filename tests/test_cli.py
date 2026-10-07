@@ -62,8 +62,8 @@ class CliTests(unittest.TestCase):
         from app_store_assets.execution import execute
         from test_execution import FakeProvider
         plan = json.loads(self.cli('plan').stdout)
-        receipt = execute(self.root, plan, plan['digest'], FakeProvider(self.root), self.root / 'state')
-        path = self.root / 'state/attempts' / receipt['attempt'] / 'receipt.json'
+        receipt = execute(self.root, plan, plan['digest'], FakeProvider(self.root), self.root / 'build/store-assets')
+        path = self.root / 'build/store-assets/attempts' / receipt['attempt'] / 'receipt.json'
         original = path.read_bytes()
         with patch.object(cli, 'CommandProvider', side_effect=AssertionError('dry run provider')), redirect_stdout(io.StringIO()):
             result = cli.main(['verify', '--root', str(self.root), '--target', 'production',

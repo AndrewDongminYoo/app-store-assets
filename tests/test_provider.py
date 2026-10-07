@@ -1,10 +1,11 @@
 """Run repository Ruby adapters with synthetic SDK models and no auth/network."""
 import subprocess
 import os
+import json
 import unittest
 from pathlib import Path
 
-from pipeline_support import ROOT
+from pipeline_support import ROOT, fixture, module, write_json
 
 RUBY = r'''
 require 'json'
@@ -108,7 +109,8 @@ end
 $LOADED_FEATURES << 'google/apis/androidpublisher_v3.rb'
 class WriteClient < GoogleClient
   attr_reader :written_track
-  def upload_bundle(path); @events << ['upload']; OpenStruct.new(version_code:9); end
+  # Supply::Client#upload_bundle returns the integer versionCode, not a Bundle.
+  def upload_bundle(path); @events << ['upload']; 9; end
   def update_track(name, track); @written_track=[name,track]; end
   def validate_current_edit!; @events << ['validate']; end
   def commit_current_edit!; @events << ['commit']; end
@@ -175,6 +177,38 @@ if ARGV[2]=='delete_policy'
     raise unless e.message.include?('requires explicit')
   end
 end
+if ARGV[2]=='apple_platform'
+  class BuildApp < App
+    attr_accessor :builds
+    def get_builds(**); builds; end
+  end
+  app=BuildApp.new
+  mac=OpenStruct.new(version:'9',processing_state:'VALID',pre_release_version:OpenStruct.new(version:'1.0',platform:'MAC_OS'))
+  ios=OpenStruct.new(version:'9',processing_state:'VALID',pre_release_version:OpenStruct.new(version:'1.0',platform:'IOS'))
+  app.builds=[mac]
+  provider=StoreProvider::Apple.new(app)
+  raise 'macOS build recognized as iOS' unless provider.snapshot(target)['binary'].nil?
+  app.builds=[mac,ios]
+  raise 'actual iOS build platform missing' unless provider.snapshot(target).dig('binary','platform')=='ios'
+end
+if ARGV[2]=='download_annotations'
+  module StoreProvider
+    def self.download_image(url,destination)
+      path=destination+'.png'; FileUtils.mkdir_p(File.dirname(path)); File.binwrite(path,'synthetic-image'); path
+    end
+  end
+  image=OpenStruct.new(id:'image-1',asset_delivery_state:{'state'=>'COMPLETE'},
+    image_asset:{'templateUrl'=>'https://example.invalid/{w}x{h}.{f}','width'=>1242,'height'=>2688})
+  set=OpenStruct.new(screenshot_display_type:'APP_IPHONE_65',app_screenshots:[image])
+  app=App.new
+  app.versions.last.localization.define_singleton_method(:get_app_screenshot_sets) { [set] }
+  apple=StoreProvider::Apple.new(app)
+  google=StoreProvider::Google.new(ImageClient.new)
+  Dir.mktmpdir do |root|
+    puts JSON.generate(downloads:[{'record'=>apple.download(target,root)['record'],'observed'=>apple.snapshot(target)},
+      {'record'=>google.download(gt,root)['record'],'observed'=>google.snapshot(gt)}])
+  end
+end
 puts JSON.generate(exact_version: true, conflicting_id_blocked: true, google_read_never_commits: true)
 '''
 
@@ -200,11 +234,90 @@ class ProviderTests(unittest.TestCase):
     def test_deleting_existing_images_requires_explicit_policy(self):
         self.run_case('delete_policy')
 
+    def test_apple_builds_are_filtered_by_actual_platform(self):
+        self.run_case('apple_platform')
+
+    def test_nonempty_native_downloads_plan_and_preflight_without_losing_file_binding(self):
+        result = self.run_case('download_annotations')
+        records = next(json.loads(line)['downloads'] for line in result.stdout.splitlines() if 'downloads' in line)
+        for value in records:
+            with self.subTest(store=value['record']['target']['store']):
+                root, profile = fixture(self, store=value['record']['target']['store'])
+                target = profile['targets']['production']
+                if target['store'] == 'google':
+                    target['track'] = 'internal'
+                files = {item['file']: b'synthetic-image' for groups in value['record']['images'].values()
+                         for images in groups.values() for item in images}
+                snapshot = module(self, 'snapshots').publish_snapshot(root / 'downloads', value['record'], files)
+                target['remote'] = (snapshot / 'manifest.json').relative_to(root).as_posix()
+                write_json(root / 'store-upload.json', profile)
+                plan = module(self, 'planning').make_plan(root, 'store-upload.json', 'production', 'metadata')
+                observed = module(self, 'metadata').normalize_remote(value['observed'], plan['payload']['target'])
+                module(self, 'execution').preflight(plan['payload'], observed)
+                planned_image = next(item for groups in plan['payload']['remote']['images'].values()
+                                     for images in groups.values() for item in images)
+                self.assertNotIn('file', planned_image)
+                changed = json.loads(json.dumps(observed))
+                changed_image = next(item for groups in changed['images'].values() for images in groups.values() for item in images)
+                changed_image['id'] = 'concurrent-image'
+                with self.assertRaisesRegex(ValueError, 'snapshot|revision'):
+                    module(self, 'execution').preflight(plan['payload'], changed)
+                (snapshot / next(iter(files))).write_bytes(b'changed local download')
+                with self.assertRaisesRegex(ValueError, 'hash|inventory|manifest'):
+                    module(self, 'planning').verify_plan(root, plan)
+
     def test_actual_supply_sdk_image_fields(self):
         root = os.environ.get('APP_STORE_ASSETS_FASTLANE_SOURCE')
         if not root:
             self.skipTest('set APP_STORE_ASSETS_FASTLANE_SOURCE for actual pinned Supply SDK model')
         self.run_case(image_model=str(Path(root) / 'supply/lib/supply/image_listing.rb'))
+
+    def test_actual_supply_upload_bundle_scalar_is_accepted(self):
+        root = os.environ.get('APP_STORE_ASSETS_FASTLANE_SOURCE')
+        if not root:
+            self.skipTest('set APP_STORE_ASSETS_FASTLANE_SOURCE for actual pinned Supply client')
+        source = r'''
+require 'json'; require 'ostruct'; require 'tmpdir'; require 'net/http'
+Net::HTTP.define_singleton_method(:start) { |*args, **kwargs| raise 'network forbidden' }
+$LOAD_PATH.unshift(*Dir.glob(File.join(ARGV[1], '*/lib')))
+require 'supply/client'
+module Supply; class << self; attr_accessor :config; end; end
+Supply.config={ack_bundle_installation_warning:false}
+require ARGV[0]
+class NativeReturnClient < Supply::Client
+  attr_reader :events
+  def initialize; @events=[]; end
+  def begin_edit(package_name:); @events << 'begin'; self.current_edit=OpenStruct.new(id:'fixture'); self.current_package_name=package_name; end
+  def abort_current_edit; @events << 'abort'; self.current_edit=nil; end
+  def listings; []; end
+  def track_releases(track); []; end
+  def aab_version_codes; []; end
+  def apks_version_codes; []; end
+  def validate_current_edit!; @events << 'validate'; end
+  def commit_current_edit!; @events << 'commit'; end
+  def update_track(*); @events << 'update-track'; end
+end
+client=NativeReturnClient.new
+transport=Object.new
+transport.define_singleton_method(:upload_edit_bundle) { |*args,**kwargs| Google::Apis::AndroidpublisherV3::Bundle.new(version_code:9) }
+client.client=transport
+target={'store'=>'google','platform'=>'android','account'=>'fixture','app_id'=>'com.example.fixture',
+  'flavor'=>'production','stage'=>'production','track'=>'internal','version'=>{'name'=>'1.0','build'=>'9'}}
+Dir.mktmpdir do |folder|
+  File.binwrite(File.join(folder,'app.aab'),'synthetic-binary')
+  provider=StoreProvider::Google.new(client)
+  payload={'target'=>target,'operation'=>'binary','remote'=>provider.snapshot(target),'release_status'=>'draft',
+    'release_notes'=>{},'artifact'=>{'path'=>'app.aab'},'build'=>{'sha256'=>Digest::SHA256.hexdigest('synthetic-binary')}}
+  raise 'acceptance missing' unless provider.upload({'payload'=>payload},folder)['accepted']
+  raise 'scalar result did not reach track/commit' unless client.events.last(3)==['update-track','validate','commit']
+end
+'''
+        sdk = Path(root)
+        env = dict(os.environ, GEM_HOME=str(sdk.parent.parent), GEM_PATH=str(sdk.parent.parent))
+        result = subprocess.run([os.environ.get('APP_STORE_ASSETS_READER_RUBY', 'ruby'), '-e', source,
+                                 str(ROOT / 'lib/store_provider.rb'), str(sdk)], env=env,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_cli_adapter_missing_authority_stops_before_sdk_authentication(self):
         result = subprocess.run(['ruby', str(ROOT / 'lib/store_provider.rb')], input='{"action":"snapshot"}',

@@ -112,11 +112,12 @@ module StoreProvider
         end
       end
       builds = @app.get_builds(filter: {"version" => target.fetch("version").fetch("build")}, includes: "preReleaseVersion")
-      exact = builds.select { |b| b.version.to_s == target["version"]["build"] && b.pre_release_version&.version == target["version"]["name"] }
+      platform = target.fetch("platform") == "macos" ? "MAC_OS" : "IOS"
+      exact = builds.select { |b| b.version.to_s == target["version"]["build"] && b.pre_release_version&.version == target["version"]["name"] && b.pre_release_version&.platform == platform }
       raise "ambiguous Apple build" if exact.length > 1
       binary = exact.first && {"app_id" => target["app_id"], "version" => {"name" => exact.first.pre_release_version.version,
                  "build" => exact.first.version.to_s}, "processing_state" => exact.first.processing_state == "VALID" ? "processed" : "pending",
-                 "source_sha256" => nil}
+                 "platform" => exact.first.pre_release_version.platform == "MAC_OS" ? "macos" : "ios", "source_sha256" => nil}
       StoreProvider.snapshot_record(target, {"version_id" => selected&.id, "app_info_id" => @app_info&.id,
         "editable" => selected && EDITABLE.include?(selected.app_store_state),
         "review_active" => selected && REVIEW.include?(selected.app_store_state),
@@ -278,7 +279,7 @@ module StoreProvider
           require "google/apis/androidpublisher_v3"
           artifact = StoreProvider.path(root, payload.fetch("artifact").fetch("path"), payload.fetch("build").fetch("sha256"))
           uploaded = @client.upload_bundle(artifact)
-          raise "uploaded Google versionCode differs" unless uploaded.version_code.to_s == target["version"]["build"]
+          raise "uploaded Google versionCode differs" unless uploaded.to_s == target["version"]["build"]
           notes = payload.fetch("release_notes", {}).map { |locale, text| ::Google::Apis::AndroidpublisherV3::LocalizedText.new(language: locale, text: text) }
           release = ::Google::Apis::AndroidpublisherV3::TrackRelease.new(name: target["version"]["name"], status: payload.fetch("release_status"),
             version_codes: [target["version"]["build"].to_i], release_notes: notes)
@@ -287,10 +288,10 @@ module StoreProvider
           @client.update_track(target.fetch("track"), track)
         elsif payload.fetch("operation") == "metadata"
           fields = payload.fetch("listing").fetch("fields")
-          fields.each_value { |values| raise "unsupported Google metadata field" unless (values.keys - %w(title short_description full_description description video)).empty? }
+          fields.each_value { |values| raise "unsupported Google metadata field" unless (values.keys - %w(title short_description full_description video)).empty? }
           fields.each do |locale, values|
             listing = @client.listing_for_language(locale)
-            values.each { |k, v| listing.public_send((k == "description" ? "full_description" : k) + "=", v) }
+            values.each { |k, v| listing.public_send(k + "=", v) }
             listing.save
           end
         elsif payload.fetch("operation") == "images"
@@ -330,7 +331,7 @@ module StoreProvider
       target = payload.fetch("target")
       release = current.fetch("releases").find { |r| r.fetch("version_codes").include?(target["version"]["build"]) }
       binary = release && {"app_id" => target["app_id"], "version" => {"name" => release["name"], "build" => target["version"]["build"]},
-                           "source_sha256" => nil, "processing_state" => current["build_exists"] ? "processed" : "pending"}
+                           "platform" => "android", "source_sha256" => nil, "processing_state" => current["build_exists"] ? "processed" : "pending"}
       {"target" => target, "observed" => {"binary" => binary, "release_status" => release && release["status"],
         "release_notes" => release && release["notes"], "fields" => current["fields"], "images" => current["images"]}}
     end

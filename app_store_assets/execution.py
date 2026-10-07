@@ -7,6 +7,8 @@ from pathlib import Path
 from .planning import verify_plan
 from .records import canonical, file_digest, read_json, record_digest, safe_path, verify_inventory
 
+ATTEMPT_STATE = 'build/store-assets'
+
 
 def write_record(path, value):
     temporary = path.with_name('.' + path.name + '-' + uuid.uuid4().hex)
@@ -66,6 +68,8 @@ def readback_matches(payload, report, result):
         binary = observed.get('binary') or {}
         if binary.get('app_id') != payload['target']['app_id'] or binary.get('version') != payload['target']['version']:
             return False
+        if binary.get('platform') != payload['target']['platform']:
+            return False
         if binary.get('processing_state') != 'processed':
             return False
         if binary.get('source_sha256') is not None and binary['source_sha256'] != payload['build']['sha256']:
@@ -109,6 +113,8 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
     if not raw_state.is_relative_to(raw_root):
         raise ValueError('attempt state must stay inside the project workspace')
     state = safe_path(root, raw_state.relative_to(raw_root).as_posix())
+    if state != safe_path(root, ATTEMPT_STATE):
+        raise ValueError(f'execution requires canonical attempt state: {ATTEMPT_STATE}')
     for name in payload['input_paths']:
         source = safe_path(root, name)
         if state == source or (source.is_dir() and state.is_relative_to(source)):
