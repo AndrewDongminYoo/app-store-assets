@@ -3,6 +3,7 @@ import re
 from pathlib import PurePosixPath
 
 from .records import read_json, safe_path
+from .commands import validate_adapter_argv
 
 TOP_KEYS = {'schema_version', 'project', 'mode', 'runtime', 'targets', 'recipes', 'builds'}
 TARGET_KEYS = {'store', 'platform', 'account', 'app_id', 'flavor', 'stage', 'version', 'version_source',
@@ -49,7 +50,7 @@ def load_profile(root, path, name):
         matches = re.findall(r'^version:\s*([^\s+]+)\+([0-9]+)\s*$', version_file.read_text(), re.MULTILINE)
         if len(matches) != 1:
             raise ValueError('version source must contain one exact pubspec version')
-        derived = dict(zip(('name', 'build'), matches[0]))
+        derived = dict(zip(('name', 'build'), matches[0], strict=True))
         if 'version' in target and target['version'] != derived:
             raise ValueError('configured version differs from version source')
         target['version'] = derived
@@ -67,7 +68,7 @@ def load_profile(root, path, name):
                          'steam': ('windows', 'linux', 'macos'), 'toss': ('web',)}
     if target['store'] not in expected_platform or target['platform'] not in expected_platform[target['store']]:
         raise ValueError('store/platform mismatch')
-    if target['store'] == 'google' and (target.get('release_status') not in ('draft', 'completed', 'inProgress', 'halted')
+    if target['store'] == 'google' and (target.get('release_status') not in ('draft', 'completed')
                                        or not target.get('track')):
         raise ValueError('Google requires explicit track and release_status')
     if target['store'] == 'google':
@@ -80,4 +81,5 @@ def load_profile(root, path, name):
     exact_keys(target['provider'], {'kind', 'argv', 'inputs', 'gemfile'}, ('kind', 'argv'))
     if target['provider']['kind'] != 'command' or not isinstance(target['provider']['argv'], list):
         raise ValueError('provider requires an explicit command adapter')
+    validate_adapter_argv(target['provider']['argv'])
     return profile, target

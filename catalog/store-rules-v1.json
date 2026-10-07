@@ -1,13 +1,14 @@
 {
   "schema_version": 1,
-  "catalog_version": "2026-10-07.1",
+  "catalog_version": "2026-10-07.2",
   "checked_on": "2026-10-07",
   "fastlane_reader": "2.240.1",
   "sources": {
     "apple_images": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
     "apple_text": "https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information/",
     "apple_name": "https://developer.apple.com/help/app-store-connect/reference/app-information/app-information/",
-    "google_images": "https://support.google.com/googleplay/android-developer/answer/9866151?hl=en"
+    "google_images": "https://support.google.com/googleplay/android-developer/answer/9866151?hl=en",
+    "google_text": "https://support.google.com/googleplay/android-developer/answer/9859152?hl=en"
   },
   "stores": {
     "apple": {
@@ -28,7 +29,7 @@
         "icon": {"sizes": [[512,512]], "rotate": false, "alpha": "required-rgba32", "formats": ["PNG"], "max_bytes": 1048576, "max_count": 1},
         "tvBanner": {"sizes": [[1280,720]], "rotate": false, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 1}
       },
-      "text_limits": {"short_description": [80,"characters"]},
+      "text_limits": {"title": [30,"characters"], "short_description": [80,"characters"], "full_description": [4000,"characters"]},
       "submission_required": {"minimum_screenshots_across_devices": 2}
     }
   }

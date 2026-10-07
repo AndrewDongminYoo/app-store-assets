@@ -1,9 +1,9 @@
 """Bound argv adapters with private environments and a small JSON protocol."""
 import json
-import os
+import re
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .environment import local_environment
 from .records import canonical, file_digest
@@ -19,7 +19,26 @@ def executable_identity(argv):
     return {'path': executable, 'sha256': file_digest(executable)}
 
 
+def validate_adapter_argv(argv):
+    if not isinstance(argv, list) or not argv or any(not isinstance(a, str) or '\x00' in a for a in argv):
+        raise ValueError('adapter argv must be a nonempty string array')
+    for arg in argv[1:]:
+        path = arg.split('=', 1)[-1] if arg.startswith('-') and '=' in arg else arg
+        compact_option = re.fullmatch(r'-[A-Za-z]+(/.*)', path)
+        if compact_option:
+            path = compact_option.group(1)
+        if PurePosixPath(path).is_absolute() or '..' in PurePosixPath(path).parts:
+            raise ValueError('adapter paths must remain inside staged trees; use {root}/{runtime}/{output}')
+        for marker in ('{root}', '{runtime}', '{output}'):
+            if marker in path and not (path == marker or path.startswith(marker + '/')):
+                raise ValueError('adapter path placeholder must identify a staged tree')
+
+
 def expand_argv(argv, root, runtime=None, output=None):
+    validate_adapter_argv(argv)
+    for marker, path in (('{root}', root), ('{runtime}', runtime), ('{output}', output)):
+        if path is None and any(marker in arg for arg in argv):
+            raise ValueError('adapter path requires its declared staged tree')
     values = {'{root}': str(root), '{runtime}': str(runtime), '{output}': str(output)}
     result = []
     for arg in argv:
