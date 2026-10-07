@@ -53,6 +53,9 @@ ruby -c lib/fastlane_assets.rb
 ```
 
 The default suite runs the standalone CLI tests and explicitly skips consumer integration tests.
+GitHub Actions runs this default suite and Ruby syntax checks on pull requests targeting `main` and pushes to `main`.
+The single Ubuntu 24.04 job installs ImageMagick 7 through the runner's existing Homebrew and uses Python 3.12 with read-only repository permissions.
+Consumer integration and the optional Fastlane reader checks remain local because they require additional checkouts or reader dependencies.
 To verify actual adopted Fastfiles, set `APP_STORE_ASSETS_PERSONAL_ROOT` to the folder containing the personal `mirae`, `ttush_push`, and `kkomkkomi` checkouts with the stage-1 lane changes.
 
 ```bash
