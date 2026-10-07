@@ -159,6 +159,30 @@ class ExecutionTests(unittest.TestCase):
         self.provider.readback = lambda plan, result: {'target': plan['payload']['target'], 'observed': {'binary': None}}
         self.assertEqual(self.execute()['status'], 'accepted_pending_verification')
 
+    def test_pending_target_blocks_changed_digest_blind_retry(self):
+        self.provider.pending = True
+        self.execute()
+        (self.root / 'helpers/version_guard.rb').write_text('new plan, same pending target')
+        with self.assertRaisesRegex(ValueError, 'pending|recovery'):
+            self.execute()
+        self.assertEqual(len(self.provider.writes), 1)
+
+    def test_added_staged_helper_blocks_before_transfer(self):
+        def add_helper(provider):
+            staged = next((self.root / 'state/attempts').glob('*/inputs'))
+            (staged / 'helpers/extra.py').write_text('unreviewed executable')
+        self.provider.on_snapshot = add_helper
+        with self.assertRaisesRegex(ValueError, 'inventory|added'):
+            self.execute()
+        self.assertEqual(self.provider.writes, [])
+
+    def test_state_symlink_blocks_before_read(self):
+        (self.root / 'actual-state').mkdir()
+        (self.root / 'state').symlink_to(self.root / 'actual-state', target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            self.execute()
+        self.assertEqual(self.provider.reads, [])
+
     def test_readback_preserves_unselected_public_metadata_fields(self):
         def readback(plan, result):
             return {'target': plan['payload']['target'], 'observed': {'fields': {

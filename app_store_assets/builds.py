@@ -6,7 +6,7 @@ from .commands import executable_identity, expand_argv, run_command
 from .execution import stage_inventory
 from .identity import git
 from .profiles import exact_keys, target_identity
-from .records import file_digest, inventory, safe_path
+from .records import file_digest, inventory, safe_path, verify_inventory
 from .snapshots import publish_snapshot
 
 
@@ -28,6 +28,7 @@ def build(root, target, adapter, state, mode='live'):
     root = Path(root).resolve()
     source_inputs = inventory(root, adapter['inputs'])
     tool = executable_identity(adapter['argv'])
+    inspector = executable_identity(adapter['inspect_argv']) if adapter.get('inspect_argv') else None
     source_commit = None
     if mode != 'fixture':
         source_commit = git(root, 'rev-parse', 'HEAD')
@@ -40,23 +41,25 @@ def build(root, target, adapter, state, mode='live'):
                    'source_commit': source_commit, 'output': str(output), 'mode': mode}
         result = run_command(expand_argv(adapter['argv'], inputs, output=output), request, inputs,
                              folder / 'home', expected=tool)
+        verify_inventory(inputs, source_inputs, exact=True)
         if result.get('artifact') != adapter['artifact']:
             raise ValueError('build adapter artifact path differs')
         artifact = safe_path(output, result['artifact'])
         inspection = result.get('inspection', {})
         if adapter.get('inspect_argv'):
             inspection = run_command(expand_argv(adapter['inspect_argv'], inputs, output=output),
-                                     dict(request, action='inspect', artifact=str(artifact)), inputs, folder / 'home')
+                                     dict(request, action='inspect', artifact=str(artifact)), inputs, folder / 'home', expected=inspector)
         for key in ('app_id', 'platform', 'flavor', 'version'):
             if inspection.get(key) != target[key]:
                 raise ValueError(f'build native identity differs: {key}')
         if inspection.get('evidence') != ('fixture' if mode == 'fixture' else 'inspected'):
             raise ValueError('build inspection evidence differs from execution mode')
-        if mode != 'fixture' and not inspection.get('native_guards'):
+        guards = inspection.get('native_guards', {})
+        if mode != 'fixture' and (not isinstance(guards, dict) or not guards or any(v is not True for v in guards.values())):
             raise ValueError('native release guard evidence is required')
         record = {'schema_version': 1, 'type': 'build', 'app_id': target['app_id'], 'platform': target['platform'],
                   'flavor': target['flavor'], 'version': target['version'], 'sha256': file_digest(artifact),
                   'evidence': inspection['evidence'], 'native_guards': inspection.get('native_guards', {}),
-                  'source_commit': source_commit, 'source_inputs': source_inputs, 'tool': tool,
+                  'source_commit': source_commit, 'source_inputs': source_inputs, 'tool': tool, 'inspector': inspector,
                   'adapter': adapter}
         return publish_snapshot(state, record, {adapter['artifact']: artifact})

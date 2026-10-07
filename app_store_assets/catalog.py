@@ -1,9 +1,11 @@
 """Frozen supported store slots; decoded bytes, not extensions or assumptions."""
 import collections
+import tempfile
 from pathlib import Path
 
 from assets import image_info
 from .metadata import normalize_fields
+from .environment import local_environment
 from .records import file_digest, read_json, safe_path
 
 CATALOG_FILE = Path(__file__).resolve().parents[1] / 'catalog/store-rules-v1.json'
@@ -49,7 +51,8 @@ def validate_images(root, entries, store):
         normalize_fields({entry['locale']: {}})
         rule = slot_rule(store, entry['slot'])
         fmt, header = encoded_format(path)
-        width, height, alpha = image_info(path)
+        with tempfile.TemporaryDirectory(prefix='image-reader-home-') as home:
+            width, height, alpha = image_info(path, env=local_environment(home))
         if fmt not in rule['formats']:
             raise ValueError('image format is unsupported for slot')
         if rule['alpha'] == 'forbidden' and alpha:

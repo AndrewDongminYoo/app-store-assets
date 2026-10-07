@@ -87,7 +87,14 @@ def inventory(root, paths):
     return dict(sorted(result.items()))
 
 
-def verify_inventory(root, expected):
+def verify_inventory(root, expected, exact=False):
     for name, digest in expected.items():
         if file_digest(safe_path(root, name)) != digest:
             raise ValueError(f'bound input changed: {name}')
+    if exact:
+        root = Path(root)
+        for entry in root.rglob('*'):
+            name = entry.relative_to(root).as_posix()
+            safe_path(root, name)
+            if entry.is_file() and name not in expected:
+                raise ValueError(f'added file outside reviewed inventory: {name}')

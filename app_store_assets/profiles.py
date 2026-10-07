@@ -46,6 +46,10 @@ def load_profile(root, path, name):
             raise ValueError('configured version differs from version source')
         target['version'] = derived
     exact_keys(target.get('version'), {'name', 'build'}, ('name', 'build'))
+    version = target['version']
+    if (not isinstance(version['name'], str) or not re.fullmatch(r'[0-9]+(?:\.[0-9]+){0,3}', version['name'])
+            or not isinstance(version['build'], str) or not re.fullmatch(r'[0-9]+', version['build'])):
+        raise ValueError('version requires explicit numeric name/build strings')
     for key in IDENTITY_KEYS[:-1]:
         if not isinstance(target[key], str) or not target[key] or any(ord(c) < 32 for c in target[key]):
             raise ValueError(f'invalid target {key}')

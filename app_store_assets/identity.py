@@ -21,6 +21,8 @@ def git(root, *args):
 
 def runtime_inventory(root):
     root = Path(root).resolve()
+    if (root / '__pycache__').exists() or any(p.suffix == '.pyc' for p in root.iterdir()):
+        raise ValueError('runtime contains unbound root bytecode cache')
     paths = [p.name for p in root.iterdir() if p.is_file() and p.suffix in ('.py', '.rb', '.sh')]
     paths += [name for name in ('app_store_assets', 'lib', 'schemas', 'catalog') if (root / name).exists()]
     for name in paths:

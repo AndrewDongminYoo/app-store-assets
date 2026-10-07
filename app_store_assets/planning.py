@@ -1,11 +1,11 @@
 """Offline plans bind the complete executor, target and transitive inputs."""
 from pathlib import Path
 
-from .identity import python_identity, runtime_identity
+from .identity import git, python_identity, runtime_identity
 from .commands import executable_identity
 from .catalog import CATALOG_FILE, validate_fields, validate_images
 from .profiles import exact_keys, load_profile, target_identity
-from .records import file_digest, inventory, read_json, record_digest, safe_path
+from .records import file_digest, inventory, read_json, record_digest, safe_path, verify_inventory
 from .snapshots import validate_snapshot
 
 OPERATIONS = {'binary', 'metadata', 'images'}
@@ -26,6 +26,16 @@ def artifact_record(root, profile, target):
         raise ValueError('artifact build inspection is missing')
     if profile['mode'] != 'fixture' and record.get('evidence') == 'fixture':
         raise ValueError('fixture build cannot be transferred to a live store')
+    if profile['mode'] == 'live':
+        guards = record.get('native_guards', {})
+        if not isinstance(guards, dict) or not guards or any(value is not True for value in guards.values()):
+            raise ValueError('artifact native guard evidence is missing or failed')
+        if not record.get('source_inputs') or not record.get('source_commit') or not record.get('inspector'):
+            raise ValueError('artifact native source/inspection evidence is missing')
+        if git(root, 'rev-parse', 'HEAD') != record['source_commit']:
+            raise ValueError('artifact source commit differs from current checkout')
+        if inventory(root, record['adapter']['inputs']) != record['source_inputs']:
+            raise ValueError('artifact source inputs changed since build')
     if file_digest(safe_path(root, descriptor['path'])) != record.get('sha256'):
         raise ValueError('artifact hash differs from build record')
     return record
@@ -79,6 +89,8 @@ def make_plan(root, profile_path, target_name, operation):
     effects = ['upload-' + operation]
     if notes:
         effects.append('release-notes')
+    if target['store'] == 'google' and operation == 'binary':
+        effects.append('append-draft-track-release' if target['release_status'] == 'draft' else 'replace-track-releases')
     if target['store'] == 'google' and operation in ('metadata', 'images'):
         effects.append('shared-listing-across-tracks')
     payload = {'schema_version': 1, 'type': 'release-plan', 'profile': profile_path, 'target_name': target_name,

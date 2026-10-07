@@ -30,14 +30,14 @@ def digest(file):
     return hashlib.sha256(file.read_bytes()).hexdigest()
 
 
-def image_info(file):
+def image_info(file, env=None):
     if file.name.startswith('.'):
         raise ValueError(f'hidden screenshot would be skipped by Fastlane: {file}')
     if file.suffix not in set().union(*FORMAT_EXTENSIONS.values()):
         raise ValueError(f'unsupported Fastlane image extension: {file}')
     # Decode the pixel stream, not just the IHDR header. Warnings also reject
     # truncated images that ImageMagick might otherwise recover.
-    result = subprocess.run(['magick', str(file), '-regard-warnings', '-format', '%w|%h|%[channels]|%m\n', 'info:'], capture_output=True, text=True, timeout=60)
+    result = subprocess.run(['magick', str(file), '-regard-warnings', '-format', '%w|%h|%[channels]|%m\n', 'info:'], env=env, capture_output=True, text=True, timeout=60)
     if result.returncode or result.stderr:
         raise ValueError(f'cannot decode image: {file}')
     values = result.stdout.strip().split('|')

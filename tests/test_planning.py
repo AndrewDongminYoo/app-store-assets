@@ -46,6 +46,28 @@ class PlanningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'runtime'):
             self.plan()
 
+    def test_ignored_root_bytecode_cache_cannot_override_source(self):
+        runtime = self.root / self.profile['runtime']['path']
+        (runtime / '__pycache__').mkdir()
+        (runtime / '__pycache__/assets.cpython-314.pyc').write_bytes(b'unreviewed cache')
+        with self.assertRaisesRegex(ValueError, 'bytecode|runtime'):
+            self.plan()
+
+    def test_version_types_and_empty_values_fail_closed(self):
+        for value in ({'name': '', 'build': '9'}, {'name': '1.0', 'build': 9}, {'name': '1.0', 'build': '9;echo'}):
+            self.profile['targets']['production']['version'] = value
+            write_json(self.root / 'store-upload.json', self.profile)
+            with self.assertRaisesRegex(ValueError, 'version'):
+                module(self, 'profiles').load_profile(self.root, 'store-upload.json', 'production')
+
+    def test_inspected_record_without_native_source_evidence_blocks_live(self):
+        self.profile['mode'] = 'live'
+        write_json(self.root / 'store-upload.json', self.profile)
+        record = json.loads((self.root / 'artifact.json').read_text())
+        write_json(self.root / 'artifact.json', dict(record, evidence='inspected'))
+        with self.assertRaisesRegex(ValueError, 'source|guard|inspection'):
+            self.plan()
+
     def test_artifact_native_identity_must_agree_with_selected_target(self):
         record = json.loads((self.root / 'artifact.json').read_text())
         for key, value in [('app_id', 'com.example.other'), ('flavor', 'staging'),

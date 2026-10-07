@@ -85,14 +85,14 @@ def main(argv=None):
             plan = read_json(safe_path(root, args.plan))
             if plan['payload']['target_name'] != args.target or plan['payload']['profile'] != args.profile:
                 raise ValueError('execution target/profile differs from plan')
+            receipt_path = safe_path(root, args.receipt) if args.receipt else None
+            if receipt_path and receipt_path.exists():
+                raise ValueError('receipt output already exists; preserve previous evidence')
             provider = None if args.dry_run else CommandProvider(target, profile['mode'], args.allow_effects,
                                                                 args.auth_file, plan['payload'].get('provider_executable'))
             result = execute(root, plan, args.expected_digest, provider, state, args.dry_run)
             if args.receipt and not args.dry_run:
-                receipt_path = safe_path(root, args.receipt)
                 receipt_path.parent.mkdir(parents=True, exist_ok=True)
-                if receipt_path.exists():
-                    raise ValueError('receipt output already exists; preserve previous evidence')
                 write_record(receipt_path, result)
         elif args.command == 'download':
             if args.dry_run:
@@ -116,10 +116,14 @@ def main(argv=None):
             plan = read_json(receipt_path.parent / 'plan.json')
             if record_digest(plan['payload']) != plan['digest'] or plan['digest'] != receipt['digest'] or receipt['target'] != identity:
                 raise ValueError('verification receipt/target/digest differs')
-            provider = CommandProvider(target, profile['mode'], args.allow_effects, args.auth_file,
+            if args.dry_run:
+                print(json.dumps({'status': 'dry-run', 'digest': receipt['digest'], 'effects': []}))
+                return 0
+            provider_target = dict(target, provider=plan['payload']['provider'])
+            provider = CommandProvider(provider_target, plan['payload']['mode'], args.allow_effects, args.auth_file,
                                        plan['payload'].get('provider_executable'))
-            verify_inventory(receipt_path.parent / 'inputs', plan['payload']['inputs'])
-            verify_inventory(receipt_path.parent / 'runtime', plan['payload']['runtime']['files'])
+            verify_inventory(receipt_path.parent / 'inputs', plan['payload']['inputs'], exact=True)
+            verify_inventory(receipt_path.parent / 'runtime', plan['payload']['runtime']['files'], exact=True)
             provider.bind_stage(receipt_path.parent / 'inputs', receipt_path.parent / 'runtime')
             report = provider.readback(plan, receipt.get('provider_result', {}))
             if readback_matches(plan['payload'], report, receipt.get('provider_result', {})):

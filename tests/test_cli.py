@@ -3,6 +3,9 @@ import os
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
+from contextlib import redirect_stdout, redirect_stderr
+import io
 
 from pipeline_support import ROOT, fixture, write_json
 
@@ -42,6 +45,31 @@ class CliTests(unittest.TestCase):
         result = self.cli('execute', '--plan', 'approved.json', '--expected-digest', plan['digest'])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('effects', result.stderr)
+
+    def test_existing_receipt_blocks_before_constructing_provider(self):
+        from app_store_assets import cli
+        plan = json.loads(self.cli('plan').stdout)
+        write_json(self.root / 'approved.json', plan)
+        write_json(self.root / 'existing.json', {'preserve': True})
+        with patch.object(cli, 'CommandProvider', side_effect=AssertionError('provider constructed')), redirect_stderr(io.StringIO()):
+            result = cli.main(['execute', '--root', str(self.root), '--target', 'production',
+                               '--plan', 'approved.json', '--expected-digest', plan['digest'],
+                               '--receipt', 'existing.json', '--allow-effects'])
+        self.assertEqual(result, 1)
+
+    def test_verify_dry_run_has_no_provider_or_receipt_write(self):
+        from app_store_assets import cli
+        from app_store_assets.execution import execute
+        from test_execution import FakeProvider
+        plan = json.loads(self.cli('plan').stdout)
+        receipt = execute(self.root, plan, plan['digest'], FakeProvider(self.root), self.root / 'state')
+        path = self.root / 'state/attempts' / receipt['attempt'] / 'receipt.json'
+        original = path.read_bytes()
+        with patch.object(cli, 'CommandProvider', side_effect=AssertionError('dry run provider')), redirect_stdout(io.StringIO()):
+            result = cli.main(['verify', '--root', str(self.root), '--target', 'production',
+                               '--receipt', path.relative_to(self.root).as_posix(), '--dry-run'])
+        self.assertEqual(result, 0)
+        self.assertEqual(path.read_bytes(), original)
 
 
 if __name__ == '__main__':

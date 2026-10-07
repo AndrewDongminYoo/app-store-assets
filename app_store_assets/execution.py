@@ -24,7 +24,7 @@ def stage_inventory(source, destination, expected):
         if file_digest(target) != digest:
             raise ValueError(f'input changed while staging: {name}')
         target.chmod(0o444)
-    verify_inventory(destination, expected)
+    verify_inventory(destination, expected, exact=True)
 
 
 def preflight(payload, observed):
@@ -102,16 +102,24 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
     payload = plan['payload']
     if dry_run:
         return {'status': 'dry-run', 'digest': plan['digest'], 'effects': payload['effects']}
-    root, state = Path(root).resolve(), Path(state).resolve()
-    if not state.is_relative_to(root):
+    raw_root, raw_state = Path(os.path.abspath(root)), Path(os.path.abspath(state))
+    root = raw_root.resolve()
+    if not raw_state.is_relative_to(raw_root):
         raise ValueError('attempt state must stay inside the project workspace')
-    safe_path(root, state.relative_to(root).as_posix())
+    state = safe_path(root, raw_state.relative_to(raw_root).as_posix())
+    for name in payload['input_paths']:
+        source = safe_path(root, name)
+        if state == source or (source.is_dir() and state.is_relative_to(source)):
+            raise ValueError('attempt state overlaps bound source inputs')
     state.mkdir(parents=True, exist_ok=True)
     locks = state / 'locks'
     attempts = state / 'attempts'
     locks.mkdir(exist_ok=True)
     attempts.mkdir(exist_ok=True)
-    key = record_digest({k: payload['target'][k] for k in ('account', 'app_id', 'store', 'platform')})
+    def target_key(target):
+        return record_digest({'account': target.get('account_id') or target['account'],
+                              **{k: target[k] for k in ('app_id', 'store', 'platform')}})
+    key = target_key(payload['target'])
     lock = locks / (key + '.lock')
     try:
         handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -121,6 +129,8 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
         os.write(handle, canonical({'pid': os.getpid(), 'digest': plan['digest']}))
         for file in attempts.glob('*/receipt.json'):
             prior = read_json(file)
+            if prior.get('effects_started') and target_key(prior['target']) == key and prior.get('status') != 'verified':
+                raise ValueError('target has a pending/partial transfer; verify it before a recovery plan')
             if prior.get('digest') == plan['digest'] and prior.get('effects_started'):
                 raise ValueError('plan already has an attempted/pending transfer; verify or make a recovery plan')
         attempt = attempts / uuid.uuid4().hex
@@ -139,8 +149,8 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
             if hasattr(provider, 'bind_stage'):
                 provider.bind_stage(inputs, runtime)
             preflight(payload, provider.snapshot(payload['target']))
-            verify_inventory(inputs, payload['inputs'])
-            verify_inventory(runtime, payload['runtime']['files'])
+            verify_inventory(inputs, payload['inputs'], exact=True)
+            verify_inventory(runtime, payload['runtime']['files'], exact=True)
             preflight(payload, provider.snapshot(payload['target']))
             receipt['status'] = 'transferring'
             receipt['effects_started'] = True
@@ -148,7 +158,8 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
             result = provider.upload(plan, inputs)
             if result.get('accepted') is not True:
                 raise ValueError('provider did not confirm acceptance')
-            verify_inventory(inputs, payload['inputs'])
+            verify_inventory(inputs, payload['inputs'], exact=True)
+            verify_inventory(runtime, payload['runtime']['files'], exact=True)
             receipt['status'] = 'accepted_pending_verification'
             receipt['provider_result'] = {k: result[k] for k in ('accepted', 'remote_ids', 'image_ids') if k in result}
             write_record(attempt / 'receipt.json', receipt)
@@ -156,7 +167,7 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
                 report = provider.readback(plan, result)
                 if readback_matches(payload, report, result):
                     receipt['status'] = 'verified'
-            except (ValueError, OSError, RuntimeError):
+            except (ValueError, OSError, RuntimeError, KeyError, TypeError):
                 # Acceptance and processing evidence are separate. Preserve pending.
                 receipt['verification_error'] = 'provider-readback-failed'
             write_record(attempt / 'receipt.json', receipt)

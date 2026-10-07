@@ -2,6 +2,7 @@ import copy
 import hashlib
 import json
 import unittest
+import sys
 from unittest.mock import patch
 
 from pipeline_support import fixture, module, write_json
@@ -48,6 +49,34 @@ class GenerationTests(unittest.TestCase):
         recipe['toolchain']['magick']['version'] = 'different encoder'
         with self.assertRaisesRegex(ValueError, 'toolchain'):
             self.generate(recipe)
+
+    def test_app_owned_composer_uses_staged_inputs_and_is_bound(self):
+        helper = self.root / 'helpers/composer.py'
+        helper.write_text('''import json,pathlib,sys,shutil,os
+r=json.load(sys.stdin)
+assert not os.environ.get('FASTLANE_PASSWORD')
+p=pathlib.Path(r['output'])/'composed.png'
+shutil.copyfile(pathlib.Path(r['root'])/'captures/01.png',p)
+print(json.dumps({'files':['composed.png']}))
+''')
+        recipe = copy.deepcopy(self.recipe)
+        recipe['composer'] = {'argv': [sys.executable, '{root}/helpers/composer.py']}
+        recipe['outputs'][0]['source'] = 'composed.png'
+        with patch.dict('os.environ', {'FASTLANE_PASSWORD': 'not-for-local-tools'}):
+            first = self.generate(recipe)
+        self.assertEqual(first, self.generate(recipe))
+        record = self.snapshots.validate_snapshot(first)['record']
+        self.assertIn('helpers/composer.py', record['inputs'])
+        self.assertIn('composed.png', record['composed_inputs'])
+        helper.write_text(helper.read_text() + '# changed composition recipe\n')
+        self.assertNotEqual(first, self.generate(recipe))
+
+    def test_jpeg_outputs_match_the_declared_extension_and_are_reproducible(self):
+        recipe = copy.deepcopy(self.recipe)
+        recipe['outputs'][0]['file'] = 'images/en-US/01.jpg'
+        first = self.generate(recipe)
+        self.assertEqual(first, self.generate(recipe))
+        self.assertEqual((first / 'images/en-US/01.jpg').read_bytes()[:3], b'\xff\xd8\xff')
 
     def test_transparent_pixels_need_an_explicit_background(self):
         (self.root / 'captures/01.png').write_bytes(png(alpha=True, opacity=100))

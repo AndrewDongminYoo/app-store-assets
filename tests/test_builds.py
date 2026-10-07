@@ -49,6 +49,21 @@ print(json.dumps({'artifact':'app.bin','inspection':{'app_id':%s,'platform':t['p
                               self.root / 'build-history', mode='fixture')
         self.assertFalse((self.root / 'build-history').exists())
 
+    def test_false_native_guard_blocks_live_publication(self):
+        from unittest.mock import patch
+        target = self.profile['targets']['production']
+        adapter = self.adapter()
+        adapter['inspect_argv'] = adapter['argv']
+        original = self.builds.run_command
+        def inspected(*args, **kwargs):
+            result = original(*args, **kwargs)
+            if args[1]['action'] == 'inspect':
+                return dict(result['inspection'], evidence='inspected', native_guards={'production-entitlements': False})
+            return result
+        with patch.object(self.builds, 'git', return_value='a' * 40), patch.object(self.builds, 'run_command', side_effect=inspected):
+            with self.assertRaisesRegex(ValueError, 'guard'):
+                self.builds.build(self.root, target, adapter, self.root / 'build-history', mode='live')
+
 
 if __name__ == '__main__':
     unittest.main()

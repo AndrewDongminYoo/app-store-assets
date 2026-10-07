@@ -7,11 +7,12 @@ from pathlib import Path
 
 from assets import image_info
 from .catalog import CATALOG_FILE, encoded_format, slot_rule, validate_images
+from .commands import executable_identity, expand_argv, run_command
 from .execution import stage_inventory
 from .environment import local_environment
 from .identity import runtime_inventory
 from .profiles import exact_keys, target_identity
-from .records import file_digest, inventory, record_digest, safe_path
+from .records import file_digest, inventory, record_digest, safe_path, verify_inventory
 from .snapshots import publish_snapshot
 
 
@@ -32,7 +33,7 @@ def toolchain(optimize=False):
 
 def generate(root, recipe, state):
     exact_keys(recipe, {'schema_version', 'target', 'inputs', 'outputs', 'toolchain', 'provenance',
-                        'normalize_alpha', 'optimize'}, ('schema_version', 'target', 'inputs', 'outputs', 'toolchain', 'provenance'))
+                        'normalize_alpha', 'optimize', 'composer'}, ('schema_version', 'target', 'inputs', 'outputs', 'toolchain', 'provenance'))
     if recipe['schema_version'] != 1 or not recipe['outputs']:
         raise ValueError('unsupported/empty generation recipe')
     provenance = recipe['provenance']
@@ -50,18 +51,36 @@ def generate(root, recipe, state):
         home.mkdir()
         output.mkdir()
         stage_inventory(root, staged, expected)
+        source_root, sources, composer_tool = staged, expected, None
+        composed_inputs = {}
+        if recipe.get('composer'):
+            exact_keys(recipe['composer'], {'argv'}, ('argv',))
+            composer_tool = executable_identity(recipe['composer']['argv'])
+            source_root = scratch / 'composed'
+            source_root.mkdir()
+            response = run_command(expand_argv(recipe['composer']['argv'], staged, output=source_root),
+                                   {'schema_version': 1, 'action': 'compose', 'root': str(staged),
+                                    'output': str(source_root), 'target': target_identity(recipe['target'])},
+                                   staged, home, expected=composer_tool)
+            names = sorted({entry['source'] for entry in recipe['outputs']})
+            if sorted(response.get('files', [])) != names:
+                raise ValueError('composer output inventory differs from recipe')
+            composed_inputs = inventory(source_root, names)
+            verify_inventory(source_root, composed_inputs, exact=True)
+            verify_inventory(staged, expected, exact=True)
+            sources = composed_inputs
         assets = []
         for entry in recipe['outputs']:
             exact_keys(entry, {'source', 'file', 'locale', 'slot', 'background', 'size'}, ('source', 'file', 'locale', 'slot'))
-            if entry['source'] not in expected:
+            if entry['source'] not in sources:
                 raise ValueError('generation source is outside declared inputs')
-            source = safe_path(staged, entry['source'])
+            source = safe_path(source_root, entry['source'])
             destination = safe_path(output, entry['file'])
             if destination.exists():
                 raise ValueError('duplicate generation output')
             destination.parent.mkdir(parents=True, exist_ok=True)
             encoded_format(source)
-            _, _, alpha = image_info(source)
+            _, _, alpha = image_info(source, env=local_environment(home))
             rule = slot_rule(store, entry['slot'])
             command = [shutil.which('magick'), str(source)]
             if alpha and rule['alpha'] == 'forbidden':
@@ -77,14 +96,18 @@ def generate(root, recipe, state):
             if entry.get('size'):
                 width, height = entry['size']
                 command += ['-resize', f'{int(width)}x{int(height)}!']
-            coder = 'PNG32' if rule['alpha'] == 'required-rgba32' else 'PNG24'
+            if destination.suffix.lower() not in ('.png', '.jpg', '.jpeg'):
+                raise ValueError('generation output must declare PNG/JPEG extension')
+            coder = 'JPEG' if destination.suffix.lower() in ('.jpg', '.jpeg') else ('PNG32' if rule['alpha'] == 'required-rgba32' else 'PNG24')
+            if coder == 'JPEG':
+                command += ['-alpha', 'off', '-quality', '90', '-sampling-factor', '4:4:4']
             if coder == 'PNG24':
                 command += ['-alpha', 'off']
             command += ['-strip', '-depth', '8', '-define', 'png:exclude-chunk=date,time', coder + ':' + str(destination)]
             rendered = subprocess.run(command, env=local_environment(home), capture_output=True, text=True, timeout=120)
             if rendered.returncode:
                 raise ValueError('local image generation failed')
-            if recipe.get('optimize'):
+            if recipe.get('optimize') and coder != 'JPEG':
                 optimized = subprocess.run([shutil.which('oxipng'), '--strip', 'safe', str(destination)],
                                            env=local_environment(home), capture_output=True, timeout=120)
                 if optimized.returncode:
@@ -92,9 +115,10 @@ def generate(root, recipe, state):
             assets.append({k: entry[k] for k in ('file', 'locale', 'slot')})
         validated = validate_images(output, assets, store)
         for item, entry in zip(validated, recipe['outputs']):
-            item['source_sha256'] = expected[entry['source']]
+            item['source_sha256'] = sources[entry['source']]
         record = {'schema_version': 1, 'type': 'asset-manifest', 'target': target_identity(recipe['target']),
                   'recipe_sha256': record_digest(recipe), 'inputs': expected, 'toolchain': locked,
                   'runtime': runtime_inventory(Path(__file__).resolve().parents[1]),
-                  'catalog_sha256': file_digest(CATALOG_FILE), 'provenance': provenance, 'assets': validated}
+                  'catalog_sha256': file_digest(CATALOG_FILE), 'provenance': provenance, 'assets': validated,
+                  'composer_tool': composer_tool, 'composed_inputs': composed_inputs}
         return publish_snapshot(state, record, {item['file']: output / item['file'] for item in validated})
