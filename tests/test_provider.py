@@ -158,10 +158,22 @@ Dir.mktmpdir do |root|
   provider=StoreProvider::Google.new(ImageWriteClient.new)
   gp={'target'=>gt,'operation'=>'images','remote'=>provider.snapshot(gt),
     'listing'=>{'images'=>{'en-US'=>{'phoneScreenshots'=>[{'file'=>'image.png','sha256'=>Digest::SHA256.hexdigest('approved')}]}}},
-    'replacement'=>{'locales'=>['en-US'],'slots'=>['phoneScreenshots'],'allow_delete'=>false}}
+    'replacement'=>{'locales'=>['en-US'],'slots'=>['phoneScreenshots'],'allow_delete'=>true}}
   result=provider.upload({'payload'=>gp},root)
   raise 'upload IDs missing for transformed readback' unless result.dig('image_ids','en-US','phoneScreenshots')==['uploaded-image']
 end
+end
+if ARGV[2]=='delete_policy'
+  observed=remote.merge('images'=>{'en-US'=>{'APP_IPHONE_65'=>[{'id'=>'existing'}]}})
+  gp={'target'=>target,'operation'=>'images','remote'=>observed,
+    'listing'=>{'images'=>{'en-US'=>{'APP_IPHONE_65'=>[{'file'=>'synthetic.png'}]}}},
+    'replacement'=>{'locales'=>['en-US'],'slots'=>['APP_IPHONE_65'],'allow_delete'=>false}}
+  begin
+    StoreProvider.guard(gp,observed)
+    raise 'existing screenshot deletion policy ignored'
+  rescue => e
+    raise unless e.message.include?('requires explicit')
+  end
 end
 puts JSON.generate(exact_version: true, conflicting_id_blocked: true, google_read_never_commits: true)
 '''
@@ -184,6 +196,9 @@ class ProviderTests(unittest.TestCase):
 
     def test_google_upload_ids_bind_transformed_image_readback(self):
         self.run_case('image_ids')
+
+    def test_deleting_existing_images_requires_explicit_policy(self):
+        self.run_case('delete_policy')
 
     def test_actual_supply_sdk_image_fields(self):
         root = os.environ.get('APP_STORE_ASSETS_FASTLANE_SOURCE')

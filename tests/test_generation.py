@@ -152,6 +152,8 @@ class ImagePlanTests(unittest.TestCase):
         listing = json.loads((root / 'metadata/listing.json').read_text())
         listing['images'] = {'en-US': {'APP_IPHONE_65': [{'file': 'images/01.png', 'sha256': hashlib.sha256(image.read_bytes()).hexdigest()}]}}
         write_json(root / 'metadata/listing.json', listing)
+        profile['targets']['production']['replacement'] = {'locales': ['en-US'], 'slots': ['APP_IPHONE_65'], 'allow_delete': False}
+        write_json(root / 'store-upload.json', profile)
         plan = planning.make_plan(root, 'store-upload.json', 'production', 'images')
         self.assertIn('images/01.png', plan['payload']['inputs'])
         image.write_bytes(png(1284, 2778))

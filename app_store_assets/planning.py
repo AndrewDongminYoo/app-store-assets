@@ -67,6 +67,10 @@ def make_plan(root, profile_path, target_name, operation):
                 raise ValueError(f'metadata target/version differs: {key}')
         validate_fields(listing.get('fields', {}), target['store'])
         if operation == 'images':
+            exact_keys(target.get('replacement'), {'locales', 'slots', 'allow_delete'}, ('locales', 'slots', 'allow_delete'))
+            policy = target['replacement']
+            if type(policy['allow_delete']) is not bool or any(not isinstance(policy[k], list) or not policy[k] for k in ('locales', 'slots')):
+                raise ValueError('image replacement requires explicit locale/slot/deletion policy')
             entries = [dict(item, locale=locale, slot=slot) for locale, groups in listing.get('images', {}).items()
                        for slot, images in groups.items() for item in images]
             if not entries:

@@ -34,64 +34,64 @@
 **Files:** modify `lib/fastlane_assets.rb`; create `tests/test_bridge.py`; update existing opt-in bridge integration expectations.
 **Interfaces:** `AppStoreAssets.prepare` fails before preparation/transfer; `prepare_local` returns only local paths. Guarded execution goes through the consumer launcher and reviewed plan.
 
-- [ ] RED: `test_legacy_prepare_cannot_enable_replacement` asserts nonzero Ruby result and zero external calls for a synthetic legacy consumer.
-- [ ] Run `python3 -m unittest discover -s tests -p test_bridge.py -v`; expect an assertion failure on the old successful prepare route.
-- [ ] Implement fail-closed bridge and explicit local-only preparation.
-- [ ] Run the bridge tests and full suite; expect pass with opt-in integrations skipped.
-- [ ] Commit candidate-only fix; record evidence in the ledger.
+- [x] RED: `test_legacy_prepare_cannot_enable_replacement` asserts nonzero Ruby result and zero external calls for a synthetic legacy consumer.
+- [x] Run `python3 -m unittest discover -s tests -p test_bridge.py -v`; expect an assertion failure on the old successful prepare route.
+- [x] Implement fail-closed bridge and explicit local-only preparation.
+- [x] Run the bridge tests and full suite; expect pass with opt-in integrations skipped.
+- [x] Commit candidate-only fix; record evidence in the ledger.
 
 ## Task 2: Bind profiles, runtime and all declared inputs
 
 **Files:** `app_store_assets/{__init__,records,identity,profiles,planning}.py`, `schemas/profile-v1.json`, `tests/{pipeline_support,test_planning}.py`.
 **Interfaces:** `inventory(root, paths) -> dict[str,str]`; `runtime_identity(root,pin) -> dict`; `load_profile(root,path,target) -> dict`; `make_plan(root,profile,target,operation) -> dict`; `verify_plan(root,plan) -> None`.
 
-- [ ] RED: tests reject changed/added Fastfile, guard, changelog, full runtime and target mismatch; offline planning cannot invoke subprocess/store callbacks.
-- [ ] Run `test_planning.py`; expect absent new interface/unsupported command failures.
-- [ ] Implement canonical records, strict paths/profile, Git+inventory integrity and content binding.
-- [ ] Verify inventory mutation, unknown config keys, development binary block, paths with spaces/metacharacters and full suite.
-- [ ] Commit candidate-only contract implementation.
+- [x] RED: tests reject changed/added Fastfile, guard, changelog, full runtime and target mismatch; offline planning cannot invoke subprocess/store callbacks.
+- [x] Run `test_planning.py`; expect absent new interface/unsupported command failures.
+- [x] Implement canonical records, strict paths/profile, Git+inventory integrity and content binding.
+- [x] Verify inventory mutation, unknown config keys, development binary block, paths with spaces/metacharacters and full suite.
+- [x] Commit candidate-only contract implementation.
 
 ## Task 3: Guard exact-target execution and immutable staging
 
 **Files:** `app_store_assets/{execution,providers}.py`, `tests/test_execution.py`.
 **Interfaces:** provider `snapshot(target)`, `upload(plan,staged_root)`, `readback(plan)`; `execute(root,plan,digest,provider,state) -> receipt`.
 
-- [ ] RED: fake provider replaces the original AAB during lookup; upload must observe reviewed staged bytes. Two Apple editable versions must select the exact planned ID. Remote-only classes, revision drift, environment overrides, partial failure and duplicate attempts must block/persist correctly.
-- [ ] Run `test_execution.py`; expect missing executor failures.
-- [ ] Implement staging-before-preflight, precise snapshot binding, target lock, receipts and pending readback.
-- [ ] Run all tests; verify zero remote writes for invalid/dry-run plans and target-specific readback.
-- [ ] Commit candidate-only executor.
+- [x] RED: fake provider replaces the original AAB during lookup; upload must observe reviewed staged bytes. Two Apple editable versions must select the exact planned ID. Remote-only classes, revision drift, environment overrides, partial failure and duplicate attempts must block/persist correctly.
+- [x] Run `test_execution.py`; expect missing executor failures.
+- [x] Implement staging-before-preflight, precise snapshot binding, target lock, receipts and pending readback.
+- [x] Run all tests; verify zero remote writes for invalid/dry-run plans and target-specific readback.
+- [x] Commit candidate-only executor.
 
 ## Task 4: Versioned snapshots and metadata diffs
 
 **Files:** `app_store_assets/{snapshots,metadata}.py`, `tests/test_snapshots.py`, `schemas/records-v1.json`.
 **Interfaces:** `publish_snapshot(root,record,files) -> path`; `validate_snapshot(path) -> record`; `metadata_diff(before,after) -> list`; `download_snapshot(provider,target,state) -> path`.
 
-- [ ] RED: preserve edited local metadata/changelogs during download, reject private fields/export, reject changed caches, preserve ordering and target/version conflicts.
-- [ ] Run targeted tests; expect missing snapshot interfaces.
-- [ ] Implement immutable content-addressed publication, explicit public metadata normalization/diff and read-only provider protocol.
-- [ ] Run snapshot concurrency/cache tests and suite.
-- [ ] Commit candidate-only snapshot support.
+- [x] RED: preserve edited local metadata/changelogs during download, reject private fields/export, reject changed caches, preserve ordering and target/version conflicts.
+- [x] Run targeted tests; expect missing snapshot interfaces.
+- [x] Implement immutable content-addressed publication, explicit public metadata normalization/diff and read-only provider protocol.
+- [x] Run snapshot concurrency/cache tests and suite.
+- [x] Commit candidate-only snapshot support.
 
 ## Task 5: Image rules and locked generation
 
 **Files:** `app_store_assets/{catalog,generation}.py`, `catalog/store-rules-v1.json`, `tests/test_generation.py`.
 **Interfaces:** `validate_images(root,entries,store) -> list`; `toolchain() -> dict`; `generate(root,recipe,state) -> snapshot`.
 
-- [ ] RED: same locked toolchain generates identical final records/bytes; source/helper/font/tool changes invalidate generation; hidden/format/alpha/count/slot violations fail; no capture provenance upgrade.
-- [ ] Verify official Apple/Google rules and record URL/date; implement supported slots only, using ImageMagick decoding and fixed normalization.
-- [ ] Run real local ImageMagick generation with synthetic images, no external capture/store calls.
-- [ ] Verify no original modification and full suite; commit candidate-only generation.
+- [x] RED: same locked toolchain generates identical final records/bytes; source/helper/font/tool changes invalidate generation; hidden/format/alpha/count/slot violations fail; no capture provenance upgrade.
+- [x] Verify official Apple/Google rules and record URL/date; implement supported slots only, using ImageMagick decoding and fixed normalization.
+- [x] Run real local ImageMagick generation with synthetic images, no external capture/store calls.
+- [x] Verify no original modification and full suite; commit candidate-only generation.
 
 ## Task 6: CLI, command/build/provider adapter boundaries
 
 **Files:** `app_store_assets/{cli,commands,builds}.py`, `assets.py`, `lib/store_provider.rb`, `tests/{test_cli,test_builds,test_provider}.py`, `examples/`.
 **Interfaces:** commands receive canonical JSON via stdin and return bounded JSON; `build(root,target,adapter,state) -> build_record`; CLI exposes doctor/plan/diff/generate/build/download/execute/verify with explicit effect flags.
 
-- [ ] RED: dry-run cannot launch adapters, inherit store credentials or use mixed legacy build/upload; command paths and outputs are bound and native artifact identities agree.
-- [ ] Implement argv-only command execution, sanitized local environment, explicit remote opt-in, Fastlane adapter guards and truthful capability blockers.
-- [ ] Test actual pinned Fastlane reader plus fake external boundaries. Unsupported Toss/Steam/browser/OTA operations remain explicit blockers until a reviewed adapter is supplied.
-- [ ] Run suite/Ruby syntax and commit candidate-only CLI/adapters/docs.
+- [x] RED: dry-run cannot launch adapters, inherit store credentials or use mixed legacy build/upload; command paths and outputs are bound and native artifact identities agree.
+- [x] Implement argv-only command execution, sanitized local environment, explicit remote opt-in, Fastlane adapter guards and truthful capability blockers.
+- [x] Test actual pinned Fastlane reader plus fake external boundaries. Unsupported Toss/Steam/browser/OTA operations remain explicit blockers until a reviewed adapter is supplied.
+- [x] Run suite/Ruby syntax and commit candidate-only CLI/adapters/docs.
 
 ## Task 7: Mirae pinned clean-clone pilot
 

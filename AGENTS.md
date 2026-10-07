@@ -7,8 +7,8 @@ Do not upload, delete placements, or submit assets for review without explicit o
 
 ## Checks
 
-Run `python3 -m unittest discover -s tests -v`.
-Run `ruby -c lib/fastlane_assets.rb` after Ruby changes.
+Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`.
+Run `ruby -c lib/fastlane_assets.rb` and `ruby -c lib/store_provider.rb` after Ruby changes.
 Run `APP_STORE_ASSETS_PERSONAL_ROOT=/absolute/personal/root python3 -m unittest discover -s tests -v` for integration verification.
 The integration suite is opt-in and uses personal checkouts of `mirae`, `ttush_push`, and `kkomkkomi` from that root.
 It evaluates their actual Fastfiles in temporary repositories and replaces only external Fastlane actions.

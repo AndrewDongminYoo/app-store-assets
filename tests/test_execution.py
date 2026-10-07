@@ -101,6 +101,21 @@ class ExecutionTests(unittest.TestCase):
             self.execute(self.plan('images'))
         self.assertEqual(self.provider.writes, [])
 
+    def test_existing_screenshot_deletion_requires_explicit_policy(self):
+        (self.root / 'images').mkdir()
+        data = png()
+        (self.root / 'images/01.png').write_bytes(data)
+        listing = json.loads((self.root / 'metadata/listing.json').read_text())
+        listing['images'] = {'en-US': {'APP_IPHONE_65': [{'file': 'images/01.png', 'sha256': hashlib.sha256(data).hexdigest()}]}}
+        write_json(self.root / 'metadata/listing.json', listing)
+        self.provider.remote['images'] = {'en-US': {'APP_IPHONE_65': [{'id': 'existing'}]}}
+        write_json(self.root / 'remote.json', self.provider.remote)
+        self.profile['targets']['production']['replacement'] = {'locales': ['en-US'], 'slots': ['APP_IPHONE_65'], 'allow_delete': False}
+        write_json(self.root / 'store-upload.json', self.profile)
+        with self.assertRaisesRegex(ValueError, 'delet'):
+            self.execute(self.plan('images'))
+        self.assertFalse(self.provider.writes)
+
     def test_remote_revision_drift_between_preflight_and_write_blocks(self):
         def mutate(provider):
             if len(provider.reads) == 2:

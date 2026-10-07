@@ -1,6 +1,6 @@
 # App Store Assets Pipeline — Design for Review
 
-Status: proposed design; product implementation has not started. This draft and the phased sequence are the first requested deliverables. After review, produce the detailed task-by-task plan for the first phase and implement with one primary worker.
+Status: approved for local implementation at 2026-10-07 15:39 UTC. Host-only implementation evidence and remaining capability blockers are recorded in `../notes/2026-10-07-implementation.md`.
 
 ## Intent and boundaries
 
@@ -107,4 +107,4 @@ For user review: approve the centralized package/adapter boundary and Mirae-firs
 - Mirae: `scripts/screenshots/generate_store_artwork.py`, `sync_metadata.sh`, download scripts, `merry.yaml`, flavor settings and locked Fastlane 2.240.1.
 - Mirae contracts: current `scripts/screenshots/AGENTS.md`; historical `docs/specs/2026-03-02-autoroute-screenshot-workflow.md`; `docs/specs/2026-09-14-release-plan-truthfulness.md`. The host-only pilot cannot close physical-device acceptance gaps.
 - [Fastlane deliver](https://docs.fastlane.tools/actions/deliver/) and [supply](https://docs.fastlane.tools/actions/supply/) document listing download/upload facilities; exact selected-version behavior is also constrained by the prior local-source tests.
-- [Apple screenshot specification](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/). The Google public specification page could not be fetched in this session; verify the official current Google slot rules before finalizing that catalog, without inventing dimensions.
+- [Apple screenshot specification](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/). [Google listing assets](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en) were subsequently verified for the frozen catalog on 2026-10-07. Unsupported device/API slots remain explicit blockers.

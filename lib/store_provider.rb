@@ -47,6 +47,7 @@ module StoreProvider
         groups.select { |_, images| !images.empty? }.keys.map { |slot| [locale, slot] }
       end
       raise "remote class/locale omitted" unless (remote_groups - local_groups).empty?
+      raise "deleting existing screenshots requires explicit reviewed allow_delete policy" unless remote_groups.empty? || policy["allow_delete"] == true
       raise "replacement locale differs" unless policy.fetch("locales").sort == local_groups.map(&:first).uniq.sort
       raise "replacement slot differs" unless policy.fetch("slots").sort == local_groups.map(&:last).uniq.sort
     end

@@ -50,6 +50,8 @@ def preflight(payload, observed):
                          for slot, images in slots.items() if images}
         if remote_groups - local_groups:
             raise ValueError('remote screenshot class/locale would be omitted by replacement')
+        if remote_groups and policy.get('allow_delete') is not True:
+            raise ValueError('deleting existing screenshots requires explicit reviewed allow_delete policy')
         if {locale for locale, _ in local_groups} != set(policy.get('locales', [])):
             raise ValueError('replacement locale policy differs from inventory')
         if {slot for _, slot in local_groups} != set(policy.get('slots', [])):

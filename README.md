@@ -1,104 +1,67 @@
 # App Store Assets
 
-Shared image-bundle preparation for personal App Store projects.
-Existing project capture and artwork generators remain the source of images.
-The first adoption covers Mirae, Ttush Push, and Kkomkkomi Fastlane uploads, plus the App Store copyright fix in Chef al Mando's composer.
+Pinned local coordination for image generation, store rules, immutable asset/build/metadata history, reviewed plans and guarded transfers. Application capture, composition, signing and native release gates stay in their application repositories.
 
-## Requirements
+## Requirements and installation
 
-Python 3.9 or newer, ImageMagick 7 (`magick`), and Ruby for the Fastlane bridge.
-No new Python package or Ruby gem is required.
-Keep this checkout beside the personal app repositories or set `APP_STORE_ASSETS_ROOT` to its absolute path.
-The [shared repository](https://github.com/AndrewDongminYoo/app-store-assets) is private.
-Use a reviewed runtime commit for reproducible installation.
-Missing tooling stops screenshot uploads with an explicit error.
+Use Python 3.11+, ImageMagick 7 and Ruby. Optional optimization requires a locked oxipng. The native Apple/Google adapter requires the consumer's frozen Fastlane 2.240.1 Gemfile/lock and an explicitly selected protected authentication file. No Python dependency is required.
 
-## Runtime Checkout
+A consumer commits `store-upload`, its public `store-upload.json`, app-owned adapters/recipes and a Git submodule. Pin the source URL, full commit and complete executable/schema/catalog inventory. Copy `examples/consumer_bootstrap.py` to `scripts/store_assets/bootstrap.py` and invoke it with `python3 -I -S`. It verifies the dependency before import. Initialize the declared submodule with `git submodule update --init`; there is no home directory or sibling checkout fallback. Runtime/profile/root environment or CLI overrides are rejected.
 
-The stage-1 runtime pin `e0d3691b455ec2c27606fbda5b22f09f5a9d3483`, also included in `d9682e6`, has reader-compatibility and cache-publication defects.
-Do not use those revisions for store uploads.
-The replacement runtime candidate is `7597d47f3ce36cac3462155b0c8a489a441e62a8`.
-Review and merge its fix PR before deploying this pin.
-After approval, clone into a new directory and set its absolute path for the app's Fastlane bridge.
+Local candidates must be reviewed and made available in the declared remote before another machine can fetch their Git pin. This implementation does not publish or release a package. LICENSE remains an owner decision.
+
+## Commands
+
+Commands below run through the application's verified launcher. Targets and public configuration are application owned. Run `doctor` first; it reports capabilities and an **unverified** remote account/target.
 
 ```bash
-git clone --no-checkout https://github.com/AndrewDongminYoo/app-store-assets.git /absolute/path/to/app-store-assets
-git -C /absolute/path/to/app-store-assets checkout --detach 7597d47f3ce36cac3462155b0c8a489a441e62a8
-export APP_STORE_ASSETS_ROOT=/absolute/path/to/app-store-assets
+./store-upload doctor --target production-ios
+./store-upload generate --target production-ios
+./store-upload build --target production-ios
+./store-upload diff --target production-ios --before path/to/remote/manifest.json --after path/to/listing.json
+./store-upload plan --target production-ios --operation images > reviewed-plan.json
+./store-upload execute --target production-ios --plan reviewed-plan.json --expected-digest DIGEST --dry-run
 ```
 
-Project lane adoption remains in each owning app repository; those app changes are not included in this repository's publication.
+`doctor`, `plan`, `diff`, and every `--dry-run` are offline and do not read authentication. Local `generate/build` use sanitized environments and argv arrays. They never call a combined build/upload alias. Live build records require native artifact inspection, successful native guards, current source commit and bound source inputs. The Mirae pilot has a fixture builder; its live signed build path deliberately remains blocked pending a reviewed protected signing/inspection adapter.
 
-## Prepare without uploading
+Generated and built outputs are content-addressed snapshots. Explicitly review/select their manifest and artifact paths in the consumer profile/listing. `version_source` resolves the checked-in pubspec version once, including the build number. A `listing` JSON record contains the exact target plus allowlisted localized `fields` and ordered `images` entries (`file`, `sha256`). Preserve original captures, editing trees and older snapshots. Do not promote widget/import provenance to native capture evidence.
+
+Remote operations require operator authority, an explicit account ID, protected auth input and a target. Credentials stay outside public inventories and are read only by the explicitly authorized provider. Download publishes a new snapshot; it preserves local metadata/changelogs. Google reads open and abort an edit/session and **never commit** it; this effect is declared in the snapshot.
 
 ```bash
-python3 assets.py prepare-screenshots \
-  --source ../mirae/fastlane/metadata/ios \
-  --subdir images/iphone65 \
-  --out ../mirae/build/store-assets/ios-bundles \
-  --project mirae --bundle-id kr.mirae.app
+./store-upload download --target production-ios --allow-effects --auth-file /protected/provider-auth.json
+./store-upload execute --target production-ios --plan reviewed-plan.json --expected-digest DIGEST --allow-effects --auth-file /protected/provider-auth.json
+./store-upload verify --target production-ios --receipt build/store-assets/attempts/ATTEMPT/receipt.json --allow-effects --auth-file /protected/provider-auth.json
 ```
 
-The command returns JSON containing `bundle` and `screenshots_path`.
-Each locale is flattened to the direct image layout Fastlane reads.
-The bundle directory is named from the manifest hash and contains final hashes, original hashes, sizes, profiles, and the explicit `replace-localized-sets` policy.
-`validate` re-decodes images and compares final hashes and inventory.
-Preparation additionally compares a reused bundle's manifest with the manifest freshly computed from the source.
-Concurrent preparations validate and reuse the atomically published winner.
+No command implicitly submits review, promotes a track, notifies external testers or releases an application. A Google binary plan explicitly declares draft append versus track-release replacement. Google listing changes apply across tracks. Image replacement binds every supplied locale/class and blocks omission of existing remote groups; deleting any existing images requires reviewed `replacement.allow_delete: true`. Supported Apple/Google slots are frozen in `catalog/store-rules-v1.json`; unsupported/new classes fail closed. Validation does not prove store submission readiness, native capture quality or device acceptance.
+
+Execution copies reviewed inputs and the whole runtime before remote lookup, rechecks remote state, serializes the account/app target, and writes durable attempt receipts. Acceptance is separate from processing/readback. A pending or partial target blocks blind retries even under a new digest. Use the authoritative attempt receipt with its adjacent plan/staged inputs for verification. If partial effects cannot be reconciled by exact readback, keep them blocked for a separately reviewed recovery workflow; no automatic rollback or force-retry flag exists. An optional receipt copy is additional evidence, not a replacement for the attempt directory.
+
+## Provider capabilities
+
+| Store | Local image rules | Native upload/download/readback | Limits |
+| --- | --- | --- | --- |
+| Apple | Selected iPhone/iPad classes | Fastlane 2.240.1 adapter; stub tested | Exact existing editable listing; new locale/version creation and binary localized beta notes blocked |
+| Google | Phone, icon, feature graphic and TV banner | Fastlane 2.240.1 adapter; stub tested | Explicit track/status; draft/completed binary only; no implicit promotion |
+| Firebase / Steam / Toss | Unsupported | Unsupported native backend | Supply a separately reviewed account-bound command adapter; no automatic fallback |
+| Browser / OTA | Unsupported | Unsupported | Separate effect and verification contract required |
+
+The JSON command protocol is available for reviewed application adapters. Native API authentication, actual transfer, signing, physical-device capture and store processing have not been validated by host-only tests. Public samples and fixtures contain synthetic identities.
+
+## Checks
 
 ```bash
-python3 assets.py validate /absolute/path/to/bundle
-python3 -m unittest discover -s tests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ruby -c lib/fastlane_assets.rb
+ruby -c lib/store_provider.rb
 ```
 
-The default suite runs the standalone CLI tests and explicitly skips consumer integration tests.
-GitHub Actions runs this default suite and Ruby syntax checks on pull requests targeting `main` and pushes to `main`.
-The single Ubuntu 24.04 job installs ImageMagick 7 through the runner's existing Homebrew and uses Python 3.12 with read-only repository permissions.
-Consumer integration and the optional Fastlane reader checks remain local because they require additional checkouts or reader dependencies.
-To verify actual adopted Fastfiles, set `APP_STORE_ASSETS_PERSONAL_ROOT` to the folder containing the personal `mirae`, `ttush_push`, and `kkomkkomi` checkouts with the stage-1 lane changes.
+Set `APP_STORE_ASSETS_FASTLANE_SOURCE` to unpacked Fastlane 2.240.1 and `APP_STORE_ASSETS_READER_RUBY` to an interpreter with its existing reader dependencies to test the actual screenshot reader and Supply model. These checks use temporary synthetic files and make no store calls. Legacy personal Fastfile integrations remain opt-in and are not a substitute for a migrated consumer's clean-clone tests.
 
-```bash
-APP_STORE_ASSETS_PERSONAL_ROOT=/absolute/personal/root python3 -m unittest discover -s tests -v
-```
+## Legacy image compatibility
 
-To compare the manifest with the actual Fastlane 2.240.1 loader, point to its unpacked source and a Ruby interpreter with its existing reader dependencies.
-This check reads temporary files and makes no store calls.
+`assets.py prepare-screenshots` and `validate` remain local-only. `AppStoreAssets.prepare` now blocks the old approval bypass. `prepare_local` returns prepared paths without upload/replacement authorization. Consumers must migrate their store lanes to a reviewed plan rather than rely on the legacy bridge.
 
-```bash
-APP_STORE_ASSETS_FASTLANE_SOURCE=/absolute/path/to/fastlane-2.240.1 \
-APP_STORE_ASSETS_READER_RUBY=/absolute/path/to/ruby \
-python3 -m unittest discover -s tests -v
-```
-
-`--normalize-alpha` removes an unused alpha channel from an entirely opaque PNG in the prepared copy.
-It rejects actual transparent pixels, which require an explicit background in the owning composer.
-Original inputs remain unchanged.
-PNG encoding excludes date and time chunks while retaining color metadata, so identical input bytes produce identical output within the same ImageMagick runtime.
-Ttush's Fastlane bridge enables this option for its existing iPad inputs.
-
-## Upload behavior
-
-The adopted Fastlane lanes prepare and validate images before account lookup or upload, then pass the exact prepared path and `overwrite_screenshots: true`.
-Hidden screenshot filenames, mixed-case extensions such as `.Png`, and mismatched file formats are rejected before the external boundary.
-Replacement affects **all screenshot sets in every supplied locale**, as implemented by Fastlane, including remote display classes absent from the local tree.
-Review the complete local and remote sets before executing the lane.
-Mirae and Ttush retain their in-progress-review guard.
-Their release lanes also validate before starting the build.
-`skip_screenshots:true` explicitly permits metadata-only upload without this checkout.
-Kkomkkomi retains its metadata-only fallback when its screenshot source directory is absent.
-
-No command in this repository currently logs into App Store Connect, uploads files, or submits review.
-Fastlane lane execution remains an external action requiring authorization.
-`overwrite_screenshots` expresses replacement intent; it does not prove remote processing, order, or absence of duplicates.
-Remote readback belongs to the later Asset Library adapter.
-
-## Evidence limits
-
-The initial manifest labels existing inputs `unverified-import`.
-It records file provenance, not the build that originally rendered the image.
-It does not assert required-slot completeness, text readability, visual quality, safe-area compliance, or App Store acceptance.
-The current dimension allowlist covers the adopted iPhone and iPad pipelines; it is not a complete Apple device catalog.
-Duo and Creative Assets require the next reference-data and provenance contract rather than aliases for existing phone screenshots.
-
-See [the rollout](docs/plans/2026-10-07-rollout.md) and [the first-stage contract](docs/specs/screenshot-bundles.md).
+See the [implementation contract](docs/specs/2026-10-07-app-store-assets-design.md), [plan](docs/plans/2026-10-07-shared-runtime.md), and [implementation evidence](docs/notes/2026-10-07-implementation.md).
