@@ -10,21 +10,23 @@ Python 3.9 or newer, ImageMagick 7 (`magick`), and Ruby for the Fastlane bridge.
 No new Python package or Ruby gem is required.
 Keep this checkout beside the personal app repositories or set `APP_STORE_ASSETS_ROOT` to its absolute path.
 The [shared repository](https://github.com/AndrewDongminYoo/app-store-assets) is private.
-Use the pinned runtime checkout below for reproducible installation.
+Use a reviewed runtime commit for reproducible installation.
 Missing tooling stops screenshot uploads with an explicit error.
 
-## Pinned Runtime Checkout
+## Runtime Checkout
 
-The stage-1 runtime commit is `e0d3691b455ec2c27606fbda5b22f09f5a9d3483`.
-Clone into a new directory and set its absolute path for the app's Fastlane bridge.
+The stage-1 runtime pin `e0d3691b455ec2c27606fbda5b22f09f5a9d3483`, also included in `d9682e6`, has reader-compatibility and cache-publication defects.
+Do not use those revisions for store uploads.
+The replacement runtime candidate is `7597d47f3ce36cac3462155b0c8a489a441e62a8`.
+Review and merge its fix PR before deploying this pin.
+After approval, clone into a new directory and set its absolute path for the app's Fastlane bridge.
 
 ```bash
 git clone --no-checkout https://github.com/AndrewDongminYoo/app-store-assets.git /absolute/path/to/app-store-assets
-git -C /absolute/path/to/app-store-assets checkout --detach e0d3691b455ec2c27606fbda5b22f09f5a9d3483
+git -C /absolute/path/to/app-store-assets checkout --detach 7597d47f3ce36cac3462155b0c8a489a441e62a8
 export APP_STORE_ASSETS_ROOT=/absolute/path/to/app-store-assets
 ```
 
-The pin covers the CLI, Ruby bridge, and tests.
 Project lane adoption remains in each owning app repository; those app changes are not included in this repository's publication.
 
 ## Prepare without uploading
@@ -40,7 +42,9 @@ python3 assets.py prepare-screenshots \
 The command returns JSON containing `bundle` and `screenshots_path`.
 Each locale is flattened to the direct image layout Fastlane reads.
 The bundle directory is named from the manifest hash and contains final hashes, original hashes, sizes, profiles, and the explicit `replace-localized-sets` policy.
-`validate` re-decodes images and compares final hashes and inventory before reuse.
+`validate` re-decodes images and compares final hashes and inventory.
+Preparation additionally compares a reused bundle's manifest with the manifest freshly computed from the source.
+Concurrent preparations validate and reuse the atomically published winner.
 
 ```bash
 python3 assets.py validate /absolute/path/to/bundle
@@ -55,14 +59,25 @@ To verify actual adopted Fastfiles, set `APP_STORE_ASSETS_PERSONAL_ROOT` to the 
 APP_STORE_ASSETS_PERSONAL_ROOT=/absolute/personal/root python3 -m unittest discover -s tests -v
 ```
 
+To compare the manifest with the actual Fastlane 2.240.1 loader, point to its unpacked source and a Ruby interpreter with its existing reader dependencies.
+This check reads temporary files and makes no store calls.
+
+```bash
+APP_STORE_ASSETS_FASTLANE_SOURCE=/absolute/path/to/fastlane-2.240.1 \
+APP_STORE_ASSETS_READER_RUBY=/absolute/path/to/ruby \
+python3 -m unittest discover -s tests -v
+```
+
 `--normalize-alpha` removes an unused alpha channel from an entirely opaque PNG in the prepared copy.
 It rejects actual transparent pixels, which require an explicit background in the owning composer.
 Original inputs remain unchanged.
+PNG encoding excludes date and time chunks while retaining color metadata, so identical input bytes produce identical output within the same ImageMagick runtime.
 Ttush's Fastlane bridge enables this option for its existing iPad inputs.
 
 ## Upload behavior
 
 The adopted Fastlane lanes prepare and validate images before account lookup or upload, then pass the exact prepared path and `overwrite_screenshots: true`.
+Hidden screenshot filenames, mixed-case extensions such as `.Png`, and mismatched file formats are rejected before the external boundary.
 Replacement affects **all screenshot sets in every supplied locale**, as implemented by Fastlane, including remote display classes absent from the local tree.
 Review the complete local and remote sets before executing the lane.
 Mirae and Ttush retain their in-progress-review guard.
