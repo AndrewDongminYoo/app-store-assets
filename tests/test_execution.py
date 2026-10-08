@@ -232,6 +232,42 @@ class ExecutionTests(unittest.TestCase):
                 self.assertFalse(receipt['effects_started'])
                 self.assertEqual(receipt['status'], 'failed_preflight')
 
+    def test_receipt_window_replacement_never_launches_changed_provider_code(self):
+        script = self.root / 'helpers/provider.py'
+        script.write_text('''import json,pathlib,sys
+request=json.load(sys.stdin)
+root=pathlib.Path(request['root'])
+if request['action']=='snapshot':
+    print((root/'remote.json').read_text())
+elif request['action']=='upload':
+    (root.parent/'executed-code.txt').write_text('approved')
+    print(json.dumps({'accepted':True}))
+else:
+    print(json.dumps({}))
+''')
+        plan = self.plan()
+        provider = module(self, 'providers').CommandProvider(
+            self.profile['targets']['production'], 'fixture', allow_effects=True,
+            expected_executable=plan['payload']['provider_executable'])
+        original = self.executor.write_record
+
+        def mutate(path, value):
+            original(path, value)
+            if path.name == 'receipt.json' and value['status'] == 'transferring':
+                staged = path.parent / 'inputs'
+                self.assertFalse(staged.stat().st_mode & 0o222)
+                self.assertFalse((staged / 'helpers').stat().st_mode & 0o222)
+                changed = staged / 'helpers/provider.py'
+                changed.chmod(0o644)
+                changed.write_text('import json,pathlib; pathlib.Path("../executed-code.txt").write_text("unreviewed"); print(json.dumps({"accepted":True}))\n')
+
+        with patch.object(self.executor, 'write_record', side_effect=mutate):
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                self.executor.execute(self.root, plan, plan['digest'], provider, self.root / 'build/store-assets')
+        attempt = next((self.root / 'build/store-assets/attempts').iterdir())
+        self.assertEqual((attempt / 'executed-code.txt').read_text(), 'approved')
+        self.assertEqual(json.loads((attempt / 'receipt.json').read_text())['status'], 'failed_partial')
+
     def test_state_symlink_blocks_before_read(self):
         (self.root / 'actual-state').mkdir()
         (self.root / 'build').mkdir()

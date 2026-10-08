@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from .builds import build
-from .execution import execute, readback_matches, stage_inventory, write_record
+from .execution import execute, readback_matches, seal_stage, stage_inventory, write_record
 from .identity import runtime_identity, runtime_inventory
 from .metadata import download_snapshot, metadata_diff
 from .planning import make_plan
@@ -147,9 +147,12 @@ def main(argv=None):
                 with tempfile.TemporaryDirectory(prefix='.read-', dir=state) as tmp:
                     scratch = Path(tmp)
                     from .records import inventory
-                    stage_inventory(root, scratch / 'inputs', inventory(root, provider_input_paths(args.profile, target)))
+                    inputs = inventory(root, provider_input_paths(args.profile, target))
+                    stage_inventory(root, scratch / 'inputs', inputs)
                     stage_inventory(safe_path(root, profile['runtime']['path']), scratch / 'runtime', runtime['files'])
-                    provider.bind_stage(scratch / 'inputs', scratch / 'runtime')
+                    provider.bind_stage(scratch / 'inputs', scratch / 'runtime', inputs, runtime['files'])
+                    seal_stage(scratch / 'inputs')
+                    seal_stage(scratch / 'runtime')
                     path = download_snapshot(provider, identity, state / 'downloads')
                     result = {'snapshot': path.relative_to(root).as_posix(), 'manifest': validate_snapshot(path)}
         else:
@@ -168,7 +171,10 @@ def main(argv=None):
                                        plan['payload'].get('provider_executable'))
             verify_inventory(receipt_path.parent / 'inputs', plan['payload']['inputs'], exact=True)
             verify_inventory(receipt_path.parent / 'runtime', plan['payload']['runtime']['files'], exact=True)
-            provider.bind_stage(receipt_path.parent / 'inputs', receipt_path.parent / 'runtime')
+            provider.bind_stage(receipt_path.parent / 'inputs', receipt_path.parent / 'runtime',
+                                plan['payload']['inputs'], plan['payload']['runtime']['files'])
+            seal_stage(receipt_path.parent / 'inputs')
+            seal_stage(receipt_path.parent / 'runtime')
             report = provider.readback(plan, receipt.get('provider_result', {}))
             if readback_matches(plan['payload'], report, receipt.get('provider_result', {})):
                 receipt['status'] = 'verified'

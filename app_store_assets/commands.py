@@ -1,5 +1,8 @@
 """Bound argv adapters with private environments and a small JSON protocol."""
+import base64
+import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -51,6 +54,49 @@ def expand_argv(argv, root, runtime=None, output=None):
             arg = arg.replace(key, value)
         result.append(arg)
     return result
+
+
+def capture_provider_argv(argv, approved_files):
+    """Launch reviewed entrypoint bytes from OS argv, never reopen its pathname."""
+    scripts = [(index, arg) for index, arg in enumerate(argv[1:], 1) if arg in approved_files]
+    if not scripts:
+        # Native installed executables are covered by executable_identity.
+        if any(Path(arg).suffix in ('.py', '.rb') for arg in argv[1:]):
+            raise ValueError('provider script must belong to the approved staged inventory')
+        return argv
+    if len(scripts) != 1:
+        raise ValueError('provider requires one staged Python/Ruby entrypoint')
+    index, path = scripts[0]
+    executable = Path(executable_identity(argv)['path']).name
+    prefix = argv[1:index]
+    if executable.startswith('python'):
+        if any(arg not in ('-I', '-S', '-B', '-u') for arg in prefix):
+            raise ValueError('unsupported Python provider startup options')
+        language = 'python'
+    elif executable.startswith('ruby'):
+        if len(prefix) % 2 or any(prefix[i] != '-r' or not re.fullmatch(r'[A-Za-z0-9_/]+', prefix[i + 1])
+                                  or prefix[i + 1].startswith('/') or '..' in prefix[i + 1].split('/')
+                                  for i in range(0, len(prefix), 2)):
+            raise ValueError('unsupported Ruby provider startup options')
+        language = 'ruby'
+    else:
+        raise ValueError('staged providers require an installed Python/Ruby interpreter')
+    handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(handle, 'rb') as stream:
+        code = stream.read(65537)
+    if len(code) > 65536:
+        raise ValueError('provider entrypoint exceeds captured code bound')
+    if hashlib.sha256(code).hexdigest() != approved_files[path]:
+        raise ValueError('provider entrypoint differs from approved captured bytes')
+    encoded = base64.b64encode(code).decode('ascii')
+    if language == 'python':
+        bootstrap = ('import base64,sys; p=sys.argv.pop(1); code=sys.argv.pop(1); sys.argv[0]=p; '
+                     + ('' if '-I' in prefix else 'sys.path[0]=__import__("os").path.dirname(p); ')
+                     + 'exec(compile(base64.b64decode(code),p,"exec"),'
+                     + '{"__name__":"__main__","__file__":p,"__package__":None,"__builtins__":__builtins__})')
+        return [argv[0], *prefix, '-c', bootstrap, path, encoded, *argv[index + 1:]]
+    bootstrap = 'p=ARGV.shift; code=ARGV.shift; $0=p; eval(code.unpack1("m0").force_encoding("UTF-8"),TOPLEVEL_BINDING,p)'
+    return [argv[0], *prefix, '-e', bootstrap, path, encoded, *argv[index + 1:]]
 
 
 def run_command(argv, request, cwd, home, expected=None, tool_env=None):

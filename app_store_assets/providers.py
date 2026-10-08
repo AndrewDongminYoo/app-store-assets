@@ -1,8 +1,8 @@
 """Explicit provider effects; no authentication or automatic backend fallback."""
 from pathlib import Path
 
-from .commands import executable_identity, expand_argv, run_command
-from .records import safe_path
+from .commands import capture_provider_argv, executable_identity, expand_argv, run_command
+from .records import file_digest, safe_path, verify_inventory
 from .metadata import normalize_remote
 
 
@@ -27,14 +27,23 @@ class CommandProvider:
         self.expected = expected_executable or executable_identity(target['provider']['argv'])
         self.root = self.runtime = None
 
-    def bind_stage(self, root, runtime):
+    def bind_stage(self, root, runtime, inputs=None, runtime_files=None):
         self.root, self.runtime = Path(root), Path(runtime)
+        approved = {}
+        for tree, files in ((self.root, inputs), (self.runtime, runtime_files)):
+            if files is not None:
+                verify_inventory(tree, files, exact=True)
+                approved.update({str(safe_path(tree, name)): digest for name, digest in files.items()})
+            else:
+                approved.update({str(path): file_digest(path) for path in tree.rglob('*') if path.is_file()})
+        argv = expand_argv(self.target['provider']['argv'], self.root, self.runtime)
+        self.captured_argv = capture_provider_argv(argv, approved)
 
     def request(self, action, **values):
         if self.root is None:
             raise ValueError('provider must be bound to immutable staged inputs')
         descriptor = self.target['provider']
-        argv = expand_argv(descriptor['argv'], self.root, self.runtime)
+        argv = self.captured_argv
         request = {'schema_version': 1, 'action': action, 'root': str(self.root), 'runtime': str(self.runtime),
                    'mode': self.mode, 'authorized': True, 'auth_file': self.auth_file, **values}
         tool_env = {}

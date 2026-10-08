@@ -30,6 +30,16 @@ def stage_inventory(source, destination, expected):
     verify_inventory(destination, expected, exact=True)
 
 
+def seal_stage(root):
+    """Remove ordinary write/replace access while adapters consume staged files."""
+    root = Path(root)
+    for path in root.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('staged symlink rejected while sealing')
+        path.chmod(0o555 if path.is_dir() else 0o444)
+    root.chmod(0o555)
+
+
 def preflight(payload, observed):
     expected = payload['remote']
     if expected is None:
@@ -164,7 +174,7 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
             stage_inventory(safe_path(root, payload['runtime_path']), runtime, payload['runtime']['files'])
             # A command provider gets only the staged package and project paths.
             if hasattr(provider, 'bind_stage'):
-                provider.bind_stage(inputs, runtime)
+                provider.bind_stage(inputs, runtime, payload['inputs'], payload['runtime']['files'])
             preflight(payload, provider.snapshot(payload['target']))
             verify_inventory(inputs, payload['inputs'], exact=True)
             verify_inventory(runtime, payload['runtime']['files'], exact=True)
@@ -172,6 +182,8 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
             # The final remote lookup can overlap another local writer.
             verify_inventory(inputs, payload['inputs'], exact=True)
             verify_inventory(runtime, payload['runtime']['files'], exact=True)
+            seal_stage(inputs)
+            seal_stage(runtime)
             receipt['status'] = 'transferring'
             receipt['effects_started'] = True
             write_record(attempt / 'receipt.json', receipt)
