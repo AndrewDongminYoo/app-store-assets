@@ -213,15 +213,22 @@ module StoreProvider
       record = snapshot(target)
       selected = version(target)
       raise "exact Apple listing version is missing" unless selected
-      selected.get_app_store_version_localizations.each do |locale|
-        locale.get_app_screenshot_sets.each do |set|
-          (set.app_screenshots || []).each_with_index do |image, index|
+      raise "Apple screenshot inventory changed: version ID" unless selected.id == record.fetch("version_id")
+      groups = selected.get_app_store_version_localizations.map do |locale|
+        [locale.locale, locale.get_app_screenshot_sets.map { |set| [set.screenshot_display_type, set.app_screenshots || []] }]
+      end
+      identities = groups.to_h { |locale, sets| [locale, sets.to_h { |slot, images| [slot, images.map(&:id)] }] }
+      expected = record.fetch("images").to_h { |locale, sets| [locale, sets.to_h { |slot, images| [slot, images.map { |image| image.fetch("id") }] }] }
+      raise "Apple screenshot inventory changed" unless identities == expected && groups.map(&:first).uniq.length == groups.length && groups.all? { |_, sets| sets.map(&:first).uniq.length == sets.length }
+      groups.each do |locale, sets|
+        sets.each do |slot, images|
+          images.each_with_index do |image, index|
             asset = image.image_asset
             raise "remote screenshot download metadata missing" unless asset && asset["templateUrl"]
-            raise "unsafe remote locale/slot identifier" unless [locale.locale, set.screenshot_display_type].all? { |s| s.match?(/\A[A-Za-z0-9_-]+\z/) }
+            raise "unsafe remote locale/slot identifier" unless [locale, slot].all? { |s| s.match?(/\A[A-Za-z0-9_-]+\z/) }
             url = asset["templateUrl"].gsub("{w}", asset.fetch("width").to_s).gsub("{h}", asset.fetch("height").to_s).gsub("{f}", "png")
-            path = StoreProvider.download_image(url, File.join(output, "images", locale.locale, set.screenshot_display_type, format("%02d", index + 1)))
-            item = record.fetch("images").fetch(locale.locale).fetch(set.screenshot_display_type)[index]
+            path = StoreProvider.download_image(url, File.join(output, "images", locale, slot, format("%02d", index + 1)))
+            item = record.fetch("images").fetch(locale).fetch(slot)[index]
             item["file"] = Pathname.new(path).relative_path_from(Pathname.new(output)).to_s
             item["sha256"] = Digest::SHA256.file(path).hexdigest
           end

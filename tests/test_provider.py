@@ -316,6 +316,38 @@ raise 'valid mixed metadata not written exactly' unless writes==[
                 with self.assertRaisesRegex(ValueError, 'hash|inventory|manifest'):
                     module(self, 'planning').verify_plan(root, plan)
 
+    def test_apple_download_rejects_complete_second_inventory_drift_before_any_download(self):
+        source = r'''require "json"; require "ostruct"; require "tmpdir"; require ARGV.fetch(0)
+        target = {"app_id"=>"com.example.fixture"}
+        original = {"version_id"=>"version-1", "images"=>{"en-US"=>{"APP_IPHONE_65"=>[{"id"=>"a"},{"id"=>"b"}]}}}
+        module StoreProvider
+          def self.download_image(*); raise "download called before complete identity guard"; end
+        end
+        [["b","a"], ["a"], ["a","b","c"], ["a","changed"]].each do |ids|
+          images = ids.map { |id| OpenStruct.new(id:id, image_asset:{"templateUrl"=>"https://example.invalid/{w}x{h}.{f}", "width"=>1,"height"=>1}) }
+          set = OpenStruct.new(screenshot_display_type:"APP_IPHONE_65", app_screenshots:images)
+          locale = Object.new
+          locale.define_singleton_method(:locale) { "en-US" }
+          locale.define_singleton_method(:get_app_screenshot_sets) { [set] }
+          version = Object.new
+          version.define_singleton_method(:id) { "version-1" }
+          version.define_singleton_method(:get_app_store_version_localizations) { [locale] }
+          provider = StoreProvider::Apple.new(Object.new)
+          provider.define_singleton_method(:snapshot) { |_| Marshal.load(Marshal.dump(original)) }
+          provider.define_singleton_method(:version) { |_| version }
+          begin
+            Dir.mktmpdir { |dir| provider.download(target,dir) }
+            raise "changed inventory accepted"
+          rescue => error
+            raise unless error.message.include?("screenshot inventory changed")
+          end
+        end
+        puts JSON.generate(blocked:true)
+        '''
+        result = subprocess.run(['ruby', '-e', source, str(ROOT / 'lib/store_provider.rb')],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_actual_supply_sdk_image_fields(self):
         root = os.environ.get('APP_STORE_ASSETS_FASTLANE_SOURCE')
         if not root:
