@@ -149,19 +149,23 @@ module StoreProvider
       localizations = selected.get_app_store_version_localizations.to_h { |l| [l.locale, l] }
       if operation == "metadata"
         fields = payload.fetch("listing").fetch("fields")
+        info_localizations = {}
         fields.each do |locale, values|
           raise "create locale needs a separately scoped plan" unless localizations[locale]
           raise "unsupported Apple metadata field" unless (values.keys - VERSION_FIELDS.keys - INFO_FIELDS.keys).empty?
           raise "exact editable app-info snapshot required" if (values.keys & INFO_FIELDS.keys).any? && (!@app_info || @app_info.id != current["app_info_id"])
+          if (values.keys & INFO_FIELDS.keys).any?
+            info = @app_info.get_app_info_localizations.find { |l| l.locale == locale }
+            raise "missing exact app-info localization" unless info
+            info_localizations[locale] = info
+          end
         end
         fields.each do |locale, values|
           attrs = values.select { |k, _| VERSION_FIELDS.key?(k) }.to_h { |k, v| [VERSION_FIELDS[k], v] }
           localizations.fetch(locale).update(attributes: attrs) unless attrs.empty?
           attrs = values.select { |k, _| INFO_FIELDS.key?(k) }.to_h { |k, v| [INFO_FIELDS[k], v] }
           unless attrs.empty?
-            info = @app_info.get_app_info_localizations.find { |l| l.locale == locale }
-            raise "missing exact app-info localization" unless info
-            info.update(attributes: attrs)
+            info_localizations.fetch(locale).update(attributes: attrs)
           end
         end
         return {"accepted" => true, "remote_ids" => [selected.id]}

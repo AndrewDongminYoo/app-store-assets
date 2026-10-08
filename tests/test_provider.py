@@ -225,6 +225,53 @@ class ProviderTests(unittest.TestCase):
         self.assertIn('"exact_version":true', result.stdout)
         self.assertIn('"google_read_never_commits":true', result.stdout)
 
+    def test_all_app_info_locales_are_checked_before_any_metadata_write(self):
+        source = r'''
+require 'json'; require ARGV.fetch(0)
+writes=[]
+locales=%w(en-US ko-KR).map do |name|
+  item=Object.new
+  item.define_singleton_method(:locale) { name }
+  item.define_singleton_method(:update) { |attributes:| writes << [name,attributes] }
+  item
+end
+version=Object.new
+version.define_singleton_method(:id) { 'exact-version' }
+version.define_singleton_method(:get_app_store_version_localizations) { locales }
+info_locales=[locales.first]
+info=Object.new
+info.define_singleton_method(:id) { 'exact-info' }
+info.define_singleton_method(:get_app_info_localizations) { info_locales }
+target={'app_id'=>'com.example.synthetic'}
+remote={'target'=>target,'version_id'=>'exact-version','app_info_id'=>'exact-info',
+  'editable'=>true,'review_active'=>false}
+provider=StoreProvider::Apple.new(Object.new,app_info:info)
+provider.define_singleton_method(:snapshot) { |_| remote }
+provider.define_singleton_method(:version) { |_| version }
+[
+  {'ko-KR'=>{'description'=>'reviewed description','name'=>'reviewed name'}},
+  {'en-US'=>{'description'=>'reviewed description'},'ko-KR'=>{'name'=>'reviewed name'}}
+].each do |fields|
+  payload={'operation'=>'metadata','target'=>target,'remote'=>remote,'listing'=>{'fields'=>fields}}
+  begin
+    provider.upload({'payload'=>payload},'/unused-synthetic-path')
+    raise 'missing AppInfo locale accepted'
+  rescue => error
+    raise unless error.message=='missing exact app-info localization'
+    raise 'metadata changed before all AppInfo locales were validated' unless writes.empty?
+  end
+end
+info_locales << locales.last
+payload={'operation'=>'metadata','target'=>target,'remote'=>remote,
+  'listing'=>{'fields'=>{'ko-KR'=>{'description'=>'reviewed description','name'=>'reviewed name'}}}}
+raise 'acceptance missing' unless provider.upload({'payload'=>payload},'/unused-synthetic-path')['accepted']
+raise 'valid mixed metadata not written exactly' unless writes==[
+  ['ko-KR',{'description'=>'reviewed description'}],['ko-KR',{'name'=>'reviewed name'}]]
+'''
+        result = subprocess.run(['ruby', '-e', source, str(ROOT / 'lib/store_provider.rb')],
+                                capture_output=True, text=True, timeout=30, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_google_revision_is_rechecked_inside_write_edit(self):
         self.run_case('drift')
 
