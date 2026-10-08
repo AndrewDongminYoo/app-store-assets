@@ -1,13 +1,14 @@
 {
   "schema_version": 1,
-  "catalog_version": "2026-10-07.3",
-  "checked_on": "2026-10-07",
+  "catalog_version": "2026-10-08.4",
+  "checked_on": "2026-10-08",
   "fastlane_reader": "2.240.1",
   "sources": {
     "apple_images": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
     "apple_text": "https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information/",
     "apple_name": "https://developer.apple.com/help/app-store-connect/reference/app-information/app-information/",
     "google_images": "https://support.google.com/googleplay/android-developer/answer/9866151?hl=en",
+    "google_release_notes": "https://support.google.com/googleplay/android-developer/answer/9859348?hl=en-EN",
     "google_text": "https://support.google.com/googleplay/android-developer/answer/9859152?hl=en"
   },
   "stores": {
@@ -24,6 +25,7 @@
       "submission_required": {"iphone": "APP_IPHONE_61", "ipad": "APP_IPAD_PRO_3GEN_129"}
     },
     "google": {
+      "release_notes_limit": 500,
       "slots": {
         "phoneScreenshots": {"min_dimension": 320, "max_dimension": 3840, "max_aspect": 2, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 8},
         "featureGraphic": {"sizes": [[1024,500]], "rotate": false, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 1},

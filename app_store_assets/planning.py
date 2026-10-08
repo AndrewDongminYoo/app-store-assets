@@ -2,8 +2,8 @@
 from pathlib import Path
 
 from .identity import git, python_identity, runtime_identity
-from .commands import executable_identity
-from .catalog import CATALOG_FILE, validate_fields, validate_images
+from .commands import capture_provider_argv, executable_identity, expand_argv
+from .catalog import CATALOG_FILE, rules, validate_fields, validate_images
 from .metadata import remote_observation
 from .profiles import exact_keys, load_profile, provider_input_paths, target_identity
 from .records import file_digest, inventory, read_json, record_digest, safe_path
@@ -108,8 +108,12 @@ def make_plan(root, profile_path, target_name, operation):
         remote = remote_observation(remote)
     notes = {}
     if operation == 'binary':
+        if target['store'] == 'apple' and target.get('changelogs'):
+            raise ValueError('Apple binary localized notes require a separate beta-localization adapter')
         for locale, path in target.get('changelogs', {}).items():
             notes[locale] = safe_path(root, path).read_text()
+            if target['store'] == 'google' and len(notes[locale]) > rules()['stores']['google']['release_notes_limit']:
+                raise ValueError(f'release-notes limit exceeded: {locale}')
             paths.append(path)
     effects = ['upload-' + operation]
     if notes:
@@ -128,6 +132,10 @@ def make_plan(root, profile_path, target_name, operation):
                'replacement': target.get('replacement'), 'release_status': target.get('release_status'),
                'provider': target['provider']}
     payload['provider_executable'] = executable_identity(target['provider']['argv'])
+    approved_files = {str(safe_path(root, name)): digest for name, digest in payload['inputs'].items()}
+    runtime_root = safe_path(root, profile['runtime']['path'])
+    approved_files.update({str(safe_path(runtime_root, name)): digest for name, digest in runtime['files'].items()})
+    capture_provider_argv(expand_argv(target['provider']['argv'], root, runtime_root), approved_files)
     return {'payload': payload, 'digest': record_digest(payload)}
 
 

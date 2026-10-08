@@ -68,6 +68,29 @@ class PlanningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'source|guard|inspection'):
             self.plan()
 
+    def test_apple_binary_notes_are_rejected_before_plan_publication(self):
+        self.profile['targets']['production']['changelogs'] = {'en-US': 'metadata/en-US/changelogs/9.txt'}
+        write_json(self.root / 'store-upload.json', self.profile)
+        with self.assertRaisesRegex(ValueError, 'Apple binary.*notes'):
+            self.plan()
+
+    def test_google_binary_unicode_notes_limit_is_per_locale(self):
+        root, profile = fixture(self, store='google')
+        profile['targets']['production']['changelogs'] = {'ko-KR': 'metadata/ko-KR/changelogs/9.txt',
+                                                         'en-US': 'metadata/en-US/changelogs/9.txt'}
+        write_json(root / 'store-upload.json', profile)
+        path = root / 'metadata/ko-KR/changelogs/9.txt'
+        path.parent.mkdir(parents=True)
+        for count in (499, 500, 501):
+            with self.subTest(count=count):
+                path.write_text('한' * count)
+                if count <= 500:
+                    plan = self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+                    self.assertEqual(plan['payload']['release_notes']['ko-KR'], '한' * count)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'release.notes.*limit'):
+                        self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+
     def test_google_version_named_changelog_must_match_build(self):
         root, profile = fixture(self, store='google')
         profile['targets']['production']['changelogs'] = {'en-US': 'metadata/en-US/changelogs/8.txt'}
