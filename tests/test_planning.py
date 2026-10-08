@@ -68,6 +68,20 @@ class PlanningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'source|guard|inspection'):
             self.plan()
 
+    def test_google_changelog_locale_keys_fail_offline_before_provider_launch(self):
+        root, profile = fixture(self, store='google')
+        for locale in ('bad locale', '', '../en-US', 'en_US', 'en-US\n'):
+            with self.subTest(locale=locale):
+                profile['targets']['production']['changelogs'] = {locale: 'metadata/en-US/changelogs/9.txt'}
+                write_json(root / 'store-upload.json', profile)
+                with self.assertRaisesRegex(ValueError, 'locale'):
+                    self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+        for locale in ('en-US', 'ko-KR', 'es-419'):
+            profile['targets']['production']['changelogs'] = {locale: 'metadata/en-US/changelogs/9.txt'}
+            write_json(root / 'store-upload.json', profile)
+            plan = self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+            self.assertEqual(set(plan['payload']['release_notes']), {locale})
+
     def test_apple_binary_notes_are_rejected_before_plan_publication(self):
         self.profile['targets']['production']['changelogs'] = {'en-US': 'metadata/en-US/changelogs/9.txt'}
         write_json(self.root / 'store-upload.json', self.profile)

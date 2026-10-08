@@ -272,6 +272,65 @@ raise 'valid mixed metadata not written exactly' unless writes==[
                                 capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_google_download_compares_complete_second_inventory_before_any_download(self):
+        source = r"""
+require 'json'; require 'ostruct'; require 'tmpdir'; require ARGV.fetch(0)
+class ChangingImages
+  attr_reader :reads
+  def initialize(change); @change=change; @edit=0; @reads=[]; end
+  def begin_edit(package_name:); @edit += 1; end
+  def abort_current_edit; end
+  def listings
+    names=%w(en-US ko-KR)
+    names=['en-US'] if @edit==2 && @change=='removed-locale'
+    names.map { |name| OpenStruct.new(language:name,title:'T',short_description:'S',full_description:'D',video:'') }
+  end
+  def fetch_images(image_type:,language:)
+    @reads << [@edit,language,image_type]
+    ids=image_type=='phoneScreenshots' ? ['one','two'] : []
+    if @edit==2 && language=='en-US' && image_type=='phoneScreenshots'
+      ids=[] if @change=='removed-slot'
+      ids=['one'] if @change=='removed-image'
+      ids=['two','one'] if @change=='reordered'
+      ids=['one','two','three'] if @change=='added-image'
+    end
+    ids.map { |id| OpenStruct.new(id:id,sha256:'a'*64,url:'https://example.invalid/'+id) }
+  end
+  def track_releases(track); []; end
+  def aab_version_codes; []; end
+  def apks_version_codes; []; end
+end
+calls=[]
+StoreProvider.define_singleton_method(:download_image) do |url,path|
+ calls << url; FileUtils.mkdir_p(File.dirname(path)); File.binwrite(path,'synthetic-image'); path
+end
+target={'store'=>'google','platform'=>'android','app_id'=>'com.example.fixture','track'=>'internal','version'=>{'name'=>'1.0','build'=>'9'}}
+%w(removed-locale removed-slot removed-image reordered added-image same).each do |change|
+ calls.clear; client=ChangingImages.new(change)
+ Dir.mktmpdir do |root|
+  if change=='same'
+    value=StoreProvider::Google.new(client).download(target,root)
+    raise 'missing downloads' unless calls.length==4
+    raise 'third inventory fetch' unless client.reads.length==32
+    raise 'missing annotations' unless value['record']['images'].values.all? { |slots| slots['phoneScreenshots'].all? { |image| image['file'] && image['sha256'] } }
+  else
+    begin
+      StoreProvider::Google.new(client).download(target,root)
+      raise 'changed complete inventory accepted: '+change
+    rescue => error
+      raise unless error.message.include?('inventory changed')
+      raise 'download started before complete comparison: '+change unless calls.empty?
+    end
+  end
+ end
+end
+puts JSON.generate(complete_inventory_checked:true)
+"""
+        result = subprocess.run(['ruby', '-e', source, str(ROOT / 'lib/store_provider.rb')],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('"complete_inventory_checked":true', result.stdout)
+
     def test_google_revision_is_rechecked_inside_write_edit(self):
         self.run_case('drift')
 

@@ -36,24 +36,33 @@ module CapturedProvider
     item = CAPTURED_FILES.fetch(self.path(path)) { raise LoadError, "uncaptured staged provider code" }
     CAPTURED_ARCHIVE.pread(item.fetch("size"), item.fetch("offset"))
   end
-  def self.candidate(feature)
-    paths = if feature.start_with?("/", "./", "../")
-      [self.path(feature)]
-    else
-      $LOAD_PATH.map { |root| self.path(File.join(root, feature)) }
-    end
+  def self.candidate(feature, cwd_fallback=false)
+    explicit = feature.start_with?("/", "./", "../")
+    paths = explicit ? [self.path(feature)] : $LOAD_PATH.map { |root| self.path(File.join(root, feature)) }
+    paths << self.path(feature) if cwd_fallback && !explicit
+    staged_search = false
     paths.each do |path|
-      [path, path + ".rb"].each { |name| return name if CAPTURED_FILES.key?(name) }
+      names = cwd_fallback ? [path] : [path, path + ".rb", path + ".so", path + ".bundle"]
+      names.each do |name|
+        return {path:name, captured:true} if CAPTURED_FILES.key?(name)
+        if staged?(name)
+          staged_search = true
+          next
+        end
+        return {path:name, captured:false} if File.file?(name)
+      end
     end
-    raise LoadError, "uncaptured staged provider code" if paths.any? { |path| staged?(path) }
-    nil
+    raise LoadError, "uncaptured staged provider code" if staged_search
+    # Only installed-library activation may retain an unresolved feature name.
+    {path:feature, captured:false}
   end
 end
 
 module CapturedRequires
   def require(feature)
-    path = CapturedProvider.candidate(feature)
-    return super unless path
+    selected = CapturedProvider.candidate(feature)
+    return super(selected.fetch(:path)) unless selected.fetch(:captured)
+    path = selected.fetch(:path)
     return false if $LOADED_FEATURES.include?(path)
     $LOADED_FEATURES << path
     begin
@@ -70,8 +79,9 @@ module CapturedRequires
     Kernel.require(File.expand_path(feature, File.dirname(origin)))
   end
   def load(feature, wrap=false)
-    path = CapturedProvider.candidate(feature)
-    return super unless path
+    selected = CapturedProvider.candidate(feature, true)
+    return super(selected.fetch(:path), wrap) unless selected.fetch(:captured)
+    path = selected.fetch(:path)
     raise LoadError, "wrapped staged loads are unsupported" if wrap
     eval(CapturedProvider.read(path).force_encoding("UTF-8"), TOPLEVEL_BINDING, path)
     true

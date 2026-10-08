@@ -132,8 +132,7 @@ def main(argv=None):
             receipt_path = safe_path(root, args.receipt) if args.receipt else None
             if receipt_path and receipt_path.exists():
                 raise ValueError('receipt output already exists; preserve previous evidence')
-            provider = None if args.dry_run else CommandProvider(target, profile['mode'], args.allow_effects,
-                                                                args.auth_file, plan['payload'].get('provider_executable'))
+            provider = None if args.dry_run else CommandProvider.from_plan(plan, args.allow_effects, args.auth_file)
             result = execute(root, plan, args.expected_digest, provider, state, args.dry_run)
             if args.receipt and not args.dry_run:
                 receipt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -166,9 +165,7 @@ def main(argv=None):
             if args.dry_run:
                 print(json.dumps({'status': 'dry-run', 'digest': receipt['digest'], 'effects': []}))
                 return 0
-            provider_target = dict(target, provider=plan['payload']['provider'])
-            provider = CommandProvider(provider_target, plan['payload']['mode'], args.allow_effects, args.auth_file,
-                                       plan['payload'].get('provider_executable'))
+            provider = CommandProvider.from_plan(plan, args.allow_effects, args.auth_file)
             verify_inventory(receipt_path.parent / 'inputs', plan['payload']['inputs'], exact=True)
             verify_inventory(receipt_path.parent / 'runtime', plan['payload']['runtime']['files'], exact=True)
             provider.bind_stage(receipt_path.parent / 'inputs', receipt_path.parent / 'runtime',

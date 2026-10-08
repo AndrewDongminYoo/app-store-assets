@@ -351,13 +351,24 @@ module StoreProvider
     def download(target, output)
       record = snapshot(target)
       read_session(target) do
-        @client.listings.each do |listing|
-          IMAGE_TYPES.each do |slot|
-            @client.fetch_images(image_type: slot, language: listing.language).each_with_index do |image, index|
-              raise "unsafe remote locale" unless listing.language.match?(/\A[A-Za-z0-9_-]+\z/)
-              path = StoreProvider.download_image(image.url, File.join(output, "images", listing.language, slot, format("%02d", index + 1)))
-              item = record.fetch("images").fetch(listing.language).fetch(slot)[index]
-              raise "download image inventory changed" unless item["id"] == image.id
+        # Freeze the complete second fetch before any image download, including empty groups.
+        current = @client.listings.to_h do |listing|
+          [listing.language, IMAGE_TYPES.to_h do |slot|
+            [slot, @client.fetch_images(image_type: slot, language: listing.language)]
+          end]
+        end
+        observed = current.transform_values do |slots|
+          slots.transform_values do |images|
+            images.map { |image| {"id" => image.id, "provider_sha256" => image.sha256, "processing_state" => "processed"} }
+          end
+        end
+        raise "download image inventory changed" unless observed == record.fetch("images")
+        current.each do |locale, slots|
+          raise "unsafe remote locale" unless locale.match?(/\A[A-Za-z0-9_-]+\z/)
+          slots.each do |slot, images|
+            images.each_with_index do |image, index|
+              path = StoreProvider.download_image(image.url, File.join(output, "images", locale, slot, format("%02d", index + 1)))
+              item = record.fetch("images").fetch(locale).fetch(slot)[index]
               item["file"] = Pathname.new(path).relative_path_from(Pathname.new(output)).to_s
               item["sha256"] = Digest::SHA256.file(path).hexdigest
             end

@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import subprocess
@@ -78,6 +79,43 @@ class CliTests(unittest.TestCase):
                                '--plan', 'approved.json', '--expected-digest', plan['digest'],
                                '--receipt', 'existing.json', '--allow-effects'])
         self.assertEqual(result, 1)
+
+    def test_execute_uses_reviewed_adapter_when_initial_profile_is_restored(self):
+        from app_store_assets import cli
+        source = """import json,pathlib,sys
+request=json.load(sys.stdin)
+root=pathlib.Path(request['root'])
+if request['action']=='snapshot':
+ print((root/'remote.json').read_text())
+elif request['action']=='upload':
+ (root.parent/'selected-provider.txt').write_text('approved')
+ print(json.dumps({'accepted':True}))
+else:
+ payload=request['plan']['payload'];target=payload['target']
+ print(json.dumps({'target':target,'observed':{'binary':{'app_id':target['app_id'],'version':target['version'],'platform':target['platform'],'source_sha256':payload['build']['sha256'],'processing_state':'processed'},'release_status':payload['release_status'],'release_notes':payload['release_notes']}}))
+"""
+        (self.root / 'helpers/provider.py').write_text(source)
+        (self.root / 'helpers/other.py').write_text(source.replace("write_text('approved')", "write_text('unreviewed')"))
+        planned = self.cli('plan', '--operation', 'binary')
+        self.assertEqual(planned.returncode, 0, planned.stderr)
+        plan = json.loads(planned.stdout)
+        write_json(self.root / 'approved.json', plan)
+        profile_path = self.root / 'store-upload.json'
+        approved = profile_path.read_bytes()
+        stale = copy.deepcopy(self.profile)
+        stale['targets']['production']['provider']['argv'] = [sys.executable, '{root}/helpers/other.py']
+        write_json(profile_path, stale)
+        real_load = cli.load_profile
+        def restore_after_load(*args):
+            result = real_load(*args)
+            profile_path.write_bytes(approved)
+            return result
+        with patch.object(cli, 'load_profile', side_effect=restore_after_load), redirect_stdout(io.StringIO()):
+            result = cli.main(['execute','--root',str(self.root),'--target','production','--plan','approved.json',
+                               '--expected-digest',plan['digest'],'--allow-effects'])
+        self.assertEqual(result, 0)
+        selected = next((self.root / 'build/store-assets/attempts').glob('*/selected-provider.txt'))
+        self.assertEqual(selected.read_text(), 'approved')
 
     def test_verify_dry_run_has_no_provider_or_receipt_write(self):
         from app_store_assets import cli

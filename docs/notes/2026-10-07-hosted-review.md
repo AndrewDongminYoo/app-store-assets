@@ -24,3 +24,16 @@ No SDK authentication or store request runs in this test.
 Verification: 134 tests passed with all optional personal Fastfile and installed SDK checks enabled; zero skipped.
 The original C-locale, staging, target, missing-listing and killed-process regressions failed before their corresponding repairs.
 Actual native builds, signing and live store behavior remain unverified.
+
+## Reviewed provider binding and download completeness
+
+The next bounded repair covers four reproduced findings on `6cf010f09d1a073c61fea921f42d8c89bf933d22`:
+
+- Ruby bare and nested relative `load` calls could resolve replaced working-directory files. The resolver now selects captured bytes for working-directory and load-path names and rejects an added staged helper.
+- Execution constructed a provider from an earlier profile read even when plan verification later observed the reviewed profile. Execution and readback now construct from the reviewed target, mode, complete adapter descriptor and executable identity. Execution rejects mismatched command-provider objects before creating an attempt; stage binding freezes the reviewed configuration.
+- Google binary changelog locale keys were not validated offline. They now use the existing listing locale contract before reading notes or invoking a provider.
+- Google download compared only images still present in its second read. It now compares both complete ordered inventories before the first image download, then consumes the frozen second read without a third lookup.
+
+Regression tests first demonstrated all four failures, using temporary public inputs and stubbed external boundaries. The profile race test executes real temporary approved/unreviewed adapters; the download test covers removed locales, empty groups, removed/reordered/added images and an unchanged inventory. No credential read, live authentication, store call, signing or native build is part of this evidence.
+
+Current validation: 173 tests discovered; the default suite passes 162 with 11 optional skips, and the installed Fastlane 2.240.1 source suite passes 168 with five personal-Fastfile integration skips. Ruby syntax, scoped Ruff and whitespace checks pass. Personal Fastfile integrations are not rerun in this repair: the preceding run had six Mirae missing-helper subcase errors because the temporary fixture copied its Fastfile without the newly required app-owned helper. Those errors remain a reported fixture limitation, not a passing integration result.

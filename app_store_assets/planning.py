@@ -4,7 +4,7 @@ from pathlib import Path
 from .identity import git, python_identity, runtime_identity
 from .commands import capture_provider_argv, executable_identity, expand_argv
 from .catalog import CATALOG_FILE, rules, validate_fields, validate_images
-from .metadata import remote_observation
+from .metadata import normalize_fields, remote_observation
 from .profiles import exact_keys, load_profile, provider_input_paths, target_identity
 from .records import file_digest, inventory, read_json, record_digest, safe_path
 from .snapshots import validate_snapshot
@@ -111,6 +111,8 @@ def make_plan(root, profile_path, target_name, operation):
         if target['store'] == 'apple' and target.get('changelogs'):
             raise ValueError('Apple binary localized notes require a separate beta-localization adapter')
         for locale, path in target.get('changelogs', {}).items():
+            if target['store'] == 'google':
+                normalize_fields({locale: {}})
             notes[locale] = safe_path(root, path).read_text()
             if target['store'] == 'google' and len(notes[locale]) > rules()['stores']['google']['release_notes_limit']:
                 raise ValueError(f'release-notes limit exceeded: {locale}')

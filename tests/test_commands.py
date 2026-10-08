@@ -259,6 +259,38 @@ print(json.dumps({'argument':sys.argv[1], 'target':request['target']}))
         self.assertFalse(marker.exists())
         self.assertEqual(result, {'code': 'approved'})
 
+    def test_ruby_relative_load_uses_capture_for_working_directory_and_load_path(self):
+        script = self.root / 'helpers/provider.rb'
+        helper = self.root / 'loaded.rb'
+        nested = self.root / 'helpers/loaded.rb'
+        target = self.profile['targets']['production']
+        target['provider']['argv'] = ['ruby', '{root}/helpers/provider.rb']
+        cases = [('', 'loaded.rb'), ('', 'helpers/loaded.rb'), ('', './helpers/loaded.rb'),
+                 ('$LOAD_PATH.unshift(__dir__); ', 'loaded.rb')]
+        for setup, name in cases:
+            with self.subTest(loader=name, setup=setup):
+                script.write_text(setup+'load '+json.dumps(name)+'; require "json"; puts JSON.generate({code:CODE})\n')
+                helper.write_text('CODE="approved"\n')
+                nested.write_text('CODE="approved"\n')
+                provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+                provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+                helper.write_text('CODE="unreviewed"\n')
+                nested.write_text('CODE="unreviewed"\n')
+                self.assertEqual(provider.request('snapshot'), {'code': 'approved'})
+
+    def test_relative_ruby_load_rejects_added_working_directory_helper(self):
+        script = self.root / 'helpers/provider.rb'
+        script.write_text('load "added.rb"; require "json"; puts JSON.generate({code:CODE})\n')
+        target = self.profile['targets']['production']
+        target['provider']['argv'] = ['ruby', '{root}/helpers/provider.rb']
+        provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        marker = self.root / 'unexpected-relative-load'
+        (self.root / 'added.rb').write_text('File.write('+json.dumps(str(marker))+', "unreviewed"); CODE="unreviewed"\n')
+        with self.assertRaises(ValueError):
+            provider.request('snapshot')
+        self.assertFalse(marker.exists())
+
     def test_adapter_failure_never_echoes_raw_stderr_or_private_response(self):
         script = self.root / 'helpers/fail.py'
         script.write_text('import sys; print("fake-token-private",file=sys.stderr);sys.exit(1)\n')

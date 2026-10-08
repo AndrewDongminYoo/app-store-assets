@@ -268,6 +268,30 @@ else:
         self.assertEqual((attempt / 'executed-code.txt').read_text(), 'approved')
         self.assertEqual(json.loads((attempt / 'receipt.json').read_text())['status'], 'failed_partial')
 
+    def test_mismatched_provider_configuration_stops_before_authenticated_snapshot(self):
+        providers = module(self, 'providers')
+        plan = self.plan()
+        for mismatch in ('argv', 'gemfile', 'mode', 'account', 'executable'):
+            with self.subTest(mismatch=mismatch):
+                target = copy.deepcopy(self.profile['targets']['production'])
+                mode = 'fixture'
+                expected = copy.deepcopy(plan['payload']['provider_executable'])
+                if mismatch == 'argv':
+                    target['provider']['argv'].append('unreviewed option')
+                elif mismatch == 'gemfile':
+                    target['provider']['gemfile'] = 'unreviewed-Gemfile'
+                elif mismatch == 'mode':
+                    mode = 'unreviewed-mode'
+                elif mismatch == 'account':
+                    target['account'] = 'unreviewed-account'
+                else:
+                    expected['sha256'] = '0' * 64
+                provider = providers.CommandProvider(target, mode, allow_effects=True, expected_executable=expected)
+                provider.snapshot = lambda _: self.fail('mismatched provider launched an authenticated snapshot')
+                with self.assertRaisesRegex(ValueError, 'reviewed plan|provider.*plan'):
+                    self.executor.execute(self.root, plan, plan['digest'], provider, self.root / 'build/store-assets')
+        self.assertFalse((self.root / 'build/store-assets').exists())
+
     def test_state_symlink_blocks_before_read(self):
         (self.root / 'actual-state').mkdir()
         (self.root / 'build').mkdir()

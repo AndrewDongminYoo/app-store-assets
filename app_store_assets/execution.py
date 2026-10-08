@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 
 from .planning import verify_plan
+from .providers import CommandProvider
 from .records import canonical, file_digest, read_json, record_digest, safe_path, verify_inventory
 
 ATTEMPT_STATE = 'build/store-assets'
@@ -125,6 +126,8 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
     payload = plan['payload']
     if dry_run:
         return {'status': 'dry-run', 'digest': plan['digest'], 'effects': payload['effects']}
+    if isinstance(provider, CommandProvider):
+        provider.verify_plan_binding(payload)
     raw_root, raw_state = Path(os.path.abspath(root)), Path(os.path.abspath(state))
     root = raw_root.resolve()
     if not raw_state.is_relative_to(raw_root):
