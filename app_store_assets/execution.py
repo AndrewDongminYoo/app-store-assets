@@ -169,6 +169,9 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
             verify_inventory(inputs, payload['inputs'], exact=True)
             verify_inventory(runtime, payload['runtime']['files'], exact=True)
             preflight(payload, provider.snapshot(payload['target']))
+            # The final remote lookup can overlap another local writer.
+            verify_inventory(inputs, payload['inputs'], exact=True)
+            verify_inventory(runtime, payload['runtime']['files'], exact=True)
             receipt['status'] = 'transferring'
             receipt['effects_started'] = True
             write_record(attempt / 'receipt.json', receipt)

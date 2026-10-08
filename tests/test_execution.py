@@ -207,6 +207,31 @@ class ExecutionTests(unittest.TestCase):
             self.execute()
         self.assertEqual(self.provider.writes, [])
 
+    def test_staged_mutation_during_final_snapshot_blocks_before_transfer(self):
+        for directory, path in (('inputs', 'helpers/provider.py'),
+                                ('runtime', 'lib/store_provider.rb'),
+                                ('inputs', 'helpers/unreviewed.py')):
+            with self.subTest(directory=directory, path=path):
+                root, _ = fixture(self)
+                provider = FakeProvider(root)
+                plan = self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+                state = root / 'build/store-assets'
+
+                def mutate(provider, state=state, directory=directory, path=path):
+                    if len(provider.reads) == 2:
+                        staged = next((state / 'attempts').glob('*/' + directory)) / path
+                        if staged.exists():
+                            staged.chmod(0o644)
+                        staged.write_text('# unreviewed staged replacement\n')
+
+                provider.on_snapshot = mutate
+                with self.assertRaisesRegex(ValueError, 'changed|inventory|added'):
+                    self.executor.execute(root, plan, plan['digest'], provider, state)
+                self.assertEqual(provider.writes, [])
+                receipt = json.loads(next((state / 'attempts').glob('*/receipt.json')).read_text())
+                self.assertFalse(receipt['effects_started'])
+                self.assertEqual(receipt['status'], 'failed_preflight')
+
     def test_state_symlink_blocks_before_read(self):
         (self.root / 'actual-state').mkdir()
         (self.root / 'build').mkdir()
