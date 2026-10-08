@@ -84,6 +84,12 @@ Mirae's `merry build aab/ipa` also uploads. The pilot adapter must invoke a buil
 - `doctor`, `plan`, `diff`, and dry-run are offline: no credentials, store calls/writes, upload, release, device install or implicit legacy lane. Display concrete commands/effects without running them.
 - Local `build/generate` and remote `download/execute/verify` have separate execution/effect boundaries. Build adapters do not inherit store-upload credentials. Device capture requires a declared device operation and is not host-only asset verification.
 - A plan binds app/platform/flavor/stage/account/store/track/version/build, runtime and all declared transitive helpers/config/notes, inventory and bytes. Before each effect, revalidate it; mutations/additions/removals invalidate the old digest.
+- A command provider requires one staged Python/Ruby source entrypoint.
+  Module-only, inline and native provider loaders fail closed during offline planning.
+  Capture the complete approved input/runtime inventory into an anonymous, hash-verified archive before the first authenticated invocation.
+  The child receives a read-only descriptor; supported imports, require/load, file reads and Bundler Gemfile/lock evaluation use captured bytes, including after a parent-directory rename.
+  Ignore local Bundler configuration.
+  Installed interpreters, standard libraries and SDKs remain trusted infrastructure; reviewed providers must use the supported loaders rather than spawn staged code or load staged native extensions.
 - Upload immutable staged copies, including native artifacts, metadata and notes. Original-path verification just before process launch cannot eliminate the remote-lookup race. Pass staged paths through adapters; approved re-signing/export steps have their own staged inputs and derived output records.
 - Apple listing operations bind the exact existing version ID and verify editability/review/display-class scope. Never select the highest editable version, create a version implicitly, or allow partial local sets to delete omitted remote classes. Screenshot replacement requires an explicit reviewed locale/class policy.
 - Play release status, track and changelogs are explicit, and environment defaults cannot override the plan. Bundle upload, text/image upload and track promotion are separate effects.

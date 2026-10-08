@@ -135,7 +135,9 @@ def make_plan(root, profile_path, target_name, operation):
     approved_files = {str(safe_path(root, name)): digest for name, digest in payload['inputs'].items()}
     runtime_root = safe_path(root, profile['runtime']['path'])
     approved_files.update({str(safe_path(runtime_root, name)): digest for name, digest in runtime['files'].items()})
-    capture_provider_argv(expand_argv(target['provider']['argv'], root, runtime_root), approved_files)
+    gemfile = str(safe_path(root, target['provider']['gemfile'])) if target['provider'].get('gemfile') else None
+    capture_provider_argv(expand_argv(target['provider']['argv'], root, runtime_root), approved_files,
+                          roots=[root, runtime_root], gemfile=gemfile)
     return {'payload': payload, 'digest': record_digest(payload)}
 
 

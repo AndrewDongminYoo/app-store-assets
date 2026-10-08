@@ -1,5 +1,9 @@
+import json
 import os
+import shutil
 import sys
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -59,6 +63,201 @@ print(json.dumps({'argument':sys.argv[1], 'target':request['target']}))
             self.commands.capture_provider_argv(['/bin/sh', str(script)], files)
         with self.assertRaisesRegex(ValueError, 'startup options'):
             self.commands.capture_provider_argv([sys.executable, '-c', str(script)], files)
+
+    def test_module_loader_without_captured_entrypoint_is_rejected_offline(self):
+        files = {str(self.root / 'helpers/provider.py'): module(self, 'records').file_digest(self.root / 'helpers/provider.py')}
+        for argv in ([sys.executable, '-m', 'unbound_adapter'], ['ruby', '-e', 'puts 1']):
+            with self.subTest(argv=argv), self.assertRaisesRegex(ValueError, 'staged|entrypoint|loader'):
+                self.commands.capture_provider_argv(argv, files)
+
+    def test_python_helper_replacement_uses_captured_code(self):
+        script = self.root / 'helpers/provider.py'
+        script.write_text('import bound_helper,json; print(json.dumps({"code":bound_helper.CODE}))\n')
+        helper = script.with_name('bound_helper.py')
+        helper.write_text('CODE="approved"\n')
+        provider = module(self, 'providers').CommandProvider(self.profile['targets']['production'], 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        helper.unlink()
+        helper.write_text('CODE="unreviewed"\n')
+        self.assertEqual(provider.request('snapshot'), {'code': 'approved'})
+
+    def test_python_package_replacement_uses_captured_relative_imports(self):
+        script = self.root / 'helpers/provider.py'
+        script.write_text('from package import helper; import json; print(json.dumps({"code":helper.CODE}))\n')
+        package = script.parent / 'package'
+        package.mkdir()
+        (package / '__init__.py').write_text('from . import helper\n')
+        (package / 'helper.py').write_text('CODE="approved"\n')
+        provider = module(self, 'providers').CommandProvider(self.profile['targets']['production'], 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        package.rename(package.with_name('old-package'))
+        package.mkdir()
+        (package / '__init__.py').write_text('from . import helper\n')
+        (package / 'helper.py').write_text('CODE="unreviewed"\n')
+        self.assertEqual(provider.request('snapshot'), {'code': 'approved'})
+
+    def test_added_python_module_cannot_execute_outside_capture(self):
+        script = self.root / 'helpers/provider.py'
+        script.write_text('import added_module; import json; print(json.dumps({"code":added_module.CODE}))\n')
+        provider = module(self, 'providers').CommandProvider(self.profile['targets']['production'], 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        marker = self.root / 'unexpected-effect'
+        script.with_name('added_module.py').write_text('from pathlib import Path; Path('+repr(str(marker))+').touch(); CODE="unreviewed"\n')
+        with self.assertRaises(ValueError):
+            provider.request('snapshot')
+        self.assertFalse(marker.exists())
+
+    def test_python_dynamic_helper_reads_captured_bytes(self):
+        script = self.root / 'helpers/provider.py'
+        script.write_text('from pathlib import Path; import json; ns={}; exec(Path(__file__).with_name("helper.source").read_text(),ns); print(json.dumps({"code":ns["CODE"]}))\n')
+        helper = script.with_name('helper.source')
+        helper.write_text('CODE="approved"\n')
+        provider = module(self, 'providers').CommandProvider(self.profile['targets']['production'], 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        helper.write_text('CODE="unreviewed"\n')
+        self.assertEqual(provider.request('snapshot'), {'code': 'approved'})
+
+    def test_ruby_dynamic_helper_reads_captured_bytes(self):
+        script = self.root / 'helpers/provider.rb'
+        script.write_text('eval(File.read(File.join(__dir__, "helper.source")),TOPLEVEL_BINDING); require "json"; puts JSON.generate({code:CODE})\n')
+        helper = script.with_name('helper.source')
+        helper.write_text('CODE="approved"\n')
+        target = self.profile['targets']['production']
+        target['provider']['argv'] = ['ruby', '{root}/helpers/provider.rb']
+        provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        helper.write_text('CODE="unreviewed"\n')
+        self.assertEqual(provider.request('snapshot'), {'code': 'approved'})
+
+    def test_python_explicit_source_loader_uses_captured_bytes(self):
+        script = self.root / 'helpers/provider.py'
+        script.write_text('import importlib.util,json; from pathlib import Path; spec=importlib.util.spec_from_file_location("loaded",Path(__file__).with_name("loaded.py")); helper=importlib.util.module_from_spec(spec); spec.loader.exec_module(helper); print(json.dumps({"code":helper.CODE}))\n')
+        helper = script.with_name('loaded.py')
+        helper.write_text('CODE="approved"\n')
+        provider = module(self, 'providers').CommandProvider(self.profile['targets']['production'], 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        helper.write_text('CODE="unreviewed"\n')
+        self.assertEqual(provider.request('snapshot'), {'code': 'approved'})
+
+    def test_ruby_added_helper_is_blocked_without_executing_it(self):
+        script = self.root / 'helpers/provider.rb'
+        script.write_text('require_relative "added_helper"; require "json"; puts JSON.generate({code:CODE})\n')
+        target = self.profile['targets']['production']
+        target['provider']['argv'] = ['ruby', '{root}/helpers/provider.rb']
+        provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        marker = self.root / 'unexpected-ruby-effect'
+        script.with_name('added_helper.rb').write_text('File.write('+json.dumps(str(marker))+', "unreviewed"); CODE="unreviewed"\n')
+        with self.assertRaises(ValueError):
+            provider.request('snapshot')
+        self.assertFalse(marker.exists())
+
+    def test_running_python_provider_keeps_capture_after_working_directory_rename(self):
+        ready = self.root.with_name(self.root.name + '-ready')
+        release = self.root.with_name(self.root.name + '-release')
+        self.addCleanup(lambda: ready.unlink(missing_ok=True))
+        self.addCleanup(lambda: release.unlink(missing_ok=True))
+        script = self.root / 'helpers/provider.py'
+        script.write_text('from pathlib import Path; import json,time\n'
+                          'Path('+repr(str(ready))+').touch()\n'
+                          'deadline=time.monotonic()+10\n'
+                          'while not Path('+repr(str(release))+').exists():\n'
+                          ' if time.monotonic()>deadline: raise RuntimeError("test synchronization timed out")\n'
+                          ' time.sleep(0.01)\n'
+                          'ns={};exec((Path.cwd()/"helpers/helper.source").read_text(),ns);print(json.dumps({"code":ns["CODE"]}))\n')
+        helper = script.with_name('helper.source')
+        helper.write_text('CODE="approved"\n')
+        provider = module(self, 'providers').CommandProvider(self.profile['targets']['production'], 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        results, errors = [], []
+        def request():
+            try:
+                results.append(provider.request('snapshot'))
+            except Exception as error:
+                errors.append(error)
+        worker = threading.Thread(target=request)
+        worker.start()
+        deadline = time.monotonic() + 10
+        while not ready.exists() and worker.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(ready.exists(), errors)
+        displaced = self.root.with_name(self.root.name + '-displaced')
+        self.root.rename(displaced)
+        self.addCleanup(shutil.rmtree, displaced)
+        self.root.mkdir()
+        (displaced / 'helpers/helper.source').write_text('CODE="unreviewed"\n')
+        release.touch()
+        worker.join(15)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(results, [{'code': 'approved'}])
+
+    def test_ruby_file_constructor_uses_captured_helper_bytes(self):
+        script = self.root / 'helpers/provider.rb'
+        script.write_text('eval(File.new(File.join(__dir__, "helper.source"),"r").read,TOPLEVEL_BINDING); require "json"; puts JSON.generate({code:CODE})\n')
+        helper = script.with_name('helper.source')
+        helper.write_text('CODE="approved"\n')
+        target = self.profile['targets']['production']
+        target['provider']['argv'] = ['ruby', '{root}/helpers/provider.rb']
+        provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        helper.write_text('CODE="unreviewed"\n')
+        self.assertEqual(provider.request('snapshot'), {'code': 'approved'})
+
+    def test_ruby_raw_staged_open_cannot_execute_uncaptured_helper(self):
+        script = self.root / 'helpers/provider.rb'
+        script.write_text('fd=File.sysopen(File.join(__dir__, "helper.source")); eval(IO.new(fd).read,TOPLEVEL_BINDING); require "json"; puts JSON.generate({code:CODE})\n')
+        helper = script.with_name('helper.source')
+        helper.write_text('CODE="approved"\n')
+        target = self.profile['targets']['production']
+        target['provider']['argv'] = ['ruby', '{root}/helpers/provider.rb']
+        provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        marker = self.root / 'unexpected-raw-effect'
+        helper.write_text('File.write('+json.dumps(str(marker))+', "unreviewed"); CODE="unreviewed"\n')
+        with self.assertRaises(ValueError):
+            provider.request('snapshot')
+        self.assertFalse(marker.exists())
+
+    def test_ruby_helper_replacement_uses_captured_require_relative_and_load(self):
+        script = self.root / 'helpers/provider.rb'
+        script.write_text('require_relative "bound_helper"; load File.join(__dir__, "loaded.rb"); require "json"; puts JSON.generate({code:CODE, loaded:LOADED})\n')
+        helper = script.with_name('bound_helper.rb')
+        loaded = script.with_name('loaded.rb')
+        helper.write_text('CODE="approved"\n')
+        loaded.write_text('LOADED="approved"\n')
+        target = self.profile['targets']['production']
+        target['provider']['argv'] = ['ruby', '{root}/helpers/provider.rb']
+        provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        helper.write_text('CODE="unreviewed"\n')
+        loaded.write_text('LOADED="unreviewed"\n')
+        self.assertEqual(provider.request('snapshot'), {'code': 'approved', 'loaded': 'approved'})
+
+    def test_ruby_gemfile_parent_replacement_uses_captured_gemfile_and_lock(self):
+        ruby = shutil.which('ruby')
+        script = self.root / 'helpers/provider.rb'
+        marker = self.root / 'unexpected-gemfile-effect'
+        script.write_text('require "json"; puts JSON.generate({code:"approved"})\n')
+        (self.root / 'Gemfile').write_text('# no dependencies or network resolution\n')
+        (self.root / 'Gemfile.lock').write_text('GEM\n  specs:\n\nPLATFORMS\n  ruby\n\nDEPENDENCIES\n')
+        target = self.profile['targets']['production']
+        target['provider'].update(argv=[ruby, '-r', 'bundler/setup', '{root}/helpers/provider.rb'], gemfile='Gemfile')
+        provider = module(self, 'providers').CommandProvider(target, 'fixture', allow_effects=True)
+        provider.bind_stage(self.root, self.root / 'tools/app-store-assets')
+        displaced = self.root.with_name(self.root.name + '-displaced')
+        self.root.rename(displaced)
+        self.addCleanup(shutil.rmtree, displaced)
+        self.root.mkdir()
+        (self.root / 'Gemfile').write_text('File.write('+json.dumps(str(marker))+', "unreviewed"); raise "replacement Gemfile"\n')
+        (self.root / 'Gemfile.lock').write_text('unreviewed lockfile\n')
+        result = None
+        try:
+            result = provider.request('snapshot')
+        except ValueError:
+            pass
+        self.assertFalse(marker.exists())
+        self.assertEqual(result, {'code': 'approved'})
 
     def test_adapter_failure_never_echoes_raw_stderr_or_private_response(self):
         script = self.root / 'helpers/fail.py'

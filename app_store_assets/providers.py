@@ -37,7 +37,8 @@ class CommandProvider:
             else:
                 approved.update({str(path): file_digest(path) for path in tree.rglob('*') if path.is_file()})
         argv = expand_argv(self.target['provider']['argv'], self.root, self.runtime)
-        self.captured_argv = capture_provider_argv(argv, approved)
+        gemfile = str(safe_path(self.root, self.target['provider']['gemfile'])) if self.target['provider'].get('gemfile') else None
+        self.captured_argv = capture_provider_argv(argv, approved, roots=[self.root, self.runtime], gemfile=gemfile)
 
     def request(self, action, **values):
         if self.root is None:

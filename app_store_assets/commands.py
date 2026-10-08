@@ -1,15 +1,18 @@
 """Bound argv adapters with private environments and a small JSON protocol."""
-import base64
 import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
+import tempfile
+import struct
 from pathlib import Path, PurePosixPath
 
 from .environment import local_environment
 from .records import canonical, file_digest
+from .provider_python import BOOTSTRAP as PYTHON_BOOTSTRAP
+from .provider_ruby import BOOTSTRAP as RUBY_BOOTSTRAP
 
 
 def executable_identity(argv):
@@ -56,47 +59,104 @@ def expand_argv(argv, root, runtime=None, output=None):
     return result
 
 
-def capture_provider_argv(argv, approved_files):
-    """Launch reviewed entrypoint bytes from OS argv, never reopen its pathname."""
+class CapturedArgv(list):
+    """Keep the anonymous capture alive until all provider requests finish."""
+
+    def __init__(self, argv, capture):
+        super().__init__(argv)
+        self.capture = capture
+
+    def __del__(self):
+        self.capture.close()
+
+
+def capture_provider_argv(argv, approved_files, roots=None, gemfile=None):
+    """Capture the supported executable closure, never reopen staged code."""
+    approved_files = dict(approved_files)
+    for name, digest in list(approved_files.items()):
+        resolved = str(Path(name).resolve())
+        if resolved in approved_files and approved_files[resolved] != digest:
+            raise ValueError('conflicting captured source path aliases')
+        approved_files[resolved] = digest
     scripts = [(index, arg) for index, arg in enumerate(argv[1:], 1) if arg in approved_files]
-    if not scripts:
-        # Native installed executables are covered by executable_identity.
-        if any(Path(arg).suffix in ('.py', '.rb') for arg in argv[1:]):
-            raise ValueError('provider script must belong to the approved staged inventory')
-        return argv
     if len(scripts) != 1:
-        raise ValueError('provider requires one staged Python/Ruby entrypoint')
+        raise ValueError('provider requires one staged Python/Ruby entrypoint; unbound loaders are unsupported')
     index, path = scripts[0]
     executable = Path(executable_identity(argv)['path']).name
     prefix = argv[1:index]
+    requires = []
     if executable.startswith('python'):
         if any(arg not in ('-I', '-S', '-B', '-u') for arg in prefix):
             raise ValueError('unsupported Python provider startup options')
-        language = 'python'
+        bootstrap = PYTHON_BOOTSTRAP
+        startup = ['-I', '-S', '-B', *(['-u'] if '-u' in prefix else []), '-c']
     elif executable.startswith('ruby'):
         if len(prefix) % 2 or any(prefix[i] != '-r' or not re.fullmatch(r'[A-Za-z0-9_/]+', prefix[i + 1])
                                   or prefix[i + 1].startswith('/') or '..' in prefix[i + 1].split('/')
                                   for i in range(0, len(prefix), 2)):
             raise ValueError('unsupported Ruby provider startup options')
-        language = 'ruby'
+        requires = prefix[1::2]
+        if 'bundler/setup' in requires and gemfile is None:
+            raise ValueError('Bundler startup requires a declared captured Gemfile and lockfile')
+        bootstrap = RUBY_BOOTSTRAP
+        startup = ['-e']
     else:
         raise ValueError('staged providers require an installed Python/Ruby interpreter')
-    handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    with os.fdopen(handle, 'rb') as stream:
-        code = stream.read(65537)
-    if len(code) > 65536:
-        raise ValueError('provider entrypoint exceeds captured code bound')
-    if hashlib.sha256(code).hexdigest() != approved_files[path]:
-        raise ValueError('provider entrypoint differs from approved captured bytes')
-    encoded = base64.b64encode(code).decode('ascii')
-    if language == 'python':
-        bootstrap = ('import base64,sys; p=sys.argv.pop(1); code=sys.argv.pop(1); sys.argv[0]=p; '
-                     + ('' if '-I' in prefix else 'sys.path[0]=__import__("os").path.dirname(p); ')
-                     + 'exec(compile(base64.b64decode(code),p,"exec"),'
-                     + '{"__name__":"__main__","__file__":p,"__package__":None,"__builtins__":__builtins__})')
-        return [argv[0], *prefix, '-c', bootstrap, path, encoded, *argv[index + 1:]]
-    bootstrap = 'p=ARGV.shift; code=ARGV.shift; $0=p; eval(code.unpack1("m0").force_encoding("UTF-8"),TOPLEVEL_BINDING,p)'
-    return [argv[0], *prefix, '-e', bootstrap, path, encoded, *argv[index + 1:]]
+    if Path(path).suffix not in ('.py', '.rb'):
+        raise ValueError('provider entrypoint must be Python/Ruby source')
+    if gemfile and (gemfile not in approved_files or gemfile + '.lock' not in approved_files):
+        raise ValueError('Gemfile and lockfile must belong to the approved captured inventory')
+    roots = [str(Path(root).absolute()) for root in (roots or [str(Path(path).parent)])]
+    roots = sorted(set(roots + [str(Path(root).resolve()) for root in roots]))
+    capture = tempfile.TemporaryFile()
+    try:
+        # One anonymous archive holds all reviewed bytes, not an extension heuristic.
+        # A bounded header indexes file slices; payloads are copied incrementally.
+        header_bound = 1024 * 1024
+        capture.seek(header_bound)
+        files, resolved_files = {}, {}
+        for name, digest in approved_files.items():
+            resolved = str(Path(name).resolve())
+            if resolved in resolved_files:
+                files[name] = resolved_files[resolved]
+                continue
+            handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW)
+            offset, count = capture.tell(), 0
+            observed = hashlib.sha256()
+            with os.fdopen(handle, 'rb') as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b''):
+                    observed.update(block)
+                    capture.write(block)
+                    count += len(block)
+            if name == path and count > 65536:
+                raise ValueError('provider entrypoint exceeds captured code bound')
+            if observed.hexdigest() != digest:
+                raise ValueError('provider source differs from approved captured bytes')
+            files[name] = resolved_files[resolved] = {'offset': offset, 'size': count}
+        if files[path]['size'] > 65536:
+            raise ValueError('provider entrypoint exceeds captured code bound')
+        directories = {}
+        for name in approved_files:
+            for directory in Path(name).parents:
+                if not any(str(directory) == root or str(directory).startswith(root + os.sep) for root in roots):
+                    break
+                info = directory.stat()
+                directories[str(info.st_dev) + ':' + str(info.st_ino)] = str(directory.resolve())
+        header = canonical({'files': files, 'roots': roots, 'entry': path, 'directories': directories,
+                            'gemfile': gemfile, 'requires': requires})
+        if len(header) + 8 > header_bound:
+            raise ValueError('provider captured inventory exceeds header bound')
+        capture.seek(0)
+        capture.write(struct.pack('>Q', len(header)) + header)
+        capture.flush()
+        # The child inherits only a read-only descriptor with no filesystem pathname.
+        readonly = os.fdopen(os.open('/dev/fd/' + str(capture.fileno()), os.O_RDONLY), 'rb')
+        capture.close()
+        return CapturedArgv([argv[0], *startup, bootstrap, str(readonly.fileno()), *argv[index + 1:]], readonly)
+    except BaseException:
+        capture.close()
+        raise
+
 
 
 def run_command(argv, request, cwd, home, expected=None, tool_env=None):
@@ -113,8 +173,12 @@ def run_command(argv, request, cwd, home, expected=None, tool_env=None):
         if set(tool_env) - {'GEM_PATH', 'BUNDLE_GEMFILE'}:
             raise ValueError('unsupported adapter tool environment')
         env.update(tool_env)
+    inherited = ()
+    if isinstance(argv, CapturedArgv):
+        argv.capture.seek(0)
+        inherited = (argv.capture.fileno(),)
     process = subprocess.run([identity['path'], *argv[1:]], input=canonical(request), cwd=cwd,
-                             env=env, capture_output=True, timeout=1200)
+                             env=env, capture_output=True, timeout=1200, pass_fds=inherited)
     if process.returncode:
         raise ValueError('declared adapter failed; private diagnostics were not exported')
     if len(process.stdout) > 8 * 1024 * 1024:
