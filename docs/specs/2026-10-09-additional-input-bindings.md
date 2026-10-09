@@ -14,6 +14,9 @@ Repair contracts:
    text must agree with the referenced snapshot inventory.
 2. Metadata/image plans capture every listing changelog, validate its locale,
    text and store limits, include its hash and notes, and reject later changes.
+   Apple notes enforce the frozen 4,000-character rule, including inline and
+   snapshot maps. Metadata notes-only locales require availability on the supplied
+   selected version; passive image-plan notes request no metadata transfer.
    Reading a referenced note does not grant a new operation's transfer authority.
 3. The mandated `python3 -m unittest discover -s tests -v` must work with normal
    Python cache generation. Runtime approval remains a complete source inventory.

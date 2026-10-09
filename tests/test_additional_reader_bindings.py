@@ -92,6 +92,58 @@ class AdditionalReaderBindings(unittest.TestCase):
             {"en-US": "Remote approved notes\n"},
         )
 
+    def test_apple_plan_notes_enforce_catalog_limit(self):
+        root, _ = fixture(self)
+        path = root / "metadata/listing.json"
+        listing = json.loads(path.read_text())
+        name = "metadata/apple-notes.txt"
+        listing["changelogs"] = {"en-US": name}
+        write_json(path, listing)
+        (root / name).write_text("x" * 4000)
+        plan = module("planning").make_plan(
+            root, "store-upload.json", "production", "metadata"
+        )
+        self.assertEqual(len(plan["payload"]["release_notes"]["en-US"]), 4000)
+        (root / name).write_text("x" * 4001)
+        with self.assertRaisesRegex(ValueError, "limit"):
+            module("planning").make_plan(
+                root, "store-upload.json", "production", "metadata"
+            )
+
+    def test_apple_inline_and_snapshot_notes_enforce_catalog_limit(self):
+        root, _ = fixture(self)
+        record = json.loads((root / "remote.json").read_text())
+        record["release_notes"] = {"en-US": "x" * 4001}
+        with self.assertRaisesRegex(ValueError, "limit"):
+            module("metadata").validate_public_metadata(record, record["target"])
+        folder = snapshot_fixture(root / "history", record, {})
+        with self.assertRaisesRegex(ValueError, "limit"):
+            module("cli").metadata_input(
+                root,
+                (folder / "manifest.json").relative_to(root).as_posix(),
+                record["target"],
+            )
+
+    def test_apple_notes_only_locale_requires_selected_version_availability(self):
+        root, _ = fixture(self)
+        path = root / "metadata/listing.json"
+        listing = json.loads(path.read_text())
+        listing["fields"] = {}
+        name = "metadata/apple-notes.txt"
+        (root / name).write_text("Approved notes")
+        listing["changelogs"] = {"en-US": name}
+        write_json(path, listing)
+        plan = module("planning").make_plan(
+            root, "store-upload.json", "production", "metadata"
+        )
+        self.assertEqual(plan["payload"]["release_notes"], {"en-US": "Approved notes"})
+        listing["changelogs"] = {"fr-FR": name}
+        write_json(path, listing)
+        with self.assertRaisesRegex(ValueError, "version locale is unavailable"):
+            module("planning").make_plan(
+                root, "store-upload.json", "production", "metadata"
+            )
+
     def test_normal_source_derived_caches_do_not_change_runtime_inventory(self):
         root, profile = fixture(self)
         runtime = root / profile["runtime"]["path"]

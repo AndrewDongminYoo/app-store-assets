@@ -281,6 +281,12 @@ def validate_public_metadata(record, target):
                     raise ValueError("release-notes limit exceeded")
     for name, note in clean.get("release_notes", {}).items():
         normalize_fields({name: {"release_notes": note}})
+        if identity["store"] == "apple":
+            validate_fields(
+                {name: {"release_notes": note}},
+                "apple",
+                proposed=clean["type"] != "metadata-snapshot",
+            )
         if identity["store"] == "google" and len(note) > 500:
             raise ValueError("release-notes limit exceeded")
     _selected_notes(clean)
