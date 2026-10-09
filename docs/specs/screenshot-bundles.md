@@ -34,12 +34,7 @@ Other filesystem errors must fail, and a corrupt winner must remain untouched.
 
 ## Fastlane Boundary
 
-The bridge returns `screenshots_path` and `overwrite_screenshots: true` only after local validation.
-Preparation runs before external account lookup or upload.
-Explicit metadata-only upload bypasses screenshot preparation.
-The existing review guard in Mirae and Ttush remains active.
-Fastlane replaces all sets in the supplied locales; a partial local locale is not a merge operation.
-The later remote adapter must compare complete intended placement groups and read back processing and order.
+The legacy `prepare` bridge now blocks before preparation or transfer. `prepare_local` supplies locally validated paths only. Store replacement requires the reviewed runtime plan/receipt contract in the shared pipeline design. Preparation alone never authorizes deleting screenshots or remote writes.
 
 ## Sources
 
@@ -48,8 +43,4 @@ The later remote adapter must compare complete intended placement groups and rea
 - [Fastlane `2.240.1` screenshot loader](https://github.com/fastlane/fastlane/blob/2.240.1/deliver/lib/deliver/loader.rb), [display-class reader](https://github.com/fastlane/fastlane/blob/2.240.1/deliver/lib/deliver/app_screenshot.rb), and [localized replacement behavior](https://github.com/fastlane/fastlane/blob/2.240.1/deliver/lib/deliver/upload_screenshots.rb), checked 2026-10-07.
 - [Fastlane `2.240.1` format and extension validator](https://github.com/fastlane/fastlane/blob/2.240.1/deliver/lib/deliver/app_screenshot_validator.rb), verified against the unpacked source on 2026-10-07.
 - [ImageMagick PNG chunk controls](https://imagemagick.org/defines/), checked 2026-10-07.
-- QuestKeeper store-asset precedent: `/Users/dongminyu/Development/01_personal/llm-wiki-dongminyu/wiki/sources/claude--projects---users-dongminyu-development-01-personal-quest-keeper--memory--store-assets-pipeline.md`.
-  Its stale append/duplicate findings support explicit replacement and later remote readback; its historical device-size advice is superseded by current Apple specifications.
-- Mirae `RunnerUITests` precedent: `/Users/dongminyu/Development/01_personal/llm-wiki-dongminyu/wiki/concepts/runner-uitests-load-bearing-name.md`.
-  Capture targets and native build pre-actions remain outside this change.
-- No relevant project-specific pipeline precedent was returned for Ttush, Kkomkkomi, or Chef al Mando: `[no precedent found]`.
+- Application capture targets and native build pre-actions remain owned by their application repositories.

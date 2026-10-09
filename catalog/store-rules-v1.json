@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "catalog_version": "2026-10-09.1",
+  "checked_on": "2026-10-09",
+  "fastlane_reader": "2.240.1",
+  "sources": {
+    "apple_images": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
+    "apple_text": "https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information/",
+    "apple_name": "https://developer.apple.com/help/app-store-connect/reference/app-information/app-information/",
+    "google_images": "https://support.google.com/googleplay/android-developer/answer/9866151?hl=en",
+    "google_release_notes": "https://support.google.com/googleplay/android-developer/answer/9859348?hl=en-EN",
+    "google_text": "https://support.google.com/googleplay/android-developer/answer/9859152?hl=en"
+  },
+  "stores": {
+    "apple": {
+      "slots": {
+        "APP_IPHONE_65": {"sizes": [[1242,2688],[1284,2778]], "rotate": true, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 10},
+        "APP_IPHONE_67": {"sizes": [[1260,2736],[1290,2796],[1320,2868]], "rotate": true, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 10},
+        "APP_IPHONE_61": {"sizes": [[1179,2556],[1206,2622]], "rotate": true, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 10},
+        "APP_IPAD_PRO_129": {"sizes": [[2048,2732]], "rotate": true, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 10},
+        "APP_IPAD_PRO_3GEN_129": {"sizes": [[2048,2732],[2064,2752]], "rotate": true, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 10}
+      },
+      "supported_fields": ["name", "subtitle", "privacy_url", "description", "keywords", "promotional_text", "release_notes", "support_url", "marketing_url"],
+      "text_limits": {"name": [30,"characters"], "subtitle": [30,"characters"], "description": [4000,"characters"], "release_notes": [4000,"characters"], "promotional_text": [170,"characters"], "keywords": [100,"utf8-bytes"]},
+      "submission_required": {"iphone": "APP_IPHONE_61", "ipad": "APP_IPAD_PRO_3GEN_129"}
+    },
+    "google": {
+      "release_notes_limit": 500,
+      "slots": {
+        "phoneScreenshots": {"min_dimension": 320, "max_dimension": 3840, "max_aspect": 2, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 8},
+        "featureGraphic": {"sizes": [[1024,500]], "rotate": false, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 1},
+        "icon": {"sizes": [[512,512]], "rotate": false, "alpha": "required-rgba32", "formats": ["PNG"], "max_bytes": 1048576, "max_count": 1},
+        "tvBanner": {"sizes": [[1280,720]], "rotate": false, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 1}
+      },
+      "supported_fields": ["title", "short_description", "full_description", "video"],
+      "text_limits": {"title": [30,"characters"], "short_description": [80,"characters"], "full_description": [4000,"characters"]},
+      "submission_required": {"minimum_screenshots_across_devices": 2}
+    }
+  }
+}

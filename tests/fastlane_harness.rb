@@ -1,5 +1,18 @@
 # Runs the actual lane, replacing only actions that access external systems.
 require "json"
+require "net/http"
+require "socket"
+
+# These copied public Fastfiles must not open sockets, spawn native/store tools,
+# or load protected files. Only the explicitly stubbed metadata boundary runs.
+Net::HTTP.define_singleton_method(:start) { |*args, **kwargs| raise "network forbidden in fixture" }
+Socket.define_singleton_method(:tcp) { |*args, **kwargs| raise "network forbidden in fixture" }
+TCPSocket.define_singleton_method(:new) { |*args| raise "network forbidden in fixture" }
+module Kernel
+  def system(*); raise "external process forbidden in fixture"; end
+  def exec(*); raise "external process forbidden in fixture"; end
+  def `(*); raise "external process forbidden in fixture"; end
+end
 
 module UI
   def self.user_error!(message)
