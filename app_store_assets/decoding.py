@@ -13,13 +13,14 @@ FORMAT_EXTENSIONS = {
     "PNG": {".png", ".PNG"},
     "JPEG": {".jpg", ".JPG", ".jpeg", ".JPEG"},
 }
+IMAGE_LIMIT = 64 * 1024 * 1024
 
 
 def image_bytes(file, *, expected_sha256=None):
     if expected_sha256 is not None:
         digest(expected_sha256)
     file = Path(file)
-    data = capture_bytes(file, limit=64 * 1024 * 1024)
+    data = capture_bytes(file, limit=IMAGE_LIMIT)
     if (
         expected_sha256 is not None
         and hashlib.sha256(data).hexdigest() != expected_sha256
