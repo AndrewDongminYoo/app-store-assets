@@ -307,6 +307,10 @@ def validate_apple_localizations(listing, remote, operation):
         if operation == "metadata"
         else listing.get("images", {})
     )
+    if operation == "metadata":
+        requested = dict(requested)
+        for name in listing.get("release_notes", {}):
+            requested.setdefault(name, {})
     for locale, values in requested.items():
         existing = remote.get("fields", {}).get(locale, {})
         # Native snapshots include every version field, even when its text is empty.
