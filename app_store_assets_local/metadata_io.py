@@ -29,6 +29,8 @@ from app_store_assets.metadata import (
 )
 from app_store_assets.record_types import validate_assets
 from app_store_assets.records import (
+    FILE_LIMIT,
+    TEXT_LIMIT,
     canonical,
     capture_bytes,
     file_digest,
@@ -40,6 +42,7 @@ from app_store_assets.records import (
 )
 from app_store_assets.snapshots import validate_snapshot
 
+from .budgets import CaptureBudget, bounded_json
 from .outputs import preflight_output, publish_tree, write_new_file
 from .publisher import publish_snapshot, snapshot_manifest
 
@@ -77,8 +80,8 @@ def confined(root, path):
     return safe_path(root, path.as_posix())
 
 
-def text_bytes(path):
-    return capture_bytes(path)
+def text_bytes(path, *, limit=TEXT_LIMIT):
+    return capture_bytes(path, limit=limit)
 
 
 def validate_export(value, target):
@@ -189,12 +192,13 @@ def export_metadata(
     fields = validate_fields(record.get("fields", {}), target["store"], proposed=False)
     maps = {"fields": [], "images": [], "notes": []}
     files = {}
+    budget = CaptureBudget(FILE_LIMIT)
     for locale, values in fields.items():
         for key, value in values.items():
             if key not in FIELDS[target["store"]]:
                 raise ValueError("unsupported repository metadata field")
             name = locale + "/" + key + ".txt"
-            files[name] = value.encode("utf-8")
+            files[name] = budget.take(value.encode("utf-8"))
             maps["fields"].append({"locale": locale, "key": key, "file": name})
     for locale, groups in record.get("images", {}).items():
         for slot, images in groups.items():
@@ -207,7 +211,7 @@ def export_metadata(
                 ):
                     raise ValueError("download image annotation/hash differs")
                 source = safe_path(snapshot, image["file"])
-                data = capture_bytes(source, limit=64 * 1024 * 1024)
+                data = budget.read(source, capture_bytes, per_file=64 * 1024 * 1024)
                 if hashlib.sha256(data).hexdigest() != image["sha256"]:
                     raise ValueError("download bytes changed during export")
                 with tempfile.TemporaryDirectory(prefix="public-export-image-") as home:
@@ -229,7 +233,7 @@ def export_metadata(
     notes = selected_notes(record) if target["store"] == "google" else {}
     for locale, text in notes.items():
         name = locale + "/changelogs/" + target["version"]["build"] + ".txt"
-        files[name] = text.encode("utf-8")
+        files[name] = budget.take(text.encode("utf-8"))
         maps["notes"].append({"locale": locale, "file": name})
     value = validate_export(
         {
@@ -242,6 +246,7 @@ def export_metadata(
         },
         target,
     )
+    export_bytes = budget.take(bounded_json(value, canonical, TEXT_LIMIT))
     # Source address, inventory and complete record must still match captured bytes.
     if validate_snapshot(snapshot) != manifest:
         raise ValueError("source snapshot changed during export")
@@ -249,7 +254,7 @@ def export_metadata(
         _context_guard()
     if dry_run:
         return {"status": "dry-run", "target": target, "effects": []}
-    return publish_tree(destination, {**files, EXPORT_MANIFEST: canonical(value)})
+    return publish_tree(destination, {**files, EXPORT_MANIFEST: export_bytes})
 
 
 def import_metadata(
@@ -272,6 +277,11 @@ def import_metadata(
     preflight_output(state)
     if output.is_relative_to(source) or state.is_relative_to(source):
         raise ValueError("import output/history overlaps the editing tree")
+    if any(
+        directory.is_relative_to(output)
+        for directory in (state / "metadata", state / "assets")
+    ):
+        raise ValueError("import output overlaps a reserved history directory")
     captures = {}
     manifest_path = safe_path(source, EXPORT_MANIFEST)
     value = validate_export(read_json(manifest_path, captures), target)
@@ -285,8 +295,10 @@ def import_metadata(
     if captures.get(manifest_path) != expected[EXPORT_MANIFEST]:
         raise ValueError("export manifest changed during import capture")
 
+    budget = CaptureBudget(FILE_LIMIT)
+
     def captured_text(name):
-        data = text_bytes(safe_path(source, name))
+        data = budget.read(safe_path(source, name), text_bytes, per_file=TEXT_LIMIT)
         if hashlib.sha256(data).hexdigest() != expected[name]:
             raise ValueError("metadata text changed outside bound inventory")
         return data.decode("utf-8")
@@ -318,7 +330,9 @@ def import_metadata(
     for item in validated:
         if item["sha256"] != expected[item["file"]]:
             raise ValueError("metadata image changed outside bound inventory")
-        data = capture_bytes(safe_path(source, item["file"]), limit=64 * 1024 * 1024)
+        data = budget.read(
+            safe_path(source, item["file"]), capture_bytes, per_file=64 * 1024 * 1024
+        )
         if hashlib.sha256(data).hexdigest() != item["sha256"]:
             raise ValueError("import image bytes changed during validation")
         captured[item["file"]] = data
@@ -407,11 +421,18 @@ def import_metadata(
     if (
         state.is_relative_to(output)
         or output.is_relative_to(history)
-        or (assets_path is not None and output.is_relative_to(assets_path))
+        or history.is_relative_to(output)
+        or (
+            assets_path is not None
+            and (
+                output.is_relative_to(assets_path) or assets_path.is_relative_to(output)
+            )
+        )
     ):
         raise ValueError("import output/history overlaps immutable publication")
     preflight_output(state)
     preflight_output(output, new=True)
+    listing_bytes = bounded_json(listing, canonical, TEXT_LIMIT)
     if _context_guard is not None:
         _context_guard()
     if dry_run:
@@ -436,7 +457,7 @@ def import_metadata(
         raise ValueError("metadata publication address changed")
     if _context_guard is not None:
         _context_guard()
-    write_new_file(output, canonical(listing))
+    write_new_file(output, listing_bytes)
     return {
         "listing": output.relative_to(root).as_posix(),
         "assets": assets_path.relative_to(root).as_posix() + "/manifest.json"

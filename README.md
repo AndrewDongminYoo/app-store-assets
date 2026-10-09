@@ -129,3 +129,12 @@ captured digest and the complete structure before use. Changing frozen rules
 requires updating their version and this explicit digest together. Image width,
 height and size annotations must agree with decoded captured bytes, including
 immutable asset snapshots.
+
+The separate local extension publishes only metadata and asset records. It
+rejects build publication; binary read plans still bind explicitly supplied
+APK/AAB/IPA files through B1. Import rejects listing files that overlap reserved
+history directories or predicted snapshot addresses, including in dry-run mode.
+Local copy operations charge supplied bytes before reading paths and bound each
+capture by the remaining 1 GiB total budget (64 MiB per image, 8 MiB per text).
+Snapshot manifests, export manifests and final listings must serialize within
+the public reader's 8 MiB limit before any durable output is created.

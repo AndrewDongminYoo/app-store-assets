@@ -11,6 +11,7 @@ from app_store_assets.records import (
     verify_inventory,
 )
 
+from .budgets import CaptureBudget
 from .outputs import preflight_output, publish_tree
 
 
@@ -21,9 +22,9 @@ def stage_inventory(source, destination, expected):
     if destination.is_relative_to(source):
         raise ValueError("staging destination overlaps source tree")
     preflight_output(destination, new=True)
+    budget = CaptureBudget(FILE_LIMIT)
     captured = {
-        name: capture_bytes(safe_path(source, name), limit=FILE_LIMIT)
-        for name in expected
+        name: budget.read(safe_path(source, name), capture_bytes) for name in expected
     }
     if sum(map(len, captured.values())) > FILE_LIMIT:
         raise ValueError("staging exceeds total byte bound")

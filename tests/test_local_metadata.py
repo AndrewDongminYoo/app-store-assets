@@ -237,8 +237,8 @@ class MetadataRoundtripTests(unittest.TestCase):
         directory = self.export()
         original_read = self.io.text_bytes
 
-        def transient(path):
-            data = original_read(path)
+        def transient(path, **kwargs):
+            data = original_read(path, **kwargs)
             return (
                 b"unreviewed transient text" if path.name == "description.txt" else data
             )

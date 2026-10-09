@@ -7,14 +7,32 @@ from pathlib import Path
 
 from app_store_assets.contracts import hash_inventory, public_path
 from app_store_assets.record_types import validate_record
-from app_store_assets.records import FILE_LIMIT, canonical, capture_bytes, record_digest
+from app_store_assets.records import (
+    FILE_LIMIT,
+    TEXT_LIMIT,
+    canonical,
+    capture_bytes,
+    record_digest,
+)
 from app_store_assets.snapshots import validate_snapshot
 
+from .budgets import CaptureBudget, bounded_json
 from .outputs import preflight_output, publish_tree
 
 
-def snapshot_manifest(record, files):
+def local_record(record):
     validate_record(record)
+    if record["type"] not in {
+        "metadata",
+        "metadata-snapshot",
+        "metadata-import",
+        "asset-manifest",
+    }:
+        raise ValueError("local publication supports only metadata and asset records")
+
+
+def snapshot_manifest(record, files):
+    local_record(record)
     if not isinstance(files, dict):
         raise ValueError("invalid snapshot files mapping")
     hashes = {}
@@ -76,12 +94,14 @@ def snapshot_manifest(record, files):
                             raise ValueError(
                                 "snapshot dimensions differ from captured bytes"
                             )
-    return {
+    manifest = {
         "schema_version": 1,
         "type": "snapshot",
         "record": copy.deepcopy(record),
         "files": hashes,
     }
+    bounded_json(manifest, canonical, TEXT_LIMIT)
+    return manifest
 
 
 def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guard=None):
@@ -91,16 +111,22 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
         public_path(name)
         if not isinstance(source, (bytes, str, Path)):
             raise ValueError("unsupported snapshot source")
-    validate_record(record)
+    local_record(record)
     if expected_hashes is not None:
         hash_inventory(expected_hashes)
         if set(expected_hashes) != set(files):
             raise ValueError("snapshot inspected inventory differs")
+    budget = CaptureBudget(FILE_LIMIT)
     captured = {
-        name: data if isinstance(data, bytes) else capture_bytes(data, limit=FILE_LIMIT)
+        name: budget.take(data)
         for name, data in files.items()
+        if isinstance(data, bytes)
     }
+    for name, source in files.items():
+        if not isinstance(source, bytes):
+            captured[name] = budget.read(source, capture_bytes)
     manifest = snapshot_manifest(record, captured)
+    manifest_bytes = bounded_json(manifest, canonical, TEXT_LIMIT)
     if expected_hashes is not None and manifest["files"] != expected_hashes:
         raise ValueError("published artifact hash differs from inspected digest")
     if _context_guard is not None:
@@ -114,7 +140,7 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
 
     publish_tree(
         destination,
-        {**captured, "manifest.json": canonical(manifest)},
+        {**captured, "manifest.json": manifest_bytes},
         reuse=winner,
         mode=0o444,
     )
