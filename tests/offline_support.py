@@ -13,7 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def module(*args):
-    return importlib.import_module("app_store_assets." + args[-1])
+    name = args[-1]
+    package = (
+        "app_store_assets_local"
+        if name in {"publisher", "metadata_io", "staging", "write_cli", "outputs"}
+        else "app_store_assets"
+    )
+    return importlib.import_module(package + "." + name)
 
 
 def write_json(path, value):

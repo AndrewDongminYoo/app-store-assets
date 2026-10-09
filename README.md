@@ -119,9 +119,9 @@ Snapshots validate the complete supported record as well as their address and
 exact file inventory. Python validators are authoritative; the JSON schema files
 are structural summaries and do not replace runtime validation.
 
-Import/export/staging/publication are absent from this distribution. A future
-separate `app_store_assets_local` package depends on these readers and validators;
-it requires a separate approval and adds no execution authority to read plans.
+The `app_store_assets` reader package contains no import/export/staging/publisher
+implementation or writer import. This dependent local branch adds those functions
+only in `app_store_assets_local`; read plans retain no execution authority.
 Native identity, signing, provider account and remote freshness remain unverified.
 
 Catalog rules are frozen to `catalog.CATALOG_SHA256`: each read validates the
