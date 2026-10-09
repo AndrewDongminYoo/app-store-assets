@@ -98,3 +98,28 @@ The current dimension allowlist covers the adopted iPhone and iPad pipelines; it
 Duo and Creative Assets require the next reference-data and provenance contract rather than aliases for existing phone screenshots.
 
 See [the rollout](docs/plans/2026-10-07-rollout.md) and [the first-stage contract](docs/specs/screenshot-bundles.md).
+
+## Offline read commands
+
+`python3 -B -m app_store_assets doctor|plan|diff --root PROJECT --target NAME`
+uses an explicitly pinned local runtime and supplied public records. `plan` is
+an intent record with `executable: false`; no command constructs a provider or
+writes project state. `diff` additionally takes `--before` and `--after`.
+`--dry-run` keeps the same read-only behavior. Image validation may create
+private temporary decoder files which are removed on completion.
+
+The profile lists a public runtime URL, exact Git commit, complete runtime hash
+inventory and each app/platform/account/flavor/stage/version/track identity.
+Unknown keys and malformed nested values fail closed in every target, including
+unselected targets. Public metadata URL queries accept only `lang`, `hl` or
+`locale` with a locale value; credential queries and fragments are rejected.
+All file reads reject symlinks in any component and private name patterns in any
+component, capture bounded bytes, and bind parsed bytes to final hashes.
+Snapshots validate the complete supported record as well as their address and
+exact file inventory. Python validators are authoritative; the JSON schema files
+are structural summaries and do not replace runtime validation.
+
+Import/export/staging/publication are absent from this distribution. A future
+separate `app_store_assets_local` package depends on these readers and validators;
+it requires a separate approval and adds no execution authority to read plans.
+Native identity, signing, provider account and remote freshness remain unverified.
