@@ -278,7 +278,7 @@ def import_metadata(
     if output.is_relative_to(source) or state.is_relative_to(source):
         raise ValueError("import output/history overlaps the editing tree")
     if any(
-        directory.is_relative_to(output)
+        directory.is_relative_to(output) or output.is_relative_to(directory)
         for directory in (state / "metadata", state / "assets")
     ):
         raise ValueError("import output overlaps a reserved history directory")

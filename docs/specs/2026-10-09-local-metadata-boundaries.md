@@ -22,7 +22,8 @@ metadata history records include typed source/export hashes, runtime inventory,
 catalog hash and explicit `unverified-import` provenance before any durable write.
 Final listing, predicted history addresses and output overlaps are also validated.
 A listing file cannot be an ancestor or descendant of its predicted snapshot,
-or replace either reserved `state/assets` or `state/metadata` directory. Both
+or be an ancestor or descendant of either reserved `state/assets` or
+`state/metadata` directory. Both
 dry-run and publication reject this configuration before creating history.
 
 Outputs use no-follow directory descriptors for every parent and component.
