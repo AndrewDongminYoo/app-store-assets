@@ -17,15 +17,10 @@ Missing tooling stops screenshot uploads with an explicit error.
 
 The stage-1 runtime pin `e0d3691b455ec2c27606fbda5b22f09f5a9d3483`, also included in `d9682e6`, has reader-compatibility and cache-publication defects.
 Do not use those revisions for store uploads.
-The replacement runtime candidate is `7597d47f3ce36cac3462155b0c8a489a441e62a8`.
-Review and merge its fix PR before deploying this pin.
-After approval, clone into a new directory and set its absolute path for the app's Fastlane bridge.
-
-```bash
-git clone --no-checkout https://github.com/AndrewDongminYoo/app-store-assets.git /absolute/path/to/app-store-assets
-git -C /absolute/path/to/app-store-assets checkout --detach 7597d47f3ce36cac3462155b0c8a489a441e62a8
-export APP_STORE_ASSETS_ROOT=/absolute/path/to/app-store-assets
-```
+The historical replacement candidate `7597d47f3ce36cac3462155b0c8a489a441e62a8` still has the legacy transfer-enabling `prepare` behavior.
+Do not deploy that revision, or the older pins above, as a runtime providing the legacy transfer block described below.
+This extraction approves no replacement deployment pin and supplies no deployment checkout command.
+Before installing the updated bridge, separately review and approve a merged runtime revision containing the block and explicit `prepare_local` entrypoint.
 
 Project lane adoption remains in each owning app repository; those app changes are not included in this repository's publication.
 
