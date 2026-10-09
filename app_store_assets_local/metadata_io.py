@@ -217,7 +217,7 @@ def export_metadata(
                 with tempfile.TemporaryDirectory(prefix="public-export-image-") as home:
                     staged = Path(home).resolve() / source.name
                     staged.write_bytes(data)
-                    fmt, _ = encoded_format(staged)
+                    fmt, _ = encoded_format(staged, expected_sha256=image["sha256"])
                 name = f"{locale}/images/{folder}/{index + 1:02}." + (
                     "png" if fmt == "PNG" else "jpg"
                 )

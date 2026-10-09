@@ -6,10 +6,10 @@ import tempfile
 from pathlib import Path
 
 from .contracts import exact_keys, image_entry, public_text, public_url
-from .decoding import image_info
+from .decoding import image_bytes, image_info
 from .environment import local_environment
 from .metadata import normalize_fields
-from .records import capture_bytes, file_digest, open_read, read_json, safe_path
+from .records import capture_bytes, file_digest, read_json, safe_path
 
 CATALOG_FILE = Path(__file__).resolve().parents[1] / "catalog/store-rules-v1.json"
 # Frozen rules bind every direct API as well as pinned plan calls.
@@ -169,23 +169,9 @@ def slot_rule(store, slot):
         raise ValueError(f"unsupported store image slot: {store}/{slot}") from None
 
 
-def encoded_format(path):
-    path = Path(path)
-    if path.name.startswith("."):
-        raise ValueError("hidden image would be omitted by the reader")
-    with open_read(path) as stream:
-        header = stream.read(26)
-    if header.startswith(b"\x89PNG\r\n\x1a\n"):
-        fmt, extensions = "PNG", {".png", ".PNG"}
-    elif header.startswith(b"\xff\xd8\xff"):
-        fmt, extensions = "JPEG", {".jpg", ".JPG", ".jpeg", ".JPEG"}
-    else:
-        raise ValueError(
-            "image format signature is not PNG/JPEG; no delegate will be invoked"
-        )
-    if path.suffix not in extensions:
-        raise ValueError("image format/extension differs from the Fastlane reader")
-    return fmt, header
+def encoded_format(path, *, expected_sha256=None):
+    data, fmt = image_bytes(path, expected_sha256=expected_sha256)
+    return fmt, data[:26]
 
 
 def validate_images(root, entries, store):
@@ -211,8 +197,10 @@ def validate_images(root, entries, store):
         with tempfile.TemporaryDirectory(prefix="image-reader-home-") as home:
             staged = Path(home).resolve() / path.name
             staged.write_bytes(captured)
-            fmt, header = encoded_format(staged)
-            width, height, alpha = image_info(staged, env=local_environment(home))
+            fmt, header = encoded_format(staged, expected_sha256=expected)
+            width, height, alpha = image_info(
+                staged, env=local_environment(home), expected_sha256=expected
+            )
         if fmt not in rule["formats"]:
             raise ValueError("image format is unsupported for slot")
         if rule["alpha"] == "forbidden" and alpha:

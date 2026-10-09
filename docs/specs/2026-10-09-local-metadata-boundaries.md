@@ -51,9 +51,12 @@ prior snapshots and existing editing trees are preserved. Import is not a
 cross-directory transaction, store upload, or release executor. Provider/account,
 native/signing and remote freshness remain unverified.
 
-Publication is not authorized. B2 must wait for B1 merge, update/rebase onto
-current main, and undergo exact-head local/CI/review gates under separately
-approved publication/review budget. No stacked hosted waiver. PR3/5 and their
-existing budgets/states stay unchanged; this split does not reset them. B1/B2
-each get one independent local whole-candidate review and at most one root
-repair pass, with reviewed versus final SHAs and gaps disclosed.
+The later operator approval Sentinel_a0e39ae66ff0819180b97a50701f69aa authorizes
+normal PR publication with Draft conversion for blockers/nonconvergence. B2
+targets B1's branch for a writer-only stacked diff. Before merge it must update
+onto main after B1 merges and repeat exact-head gates. The current CI only runs
+PRs targeting main; absent stacked CI is a blocker, not a pass. CodeRabbit's
+explicit applicable stacked skip is recorded as skipped, never reviewed.
+PR3/5 branches and spent budgets remain unchanged; this publication does not
+reset them. The common image-capture defect gets one new repair pass and one
+independent final confirmation. No further repair or merge authority is added.

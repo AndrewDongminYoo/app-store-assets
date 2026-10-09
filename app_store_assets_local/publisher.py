@@ -84,7 +84,9 @@ def snapshot_manifest(record, files):
                 for item in entries:
                     if "file" not in item:
                         continue
-                    width, height, _ = image_info(folder / item["file"])
+                    width, height, _ = image_info(
+                        folder / item["file"], expected_sha256=hashes[item["file"]]
+                    )
                     for key, value in (
                         ("width", width),
                         ("height", height),
