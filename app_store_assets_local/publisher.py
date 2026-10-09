@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from app_store_assets.contracts import hash_inventory, public_path
+from app_store_assets.decoding import IMAGE_LIMIT
 from app_store_assets.record_types import validate_record
 from app_store_assets.records import (
     FILE_LIMIT,
@@ -31,23 +32,8 @@ def local_record(record):
         raise ValueError("local publication supports only metadata and asset records")
 
 
-def snapshot_manifest(record, files):
-    local_record(record)
-    if not isinstance(files, dict):
-        raise ValueError("invalid snapshot files mapping")
-    hashes = {}
-    total = 0
-    for name, data in files.items():
-        public_path(name)
-        if name == "manifest.json":
-            raise ValueError("snapshot content may not replace manifest")
-        if not isinstance(data, bytes):
-            raise ValueError("snapshot requires captured bytes")
-        total += len(data)
-        if total > FILE_LIMIT:
-            raise ValueError("snapshot exceeds total captured byte bound")
-        hashes[name] = hashlib.sha256(data).hexdigest()
-    entries = (
+def image_entries(record):
+    return (
         record.get("assets", [])
         if record["type"] == "asset-manifest"
         else [
@@ -57,6 +43,28 @@ def snapshot_manifest(record, files):
             for item in images
         ]
     )
+
+
+def snapshot_manifest(record, files):
+    local_record(record)
+    if not isinstance(files, dict):
+        raise ValueError("invalid snapshot files mapping")
+    entries = image_entries(record)
+    image_names = {item["file"] for item in entries if "file" in item}
+    hashes = {}
+    total = 0
+    for name, data in files.items():
+        public_path(name)
+        if name == "manifest.json":
+            raise ValueError("snapshot content may not replace manifest")
+        if not isinstance(data, bytes):
+            raise ValueError("snapshot requires captured bytes")
+        if name in image_names and len(data) > IMAGE_LIMIT:
+            raise ValueError("snapshot image exceeds individual byte bound")
+        total += len(data)
+        if total > FILE_LIMIT:
+            raise ValueError("snapshot exceeds total captured byte bound")
+        hashes[name] = hashlib.sha256(data).hexdigest()
     for item in entries:
         if "file" in item and (
             item["file"] not in hashes or item.get("sha256") != hashes[item["file"]]
@@ -114,19 +122,24 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
         if not isinstance(source, (bytes, str, Path)):
             raise ValueError("unsupported snapshot source")
     local_record(record)
+    image_names = {item["file"] for item in image_entries(record) if "file" in item}
     if expected_hashes is not None:
         hash_inventory(expected_hashes)
         if set(expected_hashes) != set(files):
             raise ValueError("snapshot inspected inventory differs")
     budget = CaptureBudget(FILE_LIMIT)
-    captured = {
-        name: budget.take(data)
-        for name, data in files.items()
-        if isinstance(data, bytes)
-    }
+    captured = {}
     for name, source in files.items():
-        if not isinstance(source, bytes):
-            captured[name] = budget.read(source, capture_bytes)
+        if isinstance(source, bytes):
+            if name in image_names and len(source) > IMAGE_LIMIT:
+                raise ValueError("snapshot image exceeds individual byte bound")
+            captured[name] = budget.take(source)
+        else:
+            captured[name] = budget.read(
+                source,
+                capture_bytes,
+                per_file=IMAGE_LIMIT if name in image_names else None,
+            )
     manifest = snapshot_manifest(record, captured)
     manifest_bytes = bounded_json(manifest, canonical, TEXT_LIMIT)
     if expected_hashes is not None and manifest["files"] != expected_hashes:

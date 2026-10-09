@@ -14,6 +14,8 @@ from .metadata import (
     has_selected_binary,
     normalize_fields,
     remote_observation,
+    resolve_changelogs,
+    selected_notes,
     validate_public_metadata,
 )
 from .profiles import exact_keys, load_profile, target_identity
@@ -58,6 +60,7 @@ def make_plan(root, profile_path, target_name, operation):
         paths.extend(target["artifact"][k] for k in ("path", "record"))
     listing = None
     assets = None
+    notes = {}
     if operation in ("metadata", "images"):
         if not target.get("metadata"):
             raise ValueError("operation requires a declared listing")
@@ -67,6 +70,8 @@ def make_plan(root, profile_path, target_name, operation):
         )
         if listing["type"] != "metadata":
             raise ValueError("metadata schema/target/account/track/version differs")
+        listing = resolve_changelogs(root, listing, identity, captures)
+        notes = selected_notes(listing)
         if operation == "images":
             policy = target.get("replacement")
             exact_keys(
@@ -143,6 +148,7 @@ def make_plan(root, profile_path, target_name, operation):
     if target.get("remote"):
         paths.append(target["remote"])
         remote = read_json(safe_path(root, target["remote"]), captures=captures)
+        content_root = root
         if not isinstance(remote, dict):
             raise ValueError("invalid supplied remote record")
         if remote.get("type") == "snapshot":
@@ -150,19 +156,23 @@ def make_plan(root, profile_path, target_name, operation):
             if path.name != "manifest.json":
                 raise ValueError("remote snapshot requires manifest.json")
             remote = validate_snapshot(path.parent, captures)["record"]
+            content_root = path.parent
             paths.append(path.parent.relative_to(root).as_posix())
         if remote.get("target") != identity:
             raise ValueError("supplied snapshot target differs")
         if remote.get("type") != "metadata-snapshot":
             raise ValueError("supplied remote requires metadata-snapshot type")
-        remote = remote_observation(validate_public_metadata(remote, identity))
+        remote = remote_observation(
+            resolve_changelogs(
+                root, remote, identity, captures, content_root=content_root
+            )
+        )
         if operation == "binary" and has_selected_binary(target, remote):
             raise ValueError("selected build already exists in supplied snapshot")
     if target["store"] == "apple" and operation in ("metadata", "images"):
         if remote is None:
             raise ValueError("Apple requires a supplied selected-version snapshot")
         validate_apple_localizations(listing, remote, operation)
-    notes = {}
     if operation == "binary":
         if target["store"] == "apple" and target.get("changelogs"):
             raise ValueError("Apple binary notes require a separate adapter contract")
@@ -173,6 +183,7 @@ def make_plan(root, profile_path, target_name, operation):
             if len(notes[locale]) > rules()["stores"]["google"]["release_notes_limit"]:
                 raise ValueError("release-notes limit exceeded")
             paths.append(path)
+    paths.extend(path.relative_to(root).as_posix() for path in captures)
     inputs = inventory(root, paths)
     for path, digest in captures.items():
         if inputs.get(path.relative_to(root).as_posix()) != digest:
@@ -220,7 +231,7 @@ def make_plan(root, profile_path, target_name, operation):
             if target["release_status"] == "draft"
             else "replace-track-releases"
         )
-    if notes:
+    if notes and operation != "images":
         payload["planned_changes"].append("release-notes")
     return {"payload": payload, "digest": record_digest(payload)}
 

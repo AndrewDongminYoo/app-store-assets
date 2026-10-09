@@ -2,6 +2,7 @@
 
 import collections
 import copy
+from pathlib import Path
 
 from .contracts import (
     digest,
@@ -15,7 +16,7 @@ from .contracts import (
     target_identity,
     version,
 )
-from .records import record_digest
+from .records import read_text, record_digest, safe_path
 
 PUBLIC_FIELDS = {
     "name",
@@ -142,6 +143,25 @@ def selected_notes(record):
         record, record.get("target") if isinstance(record, dict) else None
     )
     return _selected_notes(clean)
+
+
+def resolve_changelogs(root, record, target, captures, *, content_root=None):
+    """Bind referenced notes to their record's content base before normalization."""
+    from .snapshots import validate_snapshot
+
+    clean = validate_public_metadata(record, target)
+    if clean.get("changelogs"):
+        notes = {}
+        for locale_name, name in clean["changelogs"].items():
+            path = safe_path(root if content_root is None else content_root, name)
+            for parent in path.parents:
+                if parent == Path(root).absolute():
+                    break
+                if len(parent.name) == 64:
+                    validate_snapshot(parent, captures)
+            notes[locale_name] = read_text(path, captures)
+        clean["release_notes"] = notes
+    return validate_public_metadata(clean, target)
 
 
 def validate_public_metadata(record, target):

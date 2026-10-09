@@ -5,10 +5,10 @@ import json
 import sys
 from pathlib import Path
 
-from .metadata import metadata_diff, validate_public_metadata
+from .metadata import metadata_diff, resolve_changelogs
 from .planning import local_context, make_plan
 from .profiles import target_identity
-from .records import inventory, read_json, read_text, safe_path
+from .records import inventory, read_json, safe_path
 from .snapshots import validate_snapshot
 
 
@@ -38,24 +38,16 @@ def check_captures(captures):
 def metadata_input(root, name, target, captures=None):
     captures = {} if captures is None else captures
     path = safe_path(root, name)
+    content_root = root
     record = read_json(path, captures)
     if isinstance(record, dict) and record.get("type") == "snapshot":
         if path.name != "manifest.json":
             raise ValueError("snapshot input must name manifest.json")
         record = validate_snapshot(path.parent, captures)["record"]
-    record = validate_public_metadata(record, target)
-    if record.get("changelogs"):
-        notes = {}
-        for locale, name in record["changelogs"].items():
-            note_path = safe_path(root, name)
-            for parent in note_path.parents:
-                if parent == Path(root).absolute():
-                    break
-                if len(parent.name) == 64:
-                    validate_snapshot(parent, captures)
-            notes[locale] = read_text(note_path, captures)
-        record["release_notes"] = notes
-        record = validate_public_metadata(record, target)
+        content_root = path.parent
+    record = resolve_changelogs(
+        root, record, target, captures, content_root=content_root
+    )
     check_captures(captures)
     return record
 
