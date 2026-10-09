@@ -107,6 +107,22 @@ class PlanningTests(unittest.TestCase):
             write_json(self.root / 'metadata/listing.json', listing)
             self.assertEqual(self.plan('metadata')['payload']['listing']['fields']['en-US']['release_notes'], character*4000)
 
+    def test_existing_selected_binary_is_rejected_offline_for_both_stores(self):
+        for store in ['apple', 'google']:
+            root, profile = fixture(self, store=store)
+            remote = json.loads((root/'remote.json').read_text())
+            for state in ['pending', 'processed']:
+                if store == 'apple':
+                    remote['binary'] = dict(profile['targets']['production']['version'], processing_state=state)
+                else:
+                    remote['build_exists'] = True
+                write_json(root/'remote.json', remote)
+                with self.subTest(store=store, state=state), self.assertRaisesRegex(ValueError, 'already exists|existing.*build'):
+                    self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+            remote.update(binary=None, build_exists=False)
+            write_json(root/'remote.json', remote)
+            self.assertEqual(self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')['payload']['operation'], 'binary')
+
     def test_apple_binary_notes_are_rejected_before_plan_publication(self):
         self.profile['targets']['production']['changelogs'] = {'en-US': 'metadata/en-US/changelogs/9.txt'}
         write_json(self.root / 'store-upload.json', self.profile)

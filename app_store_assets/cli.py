@@ -169,6 +169,9 @@ def main(argv=None):
             if args.dry_run:
                 print(json.dumps({'status': 'dry-run', 'digest': receipt['digest'], 'effects': []}))
                 return 0
+            accepted = receipt.get('provider_result', {})
+            if receipt.get('effects_started') is not True or not isinstance(accepted, dict) or accepted.get('accepted') is not True:
+                raise ValueError('verify requires confirmed provider acceptance')
             provider = CommandProvider.from_plan(plan, args.allow_effects, args.auth_file)
             verify_inventory(receipt_path.parent / 'inputs', plan['payload']['inputs'], exact=True)
             verify_inventory(receipt_path.parent / 'runtime', plan['payload']['runtime']['files'], exact=True)

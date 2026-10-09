@@ -182,9 +182,51 @@ class ExecutionTests(unittest.TestCase):
         plan = self.plan()
         report = self.provider.readback(plan, {})
         report['observed']['binary']['platform'] = 'macos'
-        self.assertFalse(self.executor.readback_matches(plan['payload'], report, {}))
+        self.assertFalse(self.executor.readback_matches(plan['payload'], report, {'accepted':True}))
         del report['observed']['binary']['platform']
-        self.assertFalse(self.executor.readback_matches(plan['payload'], report, {}))
+        self.assertFalse(self.executor.readback_matches(plan['payload'], report, {'accepted':True}))
+
+    def test_binary_readback_requires_acceptance_and_no_preexisting_build(self):
+        for store in ['apple', 'google']:
+            root, _ = fixture(self, store=store)
+            plan = self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+            provider = FakeProvider(root)
+            report = provider.readback(plan, {})
+            report['observed']['binary']['source_sha256'] = None
+            for accepted in [None, False, 1, 'true']:
+                with self.subTest(store=store, accepted=accepted):
+                    result = {} if accepted is None else {'accepted':accepted}
+                    self.assertFalse(self.executor.readback_matches(plan['payload'], report, result))
+            self.assertTrue(self.executor.readback_matches(plan['payload'], report, {'accepted':True}))
+            payload = copy.deepcopy(plan['payload'])
+            payload['remote'].update(binary=report['observed']['binary'] if store=='apple' else None,
+                                     build_exists=store=='google')
+            self.assertFalse(self.executor.readback_matches(payload, report, {'accepted':True}))
+
+    def test_duplicate_build_preflight_stops_before_effects(self):
+        for store in ['apple', 'google']:
+            root, _ = fixture(self, store=store)
+            payload = self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')['payload']
+            payload['remote'].update(binary={'processing_state':'pending'} if store=='apple' else None,
+                                     build_exists=store=='google')
+            with self.subTest(store=store), self.assertRaisesRegex(ValueError, 'already exists|existing.*build'):
+                self.executor.preflight(payload, payload['remote'])
+        self.assertEqual(self.provider.writes, [])
+
+    def test_acceptance_is_preserved_if_post_upload_inventory_check_fails(self):
+        plan = self.plan()
+        def alter(_):
+            helper = next((self.root/'build/store-assets/attempts').glob('*/inputs/helpers/version_guard.rb'))
+            helper.chmod(0o644)
+            helper.write_text('changed after accepted transfer')
+        self.provider.on_upload = alter
+        with self.assertRaisesRegex(ValueError, 'hash|inventory|changed'):
+            self.execute(plan)
+        receipt = json.loads(next((self.root/'build/store-assets/attempts').glob('*/receipt.json')).read_text())
+        self.assertEqual(receipt['status'], 'failed_partial')
+        self.assertTrue(receipt['effects_started'])
+        self.assertIs(receipt.get('provider_result', {}).get('accepted'), True)
+        self.assertEqual(self.provider.writes[0]['bytes'], b'approved artifact')
 
     def test_null_remote_binary_is_processing_pending(self):
         self.provider.readback = lambda plan, result: {'target': plan['payload']['target'], 'observed': {'binary': None}}

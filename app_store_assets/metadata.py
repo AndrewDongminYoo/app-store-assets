@@ -15,6 +15,14 @@ PUBLIC_FIELDS = {'name', 'title', 'subtitle', 'description', 'full_description',
 IMAGE_FIELDS = {'id', 'file', 'sha256', 'source_sha256', 'provider_sha256', 'processing_state', 'width', 'height'}
 
 
+def has_selected_binary(target, remote):
+    if not remote:
+        return False
+    if target['store'] == 'apple':
+        return remote.get('binary') is not None
+    return target['store'] == 'google' and bool(remote.get('build_exists'))
+
+
 def remote_observation(record):
     """Remove only local download annotations; retain provider state and order."""
     result = copy.deepcopy(record)

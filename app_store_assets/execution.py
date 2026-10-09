@@ -9,6 +9,7 @@ from .planning import verify_plan
 from .providers import CommandProvider
 from .catalog import validate_apple_localizations
 from .identity import verify_executing_runtime
+from .metadata import has_selected_binary
 from .records import canonical, file_digest, read_json, record_digest, safe_path, verify_inventory
 
 ATTEMPT_STATE = 'build/store-assets'
@@ -51,6 +52,8 @@ def preflight(payload, observed):
         raise ValueError('remote snapshot target/version differs from plan')
     if record_digest(observed) != record_digest(expected):
         raise ValueError('remote snapshot revision/state changed; re-plan')
+    if payload['operation'] == 'binary' and has_selected_binary(payload['target'], observed):
+        raise ValueError('selected remote build already exists; binary transfer is blocked')
     if payload['target']['store'] == 'apple' and payload['operation'] in ('metadata', 'images'):
         if not expected.get('version_id') or not observed.get('editable'):
             raise ValueError('Apple listing requires the exact existing editable version ID')
@@ -80,6 +83,8 @@ def readback_matches(payload, report, result):
         return False
     observed = report.get('observed', {})
     if payload['operation'] == 'binary':
+        if result.get('accepted') is not True or has_selected_binary(payload['target'], payload.get('remote')):
+            return False
         binary = observed.get('binary') or {}
         if binary.get('app_id') != payload['target']['app_id'] or binary.get('version') != payload['target']['version']:
             return False
@@ -197,10 +202,11 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
             result = provider.upload(plan, inputs)
             if result.get('accepted') is not True:
                 raise ValueError('provider did not confirm acceptance')
+            receipt['provider_result'] = {k: result[k] for k in ('accepted', 'remote_ids', 'image_ids') if k in result}
+            write_record(attempt / 'receipt.json', receipt)
             verify_inventory(inputs, payload['inputs'], exact=True)
             verify_inventory(runtime, payload['runtime']['files'], exact=True)
             receipt['status'] = 'accepted_pending_verification'
-            receipt['provider_result'] = {k: result[k] for k in ('accepted', 'remote_ids', 'image_ids') if k in result}
             write_record(attempt / 'receipt.json', receipt)
             try:
                 report = provider.readback(plan, result)

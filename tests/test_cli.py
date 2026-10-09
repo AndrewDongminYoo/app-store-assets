@@ -132,6 +132,80 @@ else:
         self.assertEqual(result, 0)
         self.assertEqual(path.read_bytes(), original)
 
+    def test_unaccepted_partial_receipt_cannot_verify_an_existing_binary(self):
+        from app_store_assets import cli, execution, planning
+        from test_execution import FakeProvider
+        for store in ['apple', 'google']:
+            root, _ = fixture(self, store=store)
+            plan = planning.make_plan(root, 'store-upload.json', 'production', 'binary')
+            provider = FakeProvider(root)
+            provider.bind_stage = lambda *args: None
+            def reject(_):
+                raise ValueError('native duplicate rejected without transfer')
+            provider.on_upload = reject
+            with self.assertRaises(ValueError):
+                execution.execute(root, plan, plan['digest'], provider, root/'build/store-assets')
+            path = next((root/'build/store-assets/attempts').glob('*/receipt.json'))
+            original = path.read_bytes()
+            real_readback = provider.readback
+            def existing(*args, real_readback=real_readback):
+                report = real_readback(*args)
+                report['observed']['binary']['source_sha256'] = None
+                return report
+            provider.readback = existing
+            stderr = io.StringIO()
+            with patch.object(cli.CommandProvider, 'from_plan', return_value=provider) as factory, redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+                result = cli.main(['verify','--root',str(root),'--target','production','--receipt',str(path.relative_to(root)),'--allow-effects'])
+            with self.subTest(store=store):
+                self.assertEqual(result, 1)
+                self.assertIn('acceptance', stderr.getvalue())
+                factory.assert_not_called()
+                self.assertEqual(path.read_bytes(), original)
+                self.assertEqual(provider.writes, [])
+
+    def test_accepted_pending_receipt_can_be_verified(self):
+        from app_store_assets import cli, execution, planning
+        from test_execution import FakeProvider
+        plan = planning.make_plan(self.root, 'store-upload.json', 'production', 'binary')
+        provider = FakeProvider(self.root)
+        provider.bind_stage = lambda *args: None
+        provider.pending = True
+        receipt = execution.execute(self.root, plan, plan['digest'], provider, self.root/'build/store-assets')
+        self.assertEqual(receipt['status'], 'accepted_pending_verification')
+        provider.pending = False
+        path = self.root/'build/store-assets/attempts'/receipt['attempt']/'receipt.json'
+        with patch.object(cli.CommandProvider, 'from_plan', return_value=provider), redirect_stdout(io.StringIO()):
+            result = cli.main(['verify','--root',str(self.root),'--target','production','--receipt',str(path.relative_to(self.root)),'--allow-effects'])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(path.read_text())['status'], 'verified')
+
+    def test_accepted_partial_receipt_can_be_reconciled_after_restoring_staged_inputs(self):
+        from app_store_assets import cli, execution, planning
+        from test_execution import FakeProvider
+        plan = planning.make_plan(self.root, 'store-upload.json', 'production', 'binary')
+        provider = FakeProvider(self.root)
+        provider.bind_stage = lambda *args: None
+        restored = {}
+        def alter(_):
+            helper = next((self.root/'build/store-assets/attempts').glob('*/inputs/helpers/version_guard.rb'))
+            restored.update(path=helper, data=helper.read_bytes())
+            helper.chmod(0o644)
+            helper.write_text('fixture failure after actual fake acceptance')
+        provider.on_upload = alter
+        with self.assertRaises(ValueError):
+            execution.execute(self.root, plan, plan['digest'], provider, self.root/'build/store-assets')
+        path = next((self.root/'build/store-assets/attempts').glob('*/receipt.json'))
+        receipt = json.loads(path.read_text())
+        self.assertEqual(receipt['status'], 'failed_partial')
+        self.assertIs(receipt.get('provider_result', {}).get('accepted'), True)
+        restored['path'].write_bytes(restored['data'])
+        restored['path'].chmod(0o444)
+        with patch.object(cli.CommandProvider, 'from_plan', return_value=provider), redirect_stdout(io.StringIO()):
+            result = cli.main(['verify','--root',str(self.root),'--target','production','--receipt',str(path.relative_to(self.root)),'--allow-effects'])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(path.read_text())['status'], 'verified')
+        self.assertEqual(provider.writes[0]['bytes'], b'approved artifact')
+
     def test_changed_runtime_profile_blocks_execute_and_verify_before_provider(self):
         from app_store_assets import cli
         from app_store_assets.planning import make_plan
