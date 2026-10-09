@@ -1,6 +1,5 @@
 """Offline intent records: no provider construction and no execution authority."""
 
-import copy
 from pathlib import Path
 
 from .artifacts import artifact_record
@@ -8,7 +7,6 @@ from .catalog import (
     CATALOG_FILE,
     rules,
     validate_apple_localizations,
-    validate_fields,
     validate_images,
 )
 from .identity import runtime_identity, verify_executing_runtime
@@ -19,14 +17,22 @@ from .metadata import (
     validate_public_metadata,
 )
 from .profiles import exact_keys, load_profile, target_identity
-from .records import file_digest, inventory, read_json, record_digest, safe_path
+from .records import (
+    bind_capture,
+    file_digest,
+    inventory,
+    read_json,
+    read_text,
+    record_digest,
+    safe_path,
+)
 from .snapshots import validate_snapshot
 
 OPERATIONS = {"binary", "metadata", "images"}
 
 
-def local_context(root, profile_path, target_name):
-    profile, target = load_profile(root, profile_path, target_name)
+def local_context(root, profile_path, target_name, captures=None):
+    profile, target = load_profile(root, profile_path, target_name, captures)
     runtime = runtime_identity(
         safe_path(root, profile["runtime"]["path"]), profile["runtime"]
     )
@@ -38,7 +44,8 @@ def make_plan(root, profile_path, target_name, operation):
     root = Path(root).resolve()
     if operation not in OPERATIONS:
         raise ValueError("unsupported offline operation")
-    profile, target, runtime = local_context(root, profile_path, target_name)
+    captures = {}
+    profile, target, runtime = local_context(root, profile_path, target_name, captures)
     identity = target_identity(target)
     if operation == "binary" and target["stage"] == "development":
         raise ValueError("development binary planning is blocked")
@@ -47,7 +54,7 @@ def make_plan(root, profile_path, target_name, operation):
         paths.append(target["version_source"]["file"])
     build = None
     if operation == "binary":
-        build = artifact_record(root, profile, target)
+        build = artifact_record(root, profile, target, captures)
         paths.extend((target["artifact"][k] for k in ("path", "record")))
     listing = None
     assets = None
@@ -55,15 +62,11 @@ def make_plan(root, profile_path, target_name, operation):
         if not target.get("metadata"):
             raise ValueError("operation requires a declared listing")
         paths.append(target["metadata"])
-        listing = read_json(safe_path(root, target["metadata"]))
-        if (
-            listing.get("schema_version") != 1
-            or listing.get("type") != "metadata"
-            or listing.get("target") != identity
-        ):
+        listing = validate_public_metadata(
+            read_json(safe_path(root, target["metadata"]), captures=captures), identity
+        )
+        if listing["type"] != "metadata":
             raise ValueError("metadata schema/target/account/track/version differs")
-        listing = copy.deepcopy(listing)
-        listing["fields"] = validate_fields(listing.get("fields", {}), target["store"])
         if operation == "images":
             policy = target.get("replacement")
             exact_keys(
@@ -92,6 +95,8 @@ def make_plan(root, profile_path, target_name, operation):
             if not entries:
                 raise ValueError("empty image listing")
             validated = validate_images(root, entries, target["store"])
+            for item in validated:
+                bind_capture(captures, safe_path(root, item["file"]), item["sha256"])
             if set(policy["locales"]) != {i["locale"] for i in validated} or set(
                 policy["slots"]
             ) != {i["slot"] for i in validated}:
@@ -112,7 +117,7 @@ def make_plan(root, profile_path, target_name, operation):
                 manifest_path = safe_path(root, descriptor["manifest"])
                 if manifest_path.name != "manifest.json":
                     raise ValueError("asset snapshot requires manifest.json")
-                assets = validate_snapshot(manifest_path.parent)["record"]
+                assets = validate_snapshot(manifest_path.parent, captures)["record"]
                 if (
                     assets.get("type") != "asset-manifest"
                     or assets.get("target") != identity
@@ -139,12 +144,12 @@ def make_plan(root, profile_path, target_name, operation):
     remote = None
     if target.get("remote"):
         paths.append(target["remote"])
-        remote = read_json(safe_path(root, target["remote"]))
+        remote = read_json(safe_path(root, target["remote"]), captures=captures)
         if remote.get("type") == "snapshot":
             path = safe_path(root, target["remote"])
             if path.name != "manifest.json":
                 raise ValueError("remote snapshot requires manifest.json")
-            remote = validate_snapshot(path.parent)["record"]
+            remote = validate_snapshot(path.parent, captures)["record"]
             paths.append(path.parent.relative_to(root).as_posix())
         if remote.get("target") != identity:
             raise ValueError("supplied snapshot target differs")
@@ -163,10 +168,15 @@ def make_plan(root, profile_path, target_name, operation):
             raise ValueError("Apple binary notes require a separate adapter contract")
         for locale, path in target.get("changelogs", {}).items():
             normalize_fields({locale: {}})
-            notes[locale] = safe_path(root, path).read_text()
+            notes[locale] = read_text(safe_path(root, path), captures)
             if len(notes[locale]) > rules()["stores"]["google"]["release_notes_limit"]:
                 raise ValueError("release-notes limit exceeded")
             paths.append(path)
+    inputs = inventory(root, paths)
+    for path, digest in captures.items():
+        if inputs.get(path.relative_to(root).as_posix()) != digest:
+            raise ValueError("parsed/validated input changed before plan inventory")
+    verify_executing_runtime(runtime)
     payload = {
         "schema_version": 1,
         "type": "offline-release-plan",
@@ -185,7 +195,7 @@ def make_plan(root, profile_path, target_name, operation):
         "runtime": runtime,
         "runtime_path": profile["runtime"]["path"],
         "input_paths": sorted(set(paths)),
-        "inputs": inventory(root, paths),
+        "inputs": inputs,
         "catalog_sha256": file_digest(CATALOG_FILE),
         "artifact": target.get("artifact") if build else None,
         "build": build,

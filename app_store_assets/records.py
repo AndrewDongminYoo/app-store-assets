@@ -23,7 +23,32 @@ def record_digest(value):
     return hashlib.sha256(canonical(value)).hexdigest()
 
 
-def read_json(path):
+def bind_capture(captures, path, digest):
+    if captures is not None:
+        path = Path(path).absolute()
+        if path in captures and captures[path] != digest:
+            raise ValueError("input changed between captures")
+        captures[path] = digest
+
+
+def read_text(path, captures=None):
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), "rb") as stream:
+        before = os.fstat(stream.fileno())
+        data = stream.read(8 * 1024 * 1024 + 1)
+        after = os.fstat(stream.fileno())
+    if len(data) > 8 * 1024 * 1024:
+        raise ValueError("public text input is too large")
+    if (before.st_ino, before.st_size, before.st_mtime_ns) != (
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise ValueError("input changed during text capture")
+    bind_capture(captures, path, hashlib.sha256(data).hexdigest())
+    return data.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def read_json(path, captures=None):
     def unique(pairs):
         result = {}
         for key, value in pairs:
@@ -35,7 +60,7 @@ def read_json(path):
     if Path(path).stat().st_size > 8 * 1024 * 1024:
         raise ValueError("JSON record is too large")
     return json.loads(
-        Path(path).read_text(),
+        read_text(path, captures),
         object_pairs_hook=unique,
         parse_constant=lambda _: (_ for _ in ()).throw(
             ValueError("non-finite JSON value")

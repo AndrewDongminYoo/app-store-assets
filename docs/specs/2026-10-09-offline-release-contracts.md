@@ -31,6 +31,9 @@ Plans have `type: offline-release-plan`, `executable: false`, `effects: []`,
 profile, public source inventory, catalog, target and relevant local records.
 `planned_changes` describes proposed store changes without authorizing them.
 Revalidation rebuilds the plan and rejects changed input/target/runtime bytes.
+Parsed public JSON/text and validated artifact/image bytes must match the final
+plan input inventory; replacing an input during planning fails closed. Local
+listings use the same strict public-metadata validator as supplied snapshots.
 Doctor verifies only the local profile/runtime/source inventory.
 
 ## Required validation

@@ -7,7 +7,7 @@ import zipfile
 
 from .identity import git
 from .profiles import exact_keys
-from .records import file_digest, inventory, read_json, safe_path
+from .records import bind_capture, file_digest, inventory, read_json, safe_path
 from .snapshots import validate_snapshot
 
 
@@ -39,7 +39,7 @@ def container_kind(path):
         raise ValueError("artifact container cannot be read") from error
 
 
-def artifact_record(root, profile, target):
+def artifact_record(root, profile, target, captures=None):
     descriptor = target.get("artifact")
     exact_keys(descriptor, {"path", "record", "kind"}, ("path", "record", "kind"))
     kind = descriptor["kind"]
@@ -47,11 +47,11 @@ def artifact_record(root, profile, target):
     if kind not in supported.get((target["store"], target["platform"]), ()):
         raise ValueError("unsupported artifact kind/platform")
     path = safe_path(root, descriptor["path"])
-    record = read_json(safe_path(root, descriptor["record"]))
+    record = read_json(safe_path(root, descriptor["record"]), captures)
     if record.get("type") == "snapshot":
-        record = validate_snapshot(safe_path(root, descriptor["record"]).parent)[
-            "record"
-        ]
+        record = validate_snapshot(
+            safe_path(root, descriptor["record"]).parent, captures
+        )["record"]
     if record.get("schema_version") != 1 or record.get("type") != "build":
         raise ValueError("unsupported build record")
     for key in ("app_id", "platform", "flavor", "version"):
@@ -77,6 +77,7 @@ def artifact_record(root, profile, target):
             raise ValueError("artifact container kind differs")
     if file_digest(path) != record["sha256"]:
         raise ValueError("artifact changed during container validation")
+    bind_capture(captures, path, record["sha256"])
     if record.get("evidence") not in ("fixture", "inspected"):
         raise ValueError("artifact inspection declaration is missing")
     if profile["mode"] == "live":

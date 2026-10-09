@@ -2,7 +2,7 @@
 
 import re
 
-from .records import read_json, relative_path, safe_path
+from .records import read_json, read_text, relative_path, safe_path
 
 TOP_KEYS = {"schema_version", "type", "project", "mode", "runtime", "targets"}
 TARGET_KEYS = {
@@ -50,8 +50,8 @@ def target_identity(target):
     return result
 
 
-def load_profile(root, path, name):
-    profile = read_json(safe_path(root, path))
+def load_profile(root, path, name, captures=None):
+    profile = read_json(safe_path(root, path), captures)
     exact_keys(profile, TOP_KEYS, TOP_KEYS)
     if (
         profile["schema_version"] != 1
@@ -91,7 +91,7 @@ def load_profile(root, path, name):
         version_file = safe_path(root, target["version_source"]["file"])
         matches = re.findall(
             "^version:\\s*([^\\s+]+)\\+([0-9]+)\\s*$",
-            version_file.read_text(),
+            read_text(version_file, captures),
             re.MULTILINE,
         )
         if len(matches) != 1:

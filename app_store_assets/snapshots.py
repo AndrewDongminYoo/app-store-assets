@@ -28,11 +28,11 @@ def reject_snapshot_write(path):
             raise ValueError("output/history overlaps immutable snapshot")
 
 
-def validate_snapshot(folder):
+def validate_snapshot(folder, captures=None):
     folder = Path(folder)
     if folder.is_symlink():
         raise ValueError("snapshot cache may not be a symlink")
-    manifest = read_json(safe_path(folder, "manifest.json"))
+    manifest = read_json(safe_path(folder, "manifest.json"), captures)
     if not isinstance(manifest, dict) or set(manifest) != {
         "schema_version",
         "type",

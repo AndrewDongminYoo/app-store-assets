@@ -34,7 +34,7 @@ jobs:
       - name: Run CLI regression tests
         run: |
           magick -version
-          python3 -m unittest discover -s tests -v
+          python3 -B -m unittest discover -s tests -v
       - name: Check Ruby syntax
         run: |
           ruby -c lib/fastlane_assets.rb
