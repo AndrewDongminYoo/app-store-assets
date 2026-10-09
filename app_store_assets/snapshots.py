@@ -22,7 +22,7 @@ def validate_snapshot(folder):
     return manifest
 
 
-def publish_snapshot(root, record, files):
+def publish_snapshot(root, record, files, expected_hashes=None):
     root = Path(root)
     if root.is_symlink():
         raise ValueError('snapshot history may not be a symlink')
@@ -45,6 +45,8 @@ def publish_snapshot(root, record, files):
                 if file_digest(destination) != expected:
                     raise ValueError('snapshot source changed during copy')
             hashes[name] = file_digest(destination)
+            if expected_hashes is not None and hashes[name] != expected_hashes[name]:
+                raise ValueError('published artifact hash differs from inspected digest')
         manifest = {'schema_version': 1, 'type': 'snapshot', 'record': record, 'files': hashes}
         (folder / 'manifest.json').write_bytes(canonical(manifest))
         destination = root / record_digest(manifest)

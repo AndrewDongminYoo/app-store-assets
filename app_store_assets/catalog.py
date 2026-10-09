@@ -101,6 +101,23 @@ def validate_fields(fields, store):
     return clean
 
 
+def validate_apple_localizations(listing, remote, operation):
+    """Reject unavailable selected-version/AppInfo fields before store effects."""
+    version_fields = {'description', 'keywords', 'promotional_text', 'release_notes', 'support_url', 'marketing_url'}
+    info_fields = {'name', 'subtitle', 'privacy_url'}
+    requested = listing.get('fields', {}) if operation == 'metadata' else listing.get('images', {})
+    for locale, values in requested.items():
+        existing = remote.get('fields', {}).get(locale, {})
+        # Native snapshots include every version field, even when its text is empty.
+        if not version_fields.intersection(existing):
+            raise ValueError(f'Apple version locale is unavailable: {locale}')
+        if operation == 'metadata' and info_fields.intersection(values):
+            if not remote.get('app_info_id'):
+                raise ValueError('exact editable app-info snapshot required')
+            if not info_fields.intersection(values).issubset(existing):
+                raise ValueError(f'Apple app-info locale is unavailable: {locale}')
+
+
 def submission_readiness(store, slots, supports_ipad=False):
     required = rules()['stores'][store]['submission_required']
     if store == 'apple':

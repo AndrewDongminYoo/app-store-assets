@@ -7,6 +7,8 @@ from pathlib import Path
 
 from .planning import verify_plan
 from .providers import CommandProvider
+from .catalog import validate_apple_localizations
+from .identity import verify_executing_runtime
 from .records import canonical, file_digest, read_json, record_digest, safe_path, verify_inventory
 
 ATTEMPT_STATE = 'build/store-assets'
@@ -54,6 +56,7 @@ def preflight(payload, observed):
             raise ValueError('Apple listing requires the exact existing editable version ID')
         if observed.get('review_active'):
             raise ValueError('active Apple review blocks listing replacement')
+        validate_apple_localizations(payload['listing'], observed, payload['operation'])
     if payload['operation'] == 'images':
         local = (payload['listing'] or {}).get('images', {})
         policy = payload.get('replacement')
@@ -124,6 +127,7 @@ def execute(root, plan, expected_digest, provider, state, dry_run=False):
         raise ValueError('expected digest differs from reviewed plan')
     verify_plan(root, plan)
     payload = plan['payload']
+    verify_executing_runtime(payload['runtime'])
     if dry_run:
         return {'status': 'dry-run', 'digest': plan['digest'], 'effects': payload['effects']}
     if isinstance(provider, CommandProvider):

@@ -6,6 +6,7 @@ from .commands import capture_provider_argv, executable_identity, expand_argv, r
 from .records import file_digest, safe_path, verify_inventory
 from .metadata import normalize_remote
 from .profiles import target_identity
+from .identity import verify_executing_runtime
 
 
 CAPABILITIES = {
@@ -34,6 +35,7 @@ class CommandProvider:
     def from_plan(cls, plan, allow_effects=False, auth_file=None):
         """Select authority and adapter exclusively from the reviewed payload."""
         payload = plan['payload']
+        verify_executing_runtime(payload['runtime'])
         target = dict(payload['target'], provider=payload['provider'])
         provider = cls(target, payload['mode'], allow_effects, auth_file, payload['provider_executable'])
         provider.verify_plan_binding(payload)

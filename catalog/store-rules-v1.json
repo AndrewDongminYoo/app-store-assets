@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "catalog_version": "2026-10-08.4",
-  "checked_on": "2026-10-08",
+  "catalog_version": "2026-10-09.1",
+  "checked_on": "2026-10-09",
   "fastlane_reader": "2.240.1",
   "sources": {
     "apple_images": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
@@ -21,7 +21,7 @@
         "APP_IPAD_PRO_3GEN_129": {"sizes": [[2048,2732],[2064,2752]], "rotate": true, "alpha": "forbidden", "formats": ["PNG","JPEG"], "max_count": 10}
       },
       "supported_fields": ["name", "subtitle", "privacy_url", "description", "keywords", "promotional_text", "release_notes", "support_url", "marketing_url"],
-      "text_limits": {"name": [30,"characters"], "subtitle": [30,"characters"], "description": [4000,"characters"], "promotional_text": [170,"characters"], "keywords": [100,"utf8-bytes"]},
+      "text_limits": {"name": [30,"characters"], "subtitle": [30,"characters"], "description": [4000,"characters"], "release_notes": [4000,"characters"], "promotional_text": [170,"characters"], "keywords": [100,"utf8-bytes"]},
       "submission_required": {"iphone": "APP_IPHONE_61", "ipad": "APP_IPAD_PRO_3GEN_129"}
     },
     "google": {

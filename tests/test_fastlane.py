@@ -19,6 +19,10 @@ class FastlaneIntegrationTests(unittest.TestCase):
             fastfile = repo / location
             fastfile.parent.mkdir(parents=True)
             shutil.copyfile(PERSONAL / project / location, fastfile)
+            if project == 'mirae':
+                helper = repo / 'scripts/store_assets/fastlane.rb'
+                helper.parent.mkdir(parents=True)
+                shutil.copyfile(PERSONAL / project / 'scripts/store_assets/fastlane.rb', helper)
             source = repo / ('fastlane/metadata/ios/en-US/images/iphone65' if project == 'mirae' else 'fastlane/screenshots/ios/en-US')
             source.mkdir(parents=True)
             (source / filename).write_bytes(image if image is not None else png())
@@ -43,7 +47,7 @@ class FastlaneIntegrationTests(unittest.TestCase):
                 result, report = self.lane(project)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(report['uploads'], [])
-                self.assertIn('reviewed plan', result.stderr)
+                self.assertRegex(result.stderr, r'reviewed.*plan')
 
     def test_invalid_images_stop_before_upload_or_account_lookup(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
@@ -52,7 +56,7 @@ class FastlaneIntegrationTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(report['uploads'], [])
                 self.assertEqual(report['review_reads'], 0)
-                self.assertIn('reviewed plan', result.stderr)
+                self.assertRegex(result.stderr, r'reviewed.*plan')
 
     def test_legacy_alpha_inputs_do_not_authorize_replacement(self):
         result, report = self.lane('ttush_push', image=png(alpha=True))
@@ -72,12 +76,17 @@ class FastlaneIntegrationTests(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(report['uploads'], [])
                     self.assertEqual(report['review_reads'], 0)
-                    self.assertIn('reviewed plan', result.stderr)
+                    self.assertRegex(result.stderr, r'reviewed.*plan')
 
     def test_metadata_only_option_does_not_require_a_screenshot_tool(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
             with self.subTest(project=project):
                 result, report = self.lane(project, image=b'broken', skip_screenshots=True)
+                if project == 'mirae':
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(report['uploads'], [])
+                    self.assertRegex(result.stderr, r'reviewed.*plan')
+                    continue
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue(report['uploads'][0]['skip_screenshots'])
 

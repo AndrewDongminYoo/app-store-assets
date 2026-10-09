@@ -82,6 +82,31 @@ class PlanningTests(unittest.TestCase):
             plan = self.planning.make_plan(root, 'store-upload.json', 'production', 'binary')
             self.assertEqual(set(plan['payload']['release_notes']), {locale})
 
+    def test_apple_metadata_rejects_unavailable_version_and_info_locales_offline(self):
+        for fields, changes in [({'ko-KR':{'description':'approved'}},{}),
+                                ({'en-US':{'name':'approved'}},{}),
+                                ({'en-US':{'name':'approved'}},{'app_info_id':'exact-info'})]:
+            with self.subTest(fields=fields, changes=changes):
+                listing = json.loads((self.root / 'metadata/listing.json').read_text())
+                listing['fields'] = fields
+                write_json(self.root / 'metadata/listing.json', listing)
+                remote = json.loads((self.root / 'remote.json').read_text())
+                remote.update(changes)
+                write_json(self.root / 'remote.json', remote)
+                with self.assertRaisesRegex(ValueError, 'locale|app.info'):
+                    self.plan('metadata')
+
+    def test_apple_release_notes_limit_counts_unicode_characters_offline(self):
+        for character in ['a','한','😀']:
+            listing = json.loads((self.root / 'metadata/listing.json').read_text())
+            listing['fields'] = {'en-US':{'release_notes':character*4001}}
+            write_json(self.root / 'metadata/listing.json', listing)
+            with self.subTest(character=character), self.assertRaisesRegex(ValueError, 'limit.*release_notes'):
+                self.plan('metadata')
+            listing['fields']['en-US']['release_notes'] = character*4000
+            write_json(self.root / 'metadata/listing.json', listing)
+            self.assertEqual(self.plan('metadata')['payload']['listing']['fields']['en-US']['release_notes'], character*4000)
+
     def test_apple_binary_notes_are_rejected_before_plan_publication(self):
         self.profile['targets']['production']['changelogs'] = {'en-US': 'metadata/en-US/changelogs/9.txt'}
         write_json(self.root / 'store-upload.json', self.profile)

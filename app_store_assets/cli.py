@@ -127,6 +127,8 @@ def main(argv=None):
             if not args.plan or not args.expected_digest:
                 raise ValueError('execute requires a reviewed plan and expected digest')
             plan = read_json(safe_path(root, args.plan))
+            if runtime != plan['payload']['runtime']:
+                raise ValueError('executing runtime differs from reviewed plan')
             if plan['payload']['target_name'] != args.target or plan['payload']['profile'] != args.profile:
                 raise ValueError('execution target/profile differs from plan')
             receipt_path = safe_path(root, args.receipt) if args.receipt else None
@@ -160,6 +162,8 @@ def main(argv=None):
             receipt_path = safe_path(root, args.receipt)
             receipt = read_json(receipt_path)
             plan = read_json(receipt_path.parent / 'plan.json')
+            if runtime != plan['payload']['runtime']:
+                raise ValueError('executing runtime differs from reviewed plan')
             if record_digest(plan['payload']) != plan['digest'] or plan['digest'] != receipt['digest'] or receipt['target'] != identity:
                 raise ValueError('verification receipt/target/digest differs')
             if args.dry_run:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from .identity import git, python_identity, runtime_identity
 from .commands import capture_provider_argv, executable_identity, expand_argv
-from .catalog import CATALOG_FILE, rules, validate_fields, validate_images
+from .catalog import CATALOG_FILE, rules, validate_fields, validate_images, validate_apple_localizations
 from .metadata import normalize_fields, remote_observation
 from .profiles import exact_keys, load_profile, provider_input_paths, target_identity
 from .records import file_digest, inventory, read_json, record_digest, safe_path
@@ -106,6 +106,8 @@ def make_plan(root, profile_path, target_name, operation):
         if remote.get('target') != target_identity(target):
             raise ValueError('remote snapshot target differs')
         remote = remote_observation(remote)
+        if target['store'] == 'apple' and operation in ('metadata', 'images'):
+            validate_apple_localizations(listing, remote, operation)
     notes = {}
     if operation == 'binary':
         if target['store'] == 'apple' and target.get('changelogs'):

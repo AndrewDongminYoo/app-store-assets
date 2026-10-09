@@ -5,7 +5,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from pipeline_support import fixture, module, write_json
+from pipeline_support import fixture, git, module, write_json
 from test_assets import png
 
 
@@ -291,6 +291,38 @@ else:
                 with self.assertRaisesRegex(ValueError, 'reviewed plan|provider.*plan'):
                     self.executor.execute(self.root, plan, plan['digest'], provider, self.root / 'build/store-assets')
         self.assertFalse((self.root / 'build/store-assets').exists())
+
+    def test_apple_localization_preflight_stops_before_any_write(self):
+        payload = self.plan('metadata')['payload']
+        for fields, observed_fields, app_info in [
+            ({'ko-KR':{'description':'approved'}},{'en-US':{'description':'existing'}},None),
+            ({'en-US':{'name':'approved'}},{'en-US':{'description':'existing'}},None),
+            ({'en-US':{'name':'approved'}},{'en-US':{'description':'existing'}},'exact-info'),
+            ({'en-US':{'name':'approved'}},{'en-US':{'name':'existing'}},'exact-info')]:
+            with self.subTest(fields=fields, observed=observed_fields, app_info=app_info):
+                current = copy.deepcopy(payload)
+                current['listing']['fields'] = fields
+                current['remote']['fields'] = observed_fields
+                current['remote']['app_info_id'] = app_info
+                with self.assertRaisesRegex(ValueError, 'locale|app.info'):
+                    self.executor.preflight(current, current['remote'])
+        self.assertEqual(self.provider.writes, [])
+
+    def test_direct_execute_rejects_a_different_reviewed_runtime_before_snapshot(self):
+        runtime = self.root / 'tools/app-store-assets'
+        changed = runtime / 'app_store_assets/execution.py'
+        changed.write_text(changed.read_text()+'\n# alternate reviewed executor\n')
+        git(runtime,'add','app_store_assets/execution.py')
+        git(runtime,'commit','-qm','Synthetic alternate executor')
+        self.profile['runtime'].update(commit=git(runtime,'rev-parse','HEAD'),files=module(self,'identity').runtime_inventory(runtime))
+        write_json(self.root/'store-upload.json',self.profile)
+        plan = self.plan()
+        for entry in [lambda:self.execute(plan),lambda:module(self,'providers').CommandProvider.from_plan(plan,allow_effects=True)]:
+            with self.subTest(entry=entry), self.assertRaisesRegex(ValueError,'runtime'):
+                entry()
+        self.assertEqual(self.provider.reads,[])
+        self.assertEqual(self.provider.writes,[])
+        self.assertFalse((self.root/'build/store-assets').exists())
 
     def test_state_symlink_blocks_before_read(self):
         (self.root / 'actual-state').mkdir()

@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .records import file_digest, inventory, safe_path
+from .records import file_digest, inventory
 
 
 def git(root, *args):
@@ -48,6 +48,11 @@ def runtime_identity(root, pin):
     if actual != pin['files']:
         raise ValueError('runtime inventory/hash differs from approval')
     return {'url': pin['url'], 'commit': pin['commit'], 'files': actual}
+
+
+def verify_executing_runtime(runtime):
+    if runtime_inventory(Path(__file__).resolve().parents[1]) != runtime['files']:
+        raise ValueError('executing runtime differs from reviewed plan')
 
 
 def python_identity():

@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 import unittest
@@ -8,7 +9,7 @@ from unittest.mock import patch
 from contextlib import redirect_stdout, redirect_stderr
 import io
 
-from pipeline_support import ROOT, fixture, write_json
+from pipeline_support import ROOT, fixture, git, write_json
 
 
 class CliTests(unittest.TestCase):
@@ -130,6 +131,40 @@ else:
                                '--receipt', path.relative_to(self.root).as_posix(), '--dry-run'])
         self.assertEqual(result, 0)
         self.assertEqual(path.read_bytes(), original)
+
+    def test_changed_runtime_profile_blocks_execute_and_verify_before_provider(self):
+        from app_store_assets import cli
+        from app_store_assets.planning import make_plan
+        from app_store_assets.identity import runtime_inventory
+        second = self.root / 'tools/reviewed-runtime'
+        shutil.copytree(self.root / 'tools/app-store-assets', second)
+        executor = second / 'app_store_assets/execution.py'
+        executor.write_text(executor.read_text() + '\n# different reviewed runtime\n')
+        git(second, 'add', 'app_store_assets/execution.py')
+        git(second, 'commit', '-qm', 'Synthetic alternate runtime')
+        approved = copy.deepcopy(self.profile)
+        approved['runtime'].update(path='tools/reviewed-runtime', commit=git(second, 'rev-parse', 'HEAD'),
+                                   files=runtime_inventory(second))
+        write_json(self.root / 'store-upload.json', approved)
+        plan = make_plan(self.root, 'store-upload.json', 'production', 'binary')
+        write_json(self.root / 'approved.json', plan)
+        write_json(self.root / 'attempt/plan.json', plan)
+        write_json(self.root / 'attempt/receipt.json', {'digest':plan['digest'],'target':plan['payload']['target']})
+        real_load = cli.load_profile
+        def restore(*args):
+            result = real_load(*args)
+            write_json(self.root / 'store-upload.json', approved)
+            return result
+        for command in ['execute','verify']:
+            with self.subTest(command=command):
+                write_json(self.root / 'store-upload.json', self.profile)
+                stderr = io.StringIO()
+                args = ['--plan','approved.json','--expected-digest',plan['digest']] if command=='execute' else ['--receipt','attempt/receipt.json']
+                with patch.object(cli, 'load_profile', side_effect=restore), patch.object(cli.CommandProvider,'from_plan',side_effect=AssertionError('unreviewed runtime reached provider')), redirect_stderr(stderr):
+                    result = cli.main([command,'--root',str(self.root),'--target','production','--allow-effects',*args])
+                self.assertEqual(result, 1)
+                self.assertIn('runtime', stderr.getvalue())
+        self.assertFalse((self.root / 'build/store-assets').exists())
 
 
 if __name__ == '__main__':
