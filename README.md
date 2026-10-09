@@ -123,3 +123,9 @@ Import/export/staging/publication are absent from this distribution. A future
 separate `app_store_assets_local` package depends on these readers and validators;
 it requires a separate approval and adds no execution authority to read plans.
 Native identity, signing, provider account and remote freshness remain unverified.
+
+Catalog rules are frozen to `catalog.CATALOG_SHA256`: each read validates the
+captured digest and the complete structure before use. Changing frozen rules
+requires updating their version and this explicit digest together. Image width,
+height and size annotations must agree with decoded captured bytes, including
+immutable asset snapshots.

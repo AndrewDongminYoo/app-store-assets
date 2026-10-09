@@ -12,6 +12,8 @@ from .metadata import normalize_fields
 from .records import capture_bytes, file_digest, open_read, read_json, safe_path
 
 CATALOG_FILE = Path(__file__).resolve().parents[1] / "catalog/store-rules-v1.json"
+# Frozen rules bind every direct API as well as pinned plan calls.
+CATALOG_SHA256 = "3ea0db0402f484a7c940186f4ec4acf102dbb4d3d70df11af464d9ca4dee9797"
 
 
 def validate_catalog(value):
@@ -150,7 +152,14 @@ def validate_catalog(value):
 
 
 def rules():
-    return validate_catalog(read_json(CATALOG_FILE))
+    captures = {}
+    value = read_json(CATALOG_FILE, captures)
+    if captures.get(CATALOG_FILE.absolute()) != CATALOG_SHA256:
+        raise ValueError("captured catalog differs from frozen runtime rules")
+    result = validate_catalog(value)
+    if file_digest(CATALOG_FILE) != CATALOG_SHA256:
+        raise ValueError("catalog changed after capture")
+    return result
 
 
 def slot_rule(store, slot):
@@ -232,6 +241,13 @@ def validate_images(root, entries, store):
             raise ValueError("image changed during validation")
         if entry.get("sha256", digest) != digest:
             raise ValueError("listing image hash differs")
+        for key, observed in (
+            ("width", width),
+            ("height", height),
+            ("size", [width, height]),
+        ):
+            if key in entry and entry[key] != observed:
+                raise ValueError("image dimensions differ from captured bytes")
         counts[entry["locale"], entry["slot"]] += 1
         if counts[entry["locale"], entry["slot"]] > rule["max_count"]:
             raise ValueError("too many images in one locale/slot")

@@ -169,6 +169,7 @@ def make_plan(root, profile_path, target_name, operation):
         for locale, path in target.get("changelogs", {}).items():
             normalize_fields({locale: {}})
             notes[locale] = read_text(safe_path(root, path), captures)
+            normalize_fields({locale: {"release_notes": notes[locale]}})
             if len(notes[locale]) > rules()["stores"]["google"]["release_notes_limit"]:
                 raise ValueError("release-notes limit exceeded")
             paths.append(path)

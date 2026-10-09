@@ -1,8 +1,11 @@
 """Offline container kind binding, not a native inspector or transport policy."""
 
 import hashlib
+import os
+import stat
 import tempfile
 import zipfile
+from contextlib import nullcontext
 from pathlib import Path
 
 from .identity import git
@@ -12,6 +15,7 @@ from .records import (
     FILE_LIMIT,
     bind_capture,
     file_digest,
+    identity,
     inventory,
     open_read,
     read_json,
@@ -21,9 +25,25 @@ from .snapshots import validate_snapshot
 
 
 def container_kind(path):
-    if isinstance(path, (str, Path)):
-        with open_read(path) as stream:
-            return container_kind(stream)
+    opened = open_read(path) if isinstance(path, (str, Path)) else nullcontext(path)
+    with opened as source, tempfile.TemporaryFile() as captured:
+        before = os.fstat(source.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size > FILE_LIMIT:
+            raise ValueError("artifact exceeds byte bound")
+        source.seek(0)
+        count = 0
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            count += len(block)
+            if count > FILE_LIMIT:
+                raise ValueError("artifact exceeds byte bound")
+            captured.write(block)
+        if identity(before) != identity(os.fstat(source.fileno())):
+            raise ValueError("artifact changed during capture")
+        captured.seek(0)
+        return _container_kind(captured)
+
+
+def _container_kind(path):
     try:
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
@@ -100,6 +120,7 @@ def artifact_record(root, profile, target, captures=None):
         tempfile.TemporaryFile() as captured,
     ):
         observed = hashlib.sha256()
+        source.seek(0)
         count = 0
         for block in iter(lambda: source.read(1024 * 1024), b""):
             count += len(block)

@@ -55,6 +55,8 @@ class NestedContractTests(unittest.TestCase):
                     self.assertRaises(ValueError),
                 ):
                     module("catalog").rules()
+                with self.assertRaises(ValueError):
+                    module("catalog").validate_catalog(bad)
 
     def test_direct_image_api_rejects_unknown_and_untyped_annotations(self):
         image = self.root / "image.png"

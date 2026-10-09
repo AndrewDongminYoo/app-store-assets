@@ -48,6 +48,31 @@ def validate_snapshot(folder, captures=None):
             raise ValueError(
                 "snapshot image annotation differs from captured inventory"
             )
+    if record["type"] == "asset-manifest":
+        from .catalog import validate_images
+
+        validate_images(folder, record["assets"], record["target"]["store"])
+    else:
+        from .decoding import image_info
+
+        for item in entries:
+            if "file" in item and any(
+                key in item for key in ("width", "height", "size")
+            ):
+                width, height, _ = image_info(folder / item["file"])
+                for key, value in (
+                    ("width", width),
+                    ("height", height),
+                    ("size", [width, height]),
+                ):
+                    if key in item and item[key] != value:
+                        raise ValueError(
+                            "snapshot image dimensions differ from captured bytes"
+                        )
+                if file_digest(folder / item["file"]) != actual[item["file"]]:
+                    raise ValueError(
+                        "snapshot image changed during dimension validation"
+                    )
     if file_digest(manifest_path) != observed[manifest_path]:
         raise ValueError("snapshot manifest changed after capture")
     if captures is not None:

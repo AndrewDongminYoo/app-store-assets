@@ -39,6 +39,8 @@ def text(value, label):
 
 
 def target_identity(target):
+    if target["store"] == "apple" and ("track" in target or "release_status" in target):
+        raise ValueError("Apple has no Google track/release_status")
     result = {key: target[key] for key in IDENTITY_KEYS}
     if target["store"] == "google":
         result["track"] = target["track"]
