@@ -75,23 +75,24 @@ python3 -m unittest discover -s tests -v
 It rejects actual transparent pixels, which require an explicit background in the owning composer.
 Original inputs remain unchanged.
 PNG encoding excludes date and time chunks while retaining color metadata, so identical input bytes produce identical output within the same ImageMagick runtime.
-Ttush's Fastlane bridge enables this option for its existing iPad inputs.
+Explicit local preparation can enable this option for opaque alpha inputs.
 
 ## Upload behavior
 
-The adopted Fastlane lanes prepare and validate images before account lookup or upload, then pass the exact prepared path and `overwrite_screenshots: true`.
-Hidden screenshot filenames, mixed-case extensions such as `.Png`, and mismatched file formats are rejected before the external boundary.
-Replacement affects **all screenshot sets in every supplied locale**, as implemented by Fastlane, including remote display classes absent from the local tree.
-Review the complete local and remote sets before executing the lane.
-Mirae and Ttush retain their in-progress-review guard.
-Their release lanes also validate before starting the build.
-`skip_screenshots:true` explicitly permits metadata-only upload without this checkout.
-Kkomkkomi retains its metadata-only fallback when its screenshot source directory is absent.
+The legacy Ruby `AppStoreAssets.prepare` entrypoint is blocked before it starts a local process or returns options that a lane can use for screenshot transfer.
+Consumers can explicitly call `AppStoreAssets.prepare_local` to prepare validated local bundles.
+It returns `screenshots_path` without `overwrite_screenshots`; that path is local output and does not authorize an upload.
+No replacement planner, authenticated executor or consumer launcher is introduced by this boundary change.
+
+Local preparation rejects hidden screenshots, mixed-case extensions such as `.Png`, and mismatched file formats.
+Future screenshot transfer requires a separately reviewed plan, exact target and complete local/remote placement policy.
+The existing external Fastlane replacement behavior can affect remote display classes absent from a local tree.
+Consumers that call Fastlane directly need their own guarded integration; this bridge cannot block those calls.
+The current Ttush lane still fails six opt-in safety subcases, while the Mirae and Kkom negative and metadata-only cases pass with external actions stubbed.
 
 No command in this repository currently logs into App Store Connect, uploads files, or submits review.
 Fastlane lane execution remains an external action requiring authorization.
-`overwrite_screenshots` expresses replacement intent; it does not prove remote processing, order, or absence of duplicates.
-Remote readback belongs to the later Asset Library adapter.
+Remote readback and guarded transfer remain a later separately reviewed adapter.
 
 ## Evidence limits
 

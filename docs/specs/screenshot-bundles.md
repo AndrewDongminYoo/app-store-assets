@@ -34,12 +34,12 @@ Other filesystem errors must fail, and a corrupt winner must remain untouched.
 
 ## Fastlane Boundary
 
-The bridge returns `screenshots_path` and `overwrite_screenshots: true` only after local validation.
-Preparation runs before external account lookup or upload.
-Explicit metadata-only upload bypasses screenshot preparation.
-The existing review guard in Mirae and Ttush remains active.
-Fastlane replaces all sets in the supplied locales; a partial local locale is not a merge operation.
-The later remote adapter must compare complete intended placement groups and read back processing and order.
+The legacy `AppStoreAssets.prepare` entrypoint fails before local process launch and cannot return screenshot transfer options.
+`AppStoreAssets.prepare_local` explicitly performs local validation/preparation and returns a prepared path without an overwrite flag.
+A locally prepared path does not authorize remote replacement.
+No authenticated transfer, planner or runtime launcher is introduced by this boundary.
+Actual consumers that directly call Fastlane remain separate consumer work; Ttush's six safety failures remain visible in opt-in integration checks.
+The later remote adapter must bind a reviewed plan/digest to the exact target, compare complete intended placement groups and read back processing and order.
 
 ## Sources
 
