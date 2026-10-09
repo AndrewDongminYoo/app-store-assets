@@ -1,9 +1,11 @@
 """Existing still-image decoder isolated from the legacy preparation CLI."""
 
+import hashlib
 import subprocess
 import tempfile
 from pathlib import Path
 
+from .contracts import digest
 from .environment import local_environment
 from .records import capture_bytes
 
@@ -13,9 +15,16 @@ FORMAT_EXTENSIONS = {
 }
 
 
-def image_info(file, env=None):
+def image_bytes(file, *, expected_sha256=None):
+    if expected_sha256 is not None:
+        digest(expected_sha256)
     file = Path(file)
     data = capture_bytes(file, limit=64 * 1024 * 1024)
+    if (
+        expected_sha256 is not None
+        and hashlib.sha256(data).hexdigest() != expected_sha256
+    ):
+        raise ValueError("decoded image capture differs from bound hash")
     fmt = (
         "PNG"
         if data.startswith(b"\x89PNG\r\n\x1a\n")
@@ -27,45 +36,45 @@ def image_info(file, env=None):
         "."
     ):
         raise ValueError("unsupported image signature/name/extension")
+    return data, fmt
+
+
+def image_info(file, env=None, *, expected_sha256=None):
+    data, fmt = image_bytes(file, expected_sha256=expected_sha256)
     with tempfile.TemporaryDirectory(prefix="offline-decode-") as home:
-        captured = Path(home).resolve() / file.name
-        captured.write_bytes(data)
-        return _decode(captured, local_environment(home), data[:26])
+        return _decode(data, fmt, local_environment(home))
 
 
-def _decode(file, env, header):
-    if file.name.startswith("."):
-        raise ValueError(f"hidden screenshot would be skipped by Fastlane: {file}")
-    if file.suffix not in set().union(*FORMAT_EXTENSIONS.values()):
-        raise ValueError(f"unsupported Fastlane image extension: {file}")
+def _decode(data, fmt, env):
     # Decode the pixel stream, not just the IHDR header. Warnings also reject
     # truncated images that ImageMagick might otherwise recover.
     result = subprocess.run(
         [
             "magick",
-            str(file),
+            {"PNG": "png:-", "JPEG": "jpeg:-"}[fmt],
             "-regard-warnings",
             "-format",
             "%w|%h|%[channels]|%m\n",
             "info:",
         ],
-        env=env,
+        input=data,
+        env={**env, "MAGICK_TEMPORARY_PATH": env["HOME"]},
         capture_output=True,
-        text=True,
         timeout=60,
         check=False,
     )
     if result.returncode or result.stderr:
-        raise ValueError(f"cannot decode image: {file}")
-    values = result.stdout.strip().split("|")
-    if len(values) != 4 or "\n" in result.stdout.strip():
-        raise ValueError(f"expected one still image: {file}")
-    if file.suffix not in FORMAT_EXTENSIONS.get(values[3], set()):
-        raise ValueError(f"image format does not match extension: {file}")
+        raise ValueError("cannot decode bound image bytes")
+    output = result.stdout.decode("ascii").strip()
+    values = output.split("|")
+    if len(values) != 4 or "\n" in output:
+        raise ValueError("expected one still image")
+    if values[3] != fmt:
+        raise ValueError("decoded format differs from captured signature")
     width, height = map(int, values[:2])
     alpha = values[2].split()[0].lower().endswith("a")
-    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
         # Fully opaque RGBA still has an alpha channel. Palette transparency
         # is detected by the decoder above.
-        alpha = alpha or (len(header) >= 26 and header[25] in (4, 6))
+        alpha = alpha or (len(data) >= 26 and data[25] in (4, 6))
     return width, height, alpha

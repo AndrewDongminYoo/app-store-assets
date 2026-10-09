@@ -59,7 +59,9 @@ def validate_snapshot(folder, captures=None):
             if "file" in item and any(
                 key in item for key in ("width", "height", "size")
             ):
-                width, height, _ = image_info(folder / item["file"])
+                width, height, _ = image_info(
+                    folder / item["file"], expected_sha256=actual[item["file"]]
+                )
                 for key, value in (
                     ("width", width),
                     ("height", height),
