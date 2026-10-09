@@ -3,6 +3,8 @@ import hashlib
 import json
 import unittest
 import sys
+import shutil
+from pathlib import Path
 from unittest.mock import patch
 
 from pipeline_support import fixture, module, write_json
@@ -86,6 +88,111 @@ print(json.dumps({'files':['composed.png']}))
         self.assertIn('composed.png', record['composed_inputs'])
         helper.write_text(helper.read_text() + '# changed composition recipe\n')
         self.assertNotEqual(first, self.generate(recipe))
+
+    def test_composers_execute_captured_entrypoints_helpers_and_input_parents(self):
+        (self.root/'captures/02.png').write_bytes(png(1284,2778))
+        marker = self.root/'unreviewed-composer'
+        for language in ['python','ruby']:
+            suffix = 'py' if language=='python' else 'rb'
+            helper = self.root/f'helpers/bound_helper.{suffix}'
+            script = self.root/f'helpers/composer.{suffix}'
+            if language=='python':
+                source = '''import json,pathlib,shutil,sys,bound_helper
+r=json.load(sys.stdin)
+shutil.copyfile(pathlib.Path(r['root'])/bound_helper.SOURCE,pathlib.Path(r['output'])/'composed.png')
+print(json.dumps({'files':['composed.png']}))
+'''
+                clean_helper = "SOURCE='captures/01.png'\n"
+                changed_helper = "import pathlib;pathlib.Path(%s).write_text('unreviewed');SOURCE='captures/02.png'\n" % repr(str(marker))
+                changed_source = source.replace('r=json.load(sys.stdin)', "r=json.load(sys.stdin);pathlib.Path(%s).write_text('unreviewed')" % repr(str(marker))).replace('bound_helper.SOURCE',repr('captures/02.png'))
+                interpreter = sys.executable
+            else:
+                source = '''require 'json';require_relative 'bound_helper'
+r=JSON.parse(STDIN.read)
+File.binwrite(File.join(r.fetch('output'),'composed.png'),File.binread(File.join(r.fetch('root'),SOURCE)))
+puts JSON.generate(files:['composed.png'])
+'''
+                clean_helper = "SOURCE='captures/01.png'\n"
+                changed_helper = "File.write(%s,'unreviewed');SOURCE='captures/02.png'\n" % json.dumps(str(marker))
+                changed_source = source.replace('r=JSON.parse(STDIN.read)', "r=JSON.parse(STDIN.read);File.write(%s,'unreviewed')" % json.dumps(str(marker))).replace(',SOURCE)',",'captures/02.png')")
+                interpreter = 'ruby'
+            script.write_text(source)
+            helper.write_text(clean_helper)
+            recipe = copy.deepcopy(self.recipe)
+            recipe['composer'] = {'argv':[interpreter,f'{{root}}/helpers/composer.{suffix}']}
+            recipe['outputs'][0]['source'] = 'composed.png'
+            original = self.generation.run_command
+            for change in ['entry','helper','parent']:
+                with self.subTest(language=language, change=change):
+                    marker.unlink(missing_ok=True)
+                    def replace(argv, request, cwd, home, change=change, suffix=suffix, changed_source=changed_source, changed_helper=changed_helper, **kwargs):
+                        cwd = Path(cwd)
+                        saved = cwd.with_name('saved-inputs')
+                        if change=='parent':
+                            cwd.rename(saved)
+                            shutil.copytree(saved,cwd)
+                        altered = cwd/'helpers'/f'{"composer" if change=="entry" else "bound_helper"}.{suffix}'
+                        before = altered.read_bytes()
+                        replacement = altered.with_name('replacement-source')
+                        replacement.write_text(changed_source if change=='entry' else changed_helper)
+                        replacement.replace(altered)
+                        try:
+                            return original(argv,request,cwd,home,**kwargs)
+                        finally:
+                            if change=='parent':
+                                shutil.rmtree(cwd)
+                                saved.rename(cwd)
+                            else:
+                                altered.unlink()
+                                altered.write_bytes(before)
+                                altered.chmod(0o444)
+                    with patch.object(self.generation,'run_command',side_effect=replace):
+                        path = self.generate(recipe)
+                    record = self.snapshots.validate_snapshot(path)['record']
+                    self.assertFalse(marker.exists())
+                    self.assertEqual(record['composed_inputs']['composed.png'],hashlib.sha256((self.root/'captures/01.png').read_bytes()).hexdigest())
+
+    def test_unbound_composer_module_stops_before_launch(self):
+        marker = self.root/'unbound-composer-ran'
+        script = self.root/'helpers/composer.py'
+        script.write_text('''import json,pathlib,shutil,sys
+r=json.load(sys.stdin);pathlib.Path(%s).write_text('unreviewed')
+shutil.copyfile(pathlib.Path(r['root'])/'captures/01.png',pathlib.Path(r['output'])/'composed.png')
+print(json.dumps({'files':['composed.png']}))
+''' % repr(str(marker)))
+        recipe = copy.deepcopy(self.recipe)
+        recipe['composer'] = {'argv':[sys.executable,'-m','helpers.composer']}
+        recipe['outputs'][0]['source'] = 'composed.png'
+        with self.assertRaisesRegex(ValueError,'entrypoint|unbound'):
+            self.generate(recipe)
+        self.assertFalse(marker.exists())
+
+    def test_composer_capture_closes_on_success_and_failure(self):
+        from app_store_assets.commands import capture_provider_argv
+        script = self.root/'helpers/composer.py'
+        script.write_text('''import json,pathlib,shutil,sys
+r=json.load(sys.stdin)
+shutil.copyfile(pathlib.Path(r['root'])/'captures/01.png',pathlib.Path(r['output'])/'composed.png')
+print(json.dumps({'files':['composed.png']}))
+''')
+        recipe = copy.deepcopy(self.recipe)
+        recipe['composer'] = {'argv':[sys.executable,'{root}/helpers/composer.py']}
+        recipe['outputs'][0]['source'] = 'composed.png'
+        original = self.generation.run_command
+        for fail in [False,True]:
+            captured = []
+            def retain(*args, captured=captured, **kwargs):
+                result = capture_provider_argv(*args,**kwargs)
+                captured.append(result)
+                return result
+            with self.subTest(fail=fail), patch.object(self.generation,'capture_provider_argv',side_effect=retain,create=True), patch.object(self.generation,'run_command',side_effect=ValueError('fixture composer failed') if fail else original):
+                if fail:
+                    with self.assertRaises(ValueError):
+                        self.generate(recipe)
+                else:
+                    self.generate(recipe)
+            self.assertTrue(captured)
+            self.assertTrue(all(argv.capture.closed for argv in captured))
 
     def test_jpeg_outputs_match_the_declared_extension_and_are_reproducible(self):
         recipe = copy.deepcopy(self.recipe)

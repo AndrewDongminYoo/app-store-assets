@@ -7,7 +7,7 @@ from pathlib import Path
 
 from assets import image_info
 from .catalog import CATALOG_FILE, encoded_format, slot_rule, validate_images
-from .commands import executable_identity, expand_argv, run_command
+from .commands import capture_provider_argv, executable_identity, expand_argv, run_command
 from .execution import stage_inventory
 from .environment import local_environment
 from .identity import runtime_inventory
@@ -47,7 +47,7 @@ def generate(root, recipe, state):
     expected = inventory(root, recipe['inputs'])
     store = recipe['target']['store']
     with tempfile.TemporaryDirectory(prefix='asset-generation-') as temporary:
-        scratch = Path(temporary)
+        scratch = Path(temporary).resolve()
         staged, output, home = scratch / 'inputs', scratch / 'outputs', scratch / 'home'
         home.mkdir()
         output.mkdir()
@@ -59,10 +59,16 @@ def generate(root, recipe, state):
             composer_tool = executable_identity(recipe['composer']['argv'])
             source_root = scratch / 'composed'
             source_root.mkdir()
-            response = run_command(expand_argv(recipe['composer']['argv'], staged, output=source_root),
-                                   {'schema_version': 1, 'action': 'compose', 'root': str(staged),
-                                    'output': str(source_root), 'target': target_identity(recipe['target'])},
-                                   staged, home, expected=composer_tool)
+            approved = {str(safe_path(staged, name)): digest for name, digest in expected.items()}
+            argv = capture_provider_argv(expand_argv(recipe['composer']['argv'], staged, output=source_root),
+                                         approved, roots=[staged])
+            try:
+                response = run_command(argv,
+                                       {'schema_version': 1, 'action': 'compose', 'root': str(staged),
+                                        'output': str(source_root), 'target': target_identity(recipe['target'])},
+                                       staged, home, expected=composer_tool)
+            finally:
+                argv.capture.close()
             names = sorted({entry['source'] for entry in recipe['outputs']})
             if sorted(response.get('files', [])) != names:
                 raise ValueError('composer output inventory differs from recipe')

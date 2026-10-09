@@ -51,3 +51,24 @@ The next explicitly authorized round verifies and repairs the three unresolved r
 Regressions demonstrated each failure before repair. All native, store and signing operations remain stubbed or absent. Build adapters use the supported staged Python/Ruby source protocol; installed interpreters/standard libraries and native tools invoked by an approved adapter remain trusted infrastructure. No real native build/signing or store acceptance is claimed.
 
 The optional personal Fastfile fixture now copies Mirae's actual public `scripts/store_assets/fastlane.rb` helper and tests its current guarded lane contract. The preceding six missing-helper errors are resolved; Mirae and Kkom cases execute under the fake external boundaries. The current original Ttush Fastfile still reaches the external upload boundary without a reviewed plan, producing six failing safety subcases. That is retained as a real consumer integration failure, not skipped or disguised as a fixture success. The actual consumer, its dependency pin and store state were not changed.
+
+## Ninth bounded repair on 2026-10-09
+
+This round repairs the two reproduced P1 execution-binding findings against `40d9f0ffed5c046784e3cffcca6efe3e10d05580` and audits the related declared source launch paths.
+It does not extend the native capability policy or modify any original consumer or dependency pin.
+
+Binary planning and preflight now reject an existing selected Apple build or Google versionCode before transfer.
+Readback requires exact provider acceptance and an initially absent selected build; CLI verification rejects an unaccepted partial receipt before provider construction.
+Acceptance is recorded before post-upload local checks so an accepted partial attempt can still be reconciled after restoring its approved staged inputs.
+Temporary fake-provider regressions cover both stores with null native source hashes, duplicate snapshots, accepted pending verification, and accepted partial reconciliation.
+
+Composition now captures the complete declared Python/Ruby input closure using the existing anonymous archive mechanism before launch and closes it on success and failure.
+Real local interpreter children test entrypoint, helper and entire input-parent replacement followed by restoration; substituted marker code must not run and the output must come from the approved selection.
+Module-only composer loaders stop before execution.
+No store, credential, signing or native-build operation is part of these regressions.
+
+A single independent read-only reviewer found no blocker in this bounded candidate.
+Four later P2 findings remain separately held: offline Apple version editability/review-state validation, absolute public URL validation, the Apple app-name minimum, and explicit Google APK/AAB capability binding.
+They are checked and reported without silently expanding this two-P1 repair round.
+The six current Ttush consumer safety failures remain a merge limitation; the Mirae missing-helper fixture errors are resolved.
+CodeRabbit is explicitly waived by the operator for PR3 only; current-head Codex code/security outcomes and CI are reported separately, and further source repair rounds do not start automatically.
