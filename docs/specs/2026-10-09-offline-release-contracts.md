@@ -5,10 +5,13 @@ Source reference: preserved PR3 at `9fc53959e52402f7dbfe6d3fae93560abdd4aa09`.
 
 ## Boundary
 
-The separate `python3 -m app_store_assets` entry point offers only doctor,
+The separate `python3 -B -m app_store_assets` entry point offers only doctor,
 plan, diff, import and export. Existing `assets.py` and the fail-closed Ruby
 bridge remain unchanged. There are no provider, command adapter, credential,
 download, generation, native-build, execution, receipt or attempt modules.
+The `-B` flag is required (or set `PYTHONDONTWRITEBYTECODE=1`): runtime
+verification rejects bytecode caches. A default Python invocation fails closed;
+remove only task-created caches before retrying with bytecode disabled.
 Image validation may invoke the existing local ImageMagick decoder with an
 isolated home. Git identity queries disable personal configuration and hooks.
 No authenticated account, current remote state or native validity is asserted.
