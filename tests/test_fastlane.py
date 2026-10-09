@@ -19,13 +19,18 @@ class FastlaneIntegrationTests(unittest.TestCase):
             fastfile = repo / location
             fastfile.parent.mkdir(parents=True)
             shutil.copyfile(PERSONAL / project / location, fastfile)
+            if project == 'mirae':
+                helper = repo / 'scripts/store_assets/fastlane.rb'
+                helper.parent.mkdir(parents=True)
+                shutil.copyfile(PERSONAL / project / 'scripts/store_assets/fastlane.rb', helper)
             source = repo / ('fastlane/metadata/ios/en-US/images/iphone65' if project == 'mirae' else 'fastlane/screenshots/ios/en-US')
             source.mkdir(parents=True)
             (source / filename).write_bytes(image if image is not None else png())
             for extra_name, data in (extra_images or {}).items():
                 (source / extra_name).write_bytes(data)
             (repo / 'pubspec.yaml').write_text('version: 1.0.0+1\n')
-            env = dict(os.environ, APP_STORE_ASSETS_ROOT=str(ROOT))
+            env = {'PATH': os.environ['PATH'], 'APP_STORE_ASSETS_ROOT': str(ROOT),
+                   'LANG': 'C.UTF-8', 'HOME': str(Path(scratch) / 'empty-home')}
             result = subprocess.run(['ruby', str(ROOT / 'tests/fastlane_harness.rb'), str(fastfile), json.dumps(options)], capture_output=True, text=True, env=env, timeout=30)
             report = json.loads(result.stdout)
             # Read the actual folder passed to the external upload action.
@@ -36,13 +41,13 @@ class FastlaneIntegrationTests(unittest.TestCase):
                 report['uploaded_png_color'] = data[25] if len(data) > 25 else None
             return result, report
 
-    def test_metadata_lanes_pass_validated_tree_and_explicit_replacement(self):
+    def test_legacy_metadata_lanes_are_blocked_before_replacement(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
             with self.subTest(project=project):
                 result, report = self.lane(project)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue(report['uploads'][0].get('overwrite_screenshots'))
-                self.assertEqual(report['uploaded_files'], ['en-US/01.png'])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(report['uploads'], [])
+                self.assertRegex(result.stderr, r'reviewed.*plan')
 
     def test_invalid_images_stop_before_upload_or_account_lookup(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
@@ -51,12 +56,12 @@ class FastlaneIntegrationTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(report['uploads'], [])
                 self.assertEqual(report['review_reads'], 0)
-                self.assertIn('unsupported screenshot size', result.stderr)
+                self.assertRegex(result.stderr, r'reviewed.*plan')
 
-    def test_ttush_normalizes_opaque_alpha_in_the_upload_bundle(self):
+    def test_legacy_alpha_inputs_do_not_authorize_replacement(self):
         result, report = self.lane('ttush_push', image=png(alpha=True))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(report.get('uploaded_png_color'), 2)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(report['uploads'], [])
 
     def test_reader_incompatible_inputs_stop_before_external_calls(self):
         cases = [
@@ -71,12 +76,17 @@ class FastlaneIntegrationTests(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(report['uploads'], [])
                     self.assertEqual(report['review_reads'], 0)
-                    self.assertIn(message, result.stderr)
+                    self.assertRegex(result.stderr, r'reviewed.*plan')
 
     def test_metadata_only_option_does_not_require_a_screenshot_tool(self):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
             with self.subTest(project=project):
                 result, report = self.lane(project, image=b'broken', skip_screenshots=True)
+                if project == 'mirae':
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(report['uploads'], [])
+                    self.assertRegex(result.stderr, r'reviewed.*plan')
+                    continue
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue(report['uploads'][0]['skip_screenshots'])
 
