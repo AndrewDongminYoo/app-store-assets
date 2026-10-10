@@ -134,7 +134,8 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
             if name in image_names and len(source) > IMAGE_LIMIT:
                 raise ValueError("snapshot image exceeds individual byte bound")
             captured[name] = budget.take(source)
-        else:
+    for name, source in files.items():
+        if not isinstance(source, bytes):
             captured[name] = budget.read(
                 source,
                 capture_bytes,
