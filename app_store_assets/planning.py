@@ -58,6 +58,8 @@ def make_plan(root, profile_path, target_name, operation):
     if operation == "binary":
         build = artifact_record(root, profile, target, captures)
         paths.extend(target["artifact"][k] for k in ("path", "record"))
+        if profile["mode"] == "live":
+            paths.extend(build["adapter"]["inputs"])
     listing = None
     assets = None
     notes = {}
@@ -188,6 +190,17 @@ def make_plan(root, profile_path, target_name, operation):
     for path, digest in captures.items():
         if inputs.get(path.relative_to(root).as_posix()) != digest:
             raise ValueError("parsed/validated input changed before plan inventory")
+    if build and profile["mode"] == "live":
+        source_inputs = {
+            name: digest
+            for name, digest in inputs.items()
+            if any(
+                name == path or name.startswith(path + "/")
+                for path in build["adapter"]["inputs"]
+            )
+        }
+        if source_inputs != build["source_inputs"]:
+            raise ValueError("artifact source inputs changed before plan inventory")
     verify_executing_runtime(runtime)
     payload = {
         "schema_version": 1,
