@@ -7,6 +7,8 @@ Apple field-level and selected release notes must agree for overlapping locales;
 Canonical selection combines those representations without rewriting content-addressed snapshot records.
 Changelog resolution uses that selection and stops at the canonical project boundary, while still validating a content-addressed content root.
 Content roots outside the project reject before reading notes.
+Google changelog resolution validates supplied selected notes strictly before merging; its derived copy explicitly updates the selected release notes, including an omitted notes map, without changing the caller or other releases.
+This is the one necessary in-scope reader repair; the dependent PR7 integration is a normal stack-only merge.
 
 The catalog has no macOS image contract.
 Image plans reject macOS before reading or decoding listing images; text-only macOS metadata remains supported.

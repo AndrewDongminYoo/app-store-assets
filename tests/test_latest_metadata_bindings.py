@@ -1,5 +1,6 @@
 """Current review regressions use synthetic local inputs only."""
 
+import copy
 import json
 import unittest
 
@@ -64,3 +65,54 @@ class LatestReviewRegressions(unittest.TestCase):
             clean["release_notes"],
             {"fr-FR": "Inline remote notes", "en-US": "File notes"},
         )
+
+    def test_selected_google_release_merges_changelog_locales(self):
+        record = self.notes_record({"fr-FR": "Selected notes"})
+        record["releases"] = [
+            {"version_codes": ["9"], "notes": {"fr-FR": "Selected notes"}},
+            {"version_codes": ["8"], "notes": {"de-DE": "Other release"}},
+        ]
+        original = copy.deepcopy(record)
+        expected = {"fr-FR": "Selected notes", "en-US": "Approved notes\n"}
+        clean = module("metadata").resolve_changelogs(
+            self.root, record, record["target"], {}
+        )
+        self.assertEqual(clean["release_notes"], expected)
+        self.assertEqual(module("metadata").selected_notes(clean), expected)
+        self.assertEqual(clean["releases"][0]["notes"], expected)
+        self.assertEqual(clean["releases"][1], record["releases"][1])
+        self.assertEqual(record, original)
+        write_json(self.root / "metadata/listing.json", record)
+        plan = module("planning").make_plan(
+            self.root, "store-upload.json", "production", "metadata"
+        )
+        self.assertEqual(plan["payload"]["release_notes"], expected)
+        self.assertIn("metadata/en-US/changelogs/9.txt", plan["payload"]["inputs"])
+        for inline in ({"fr-FR": "Different"}, {"de-DE": "Unbound extra"}):
+            with self.subTest(inline=inline):
+                bad = copy.deepcopy(record)
+                bad["release_notes"] = inline
+                with self.assertRaisesRegex(ValueError, "conflicting"):
+                    module("metadata").resolve_changelogs(
+                        self.root, bad, bad["target"], {}
+                    )
+        bad = copy.deepcopy(record)
+        bad["changelogs"] = {"fr-FR": "metadata/en-US/changelogs/9.txt"}
+        with self.assertRaisesRegex(ValueError, "conflicting"):
+            module("metadata").resolve_changelogs(self.root, bad, bad["target"], {})
+
+    def test_selected_release_without_notes_accepts_bound_changelog(self):
+        for existing in (
+            {"version_codes": ["9"]},
+            {"version_codes": ["9"], "notes": {}},
+        ):
+            with self.subTest(existing=existing):
+                record = self.notes_record({})
+                record["releases"] = [existing]
+                original = copy.deepcopy(record)
+                clean = module("metadata").resolve_changelogs(
+                    self.root, record, record["target"], {}
+                )
+                expected = {"en-US": "Approved notes\n"}
+                self.assertEqual(module("metadata").selected_notes(clean), expected)
+                self.assertEqual(record, original)

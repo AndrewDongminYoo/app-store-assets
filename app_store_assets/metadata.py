@@ -141,7 +141,7 @@ def _selected_notes(record):
         supplied = matches[0].get("notes", {}) if matches else {}
         if notes and notes != supplied:
             raise ValueError("conflicting selected release notes")
-        notes = supplied
+        notes = copy.deepcopy(supplied)
     return notes
 
 
@@ -177,6 +177,10 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
                 raise ValueError("conflicting inline and changelog release notes")
             notes[locale_name] = note
         clean["release_notes"] = notes
+        if target["store"] == "google":
+            for release in clean.get("releases", []):
+                if target["version"]["build"] in release["version_codes"]:
+                    release["notes"] = copy.deepcopy(notes)
     return validate_public_metadata(clean, target)
 
 
