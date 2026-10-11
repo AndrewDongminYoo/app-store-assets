@@ -123,6 +123,13 @@ def normalize_remote(record, target):
 def _selected_notes(record):
     target = record["target"]
     notes = copy.deepcopy(record.get("release_notes", {}))
+    if target["store"] == "apple":
+        for name, values in record.get("fields", {}).items():
+            if "release_notes" in values:
+                note = values["release_notes"]
+                if name in notes and notes[name] != note:
+                    raise ValueError("conflicting field and selected release notes")
+                notes[name] = note
     if target["store"] == "google" and "releases" in record:
         matches = [
             release
@@ -151,12 +158,18 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
 
     clean = validate_public_metadata(record, target)
     if clean.get("changelogs"):
-        notes = copy.deepcopy(clean.get("release_notes", {}))
+        notes = _selected_notes(clean)
+        boundary = Path(root).resolve()
+        content = root if content_root is None else content_root
+        if not Path(content).resolve().is_relative_to(boundary):
+            raise ValueError("changelog content root must stay inside the project")
         for locale_name, name in clean["changelogs"].items():
-            path = safe_path(root if content_root is None else content_root, name)
+            path = safe_path(content, name)
             for parent in path.parents:
-                if parent == Path(root).absolute():
+                if parent.resolve() == boundary:
                     break
+                if not parent.resolve().is_relative_to(boundary):
+                    raise ValueError("changelog path must stay inside the project")
                 if len(parent.name) == 64:
                     validate_snapshot(parent, captures)
             note = read_text(path, captures)

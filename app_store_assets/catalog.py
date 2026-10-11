@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .contracts import exact_keys, image_entry, public_text, public_url
 from .decoding import image_bytes, image_info
-from .environment import local_environment
 from .metadata import normalize_fields
 from .records import capture_bytes, file_digest, read_json, safe_path
 
@@ -200,9 +199,7 @@ def validate_images(root, entries, store):
             staged = Path(home).resolve() / path.name
             staged.write_bytes(captured)
             fmt, header = encoded_format(staged, expected_sha256=expected)
-            width, height, alpha = image_info(
-                staged, env=local_environment(home), expected_sha256=expected
-            )
+            width, height, alpha = image_info(staged, expected_sha256=expected)
         if fmt not in rule["formats"]:
             raise ValueError("image format is unsupported for slot")
         if rule["alpha"] == "forbidden" and alpha:
