@@ -94,7 +94,8 @@ def safe_path(root, relative):
 @contextmanager
 def open_directory(path):
     path = Path(path).absolute()
-    public_input_name(path)
+    # Callers validate untrusted components relative to their trusted root.
+    # Ancestors still open descriptor-by-descriptor without following symlinks.
     fd = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         for part in path.parts[1:]:
@@ -111,7 +112,7 @@ def open_directory(path):
 @contextmanager
 def open_read(path):
     path = Path(path).absolute()
-    public_input_name(path)
+    public_input_name(path.name)
     try:
         with open_directory(path.parent) as parent:
             fd = os.open(

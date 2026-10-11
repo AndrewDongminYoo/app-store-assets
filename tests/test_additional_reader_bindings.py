@@ -151,8 +151,21 @@ class AdditionalReaderBindings(unittest.TestCase):
         for name in ("assets.py", "app_store_assets/profiles.py"):
             for optimize in (0, 1, 2):
                 for mode in py_compile.PycInvalidationMode:
+                    source = runtime / name
+                    cache = (
+                        source.parent
+                        / "__pycache__"
+                        / (
+                            source.stem
+                            + "."
+                            + __import__("sys").implementation.cache_tag
+                            + (".opt-" + str(optimize) if optimize else "")
+                            + ".pyc"
+                        )
+                    )
                     py_compile.compile(
-                        str(runtime / name),
+                        str(source),
+                        cfile=str(cache),
                         doraise=True,
                         optimize=optimize,
                         invalidation_mode=mode,
@@ -179,7 +192,7 @@ class AdditionalReaderBindings(unittest.TestCase):
             / "__pycache__"
             / (source.stem + "." + __import__("sys").implementation.cache_tag + ".pyc")
         )
-        py_compile.compile(str(source), doraise=True)
+        py_compile.compile(str(source), cfile=str(cache), doraise=True)
         original = cache.read_bytes()
         for data in (original[:-1] + bytes([original[-1] ^ 1]), b"bad cache"):
             cache.write_bytes(data)
