@@ -34,15 +34,13 @@ from app_store_assets.records import (
     canonical,
     capture_bytes,
     file_digest,
-    inventory,
     read_json,
     record_digest,
     safe_path,
-    verify_inventory,
 )
 from app_store_assets.snapshots import validate_snapshot
 
-from .budgets import CaptureBudget, bounded_json
+from .budgets import CaptureBudget, bounded_inventory, bounded_json
 from .outputs import preflight_output, publish_tree, write_new_file
 from .publisher import publish_snapshot, snapshot_manifest
 
@@ -68,6 +66,7 @@ APPLE_FOLDERS = {
     "APP_IPAD_PRO_3GEN_129": "ipad3gen129",
 }
 EXPORT_MANIFEST = "store-assets-export.json"
+IMAGE_LIMIT = 64 * 1024 * 1024
 
 
 def confined(root, path):
@@ -275,7 +274,10 @@ def import_metadata(
     source, output, state = (confined(root, path) for path in (source, output, state))
     preflight_output(output, new=True)
     preflight_output(state)
-    if output.is_relative_to(source) or state.is_relative_to(source):
+    if any(
+        left.is_relative_to(right) or right.is_relative_to(left)
+        for left, right in ((output, source), (state, source))
+    ):
         raise ValueError("import output/history overlaps the editing tree")
     if any(
         directory.is_relative_to(output) or output.is_relative_to(directory)
@@ -285,13 +287,15 @@ def import_metadata(
     captures = {}
     manifest_path = safe_path(source, EXPORT_MANIFEST)
     value = validate_export(read_json(manifest_path, captures), target)
-    declared = {EXPORT_MANIFEST} | {
-        entry["file"]
-        for group in ("fields", "images", "notes")
-        for entry in value[group]
-    }
-    expected = inventory(source, sorted(declared))
-    verify_inventory(source, expected, exact=True)
+    limits = {EXPORT_MANIFEST: TEXT_LIMIT}
+    for group in ("fields", "images", "notes"):
+        limits.update(
+            {
+                entry["file"]: IMAGE_LIMIT if group == "images" else TEXT_LIMIT
+                for entry in value[group]
+            }
+        )
+    expected = bounded_inventory(source, limits, FILE_LIMIT)
     if captures.get(manifest_path) != expected[EXPORT_MANIFEST]:
         raise ValueError("export manifest changed during import capture")
 
@@ -417,7 +421,8 @@ def import_metadata(
         },
         target,
     )
-    verify_inventory(source, expected, exact=True)
+    if bounded_inventory(source, limits, FILE_LIMIT) != expected:
+        raise ValueError("bound editing inventory changed during import")
     if (
         state.is_relative_to(output)
         or output.is_relative_to(history)

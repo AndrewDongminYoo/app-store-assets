@@ -26,7 +26,7 @@ class LocalCLIContextTests(unittest.TestCase):
                 }
                 snapshot = snapshot_fixture(root / "history", record)
                 module("metadata_io").export_metadata(root, snapshot, target, "editing")
-                original = module("metadata_io").inventory
+                original = module("metadata_io").bounded_inventory
 
                 def mutate(*args, **kwargs):
                     result = original(*args, **kwargs)
@@ -42,7 +42,7 @@ class LocalCLIContextTests(unittest.TestCase):
                 out = io.StringIO()
                 with (
                     patch.object(
-                        module("metadata_io"), "inventory", side_effect=mutate
+                        module("metadata_io"), "bounded_inventory", side_effect=mutate
                     ),
                     contextlib.redirect_stdout(out),
                     contextlib.redirect_stderr(io.StringIO()),

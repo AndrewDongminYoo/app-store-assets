@@ -55,8 +55,8 @@ native/signing and remote freshness remain unverified.
 The later operator approval Sentinel_a0e39ae66ff0819180b97a50701f69aa authorizes
 normal PR publication with Draft conversion for blockers/nonconvergence. B2
 targets B1's branch for a writer-only stacked diff. Before merge it must update
-onto main after B1 merges and repeat exact-head gates. The current CI only runs
-PRs targeting main; absent stacked CI is a blocker, not a pass. CodeRabbit's
+onto main after B1 merges and repeat exact-head gates. The current CI runs
+PRs targeting main or split/offline-read-boundaries; absent stacked CI is a blocker, not a pass. CodeRabbit's
 explicit applicable stacked skip is recorded as skipped, never reviewed.
 PR3/5 branches and spent budgets remain unchanged; this publication does not
 reset them. The common image-capture defect gets one new repair pass and one

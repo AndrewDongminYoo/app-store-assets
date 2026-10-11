@@ -7,6 +7,7 @@ from app_store_assets.contracts import hash_inventory
 from app_store_assets.records import (
     FILE_LIMIT,
     capture_bytes,
+    open_directory,
     safe_path,
     verify_inventory,
 )
@@ -19,7 +20,15 @@ def stage_inventory(source, destination, expected):
     source = Path(source).absolute()
     destination = Path(destination).absolute()
     hash_inventory(expected)
-    if destination.is_relative_to(source):
+    # Even an empty inventory must validate the source root without symlinks.
+    try:
+        with open_directory(source):
+            pass
+    except OSError as error:
+        raise ValueError("unsafe staging source root") from error
+    if destination.is_relative_to(source) or destination.resolve().is_relative_to(
+        source.resolve()
+    ):
         raise ValueError("staging destination overlaps source tree")
     preflight_output(destination, new=True)
     budget = CaptureBudget(FILE_LIMIT)

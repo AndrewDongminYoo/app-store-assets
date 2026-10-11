@@ -187,7 +187,7 @@ class MetadataRoundtripTests(unittest.TestCase):
         write_json(path, value)
         with patch.object(
             self.io,
-            "inventory",
+            "bounded_inventory",
             side_effect=AssertionError("mapped protected file read"),
         ):
             with self.assertRaisesRegex(ValueError, "public.*path"):
