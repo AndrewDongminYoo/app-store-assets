@@ -3,6 +3,7 @@
 import hashlib
 import os
 import stat
+import struct
 import tempfile
 import zipfile
 from contextlib import nullcontext
@@ -22,6 +23,49 @@ from .records import (
     safe_path,
 )
 from .snapshots import validate_snapshot
+
+ENTRY_LIMIT = 100000
+DIRECTORY_LIMIT = 64 * 1024 * 1024
+
+
+def _preflight_directory(source):
+    # Match the stdlib's bounded EOCD/ZIP64 reader and prefix-offset arithmetic.
+    # Scan fixed headers without allocating ZipInfo objects or directory bytes.
+    end = zipfile._EndRecData(source)
+    if end is None:
+        raise ValueError("artifact container cannot be read")
+    size = end[zipfile._ECD_SIZE]
+    count = end[zipfile._ECD_ENTRIES_TOTAL]
+    if size > DIRECTORY_LIMIT or count > ENTRY_LIMIT:
+        raise ValueError("oversized artifact central directory bound")
+    if (
+        end[zipfile._ECD_DISK_NUMBER]
+        or end[zipfile._ECD_DISK_START]
+        or end[zipfile._ECD_ENTRIES_THIS_DISK] != count
+    ):
+        raise ValueError("unsupported split artifact container")
+    start = end[zipfile._ECD_LOCATION] - size
+    if end[zipfile._ECD_SIGNATURE] == zipfile.stringEndArchive64:
+        start -= zipfile.sizeEndCentDir64 + zipfile.sizeEndCentDir64Locator
+    if start < 0:
+        raise ValueError("invalid artifact central directory offset")
+    source.seek(start)
+    consumed = observed = 0
+    while consumed < size:
+        header = source.read(zipfile.sizeCentralDir)
+        if len(header) != zipfile.sizeCentralDir:
+            raise ValueError("truncated artifact central directory")
+        fields = struct.unpack(zipfile.structCentralDir, header)
+        if fields[zipfile._CD_SIGNATURE] != zipfile.stringCentralDir:
+            raise ValueError("invalid artifact central directory header")
+        consumed += zipfile.sizeCentralDir + sum(fields[12:15])
+        observed += 1
+        if consumed > size or observed > ENTRY_LIMIT:
+            raise ValueError("oversized artifact central directory bound")
+        source.seek(sum(fields[12:15]), os.SEEK_CUR)
+    if observed != count:
+        raise ValueError("artifact central directory entry count differs")
+    source.seek(0)
 
 
 def container_kind(path):
@@ -45,9 +89,10 @@ def container_kind(path):
 
 def _container_kind(path):
     try:
+        _preflight_directory(path)
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
-            if len(names) > 100000 or len(names) != len(set(names)):
+            if len(names) > ENTRY_LIMIT or len(names) != len(set(names)):
                 raise ValueError("ambiguous or oversized artifact container")
             names = set(names)
             kinds = []
@@ -67,7 +112,13 @@ def _container_kind(path):
             if len(kinds) != 1:
                 raise ValueError("unsupported or ambiguous artifact container kind")
             return kinds[0]
-    except (zipfile.BadZipFile, OSError) as error:
+    except (
+        zipfile.BadZipFile,
+        OSError,
+        struct.error,
+        UnicodeError,
+        NotImplementedError,
+    ) as error:
         raise ValueError("artifact container cannot be read") from error
 
 
