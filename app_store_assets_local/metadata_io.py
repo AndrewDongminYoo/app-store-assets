@@ -280,6 +280,7 @@ def import_metadata(
     source, output, state = (confined(root, path) for path in (source, output, state))
     preflight_output(output, new=True)
     preflight_output(state, directory_root=True)
+    preflight_output(state / "metadata", directory_root=True)
     if any(
         left.is_relative_to(right) or right.is_relative_to(left)
         for left, right in ((output, source), (state, source))
@@ -293,6 +294,8 @@ def import_metadata(
     captures = {}
     manifest_path = safe_path(source, EXPORT_MANIFEST)
     value = validate_export(read_json(manifest_path, captures), target)
+    if not metadata_only and value["images"]:
+        preflight_output(state / "assets", directory_root=True)
     limits = {EXPORT_MANIFEST: TEXT_LIMIT}
     for group in ("fields", "images", "notes"):
         limits.update(
@@ -443,6 +446,9 @@ def import_metadata(
     ):
         raise ValueError("import output/history overlaps immutable publication")
     preflight_output(state, directory_root=True)
+    preflight_output(state / "metadata", directory_root=True)
+    if assets_record is not None:
+        preflight_output(state / "assets", directory_root=True)
     preflight_output(output, new=True)
     listing_bytes = bounded_json(listing, canonical, TEXT_LIMIT)
     if _context_guard is not None:

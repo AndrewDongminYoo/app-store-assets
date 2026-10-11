@@ -5,6 +5,8 @@ The reader findings are delivered in PR6 and received through a normal stack mer
 This scope retains the prior stop history and the reader continuation's candidate/deadline limits.
 
 Existing publication/history roots must be directories, and regular files reject before source capture, decoding or dry-run success.
+Import preflights the actual metadata history root and, when images will be published, the actual assets history root before input inventory hashing and again before dry-run/publication.
+An unused assets root does not block a metadata-only import.
 New listing files retain their separate new-only output contract.
 Export reserves the complete declared snapshot payload against the aggregate ceiling before any payload hash or decode, including unreferenced files and both dry-run and final revalidation.
 The reader's opt-in bounded inventory provides identity-bound hashes after all file sizes are reserved.
