@@ -100,6 +100,7 @@ def image_bytes(file, *, expected_sha256=None):
 
 
 def image_info(file, env=None, *, expected_sha256=None):
+    """Decode in a fresh isolated environment; env is compatibility-only."""
     data, fmt = image_bytes(file, expected_sha256=expected_sha256)
     with tempfile.TemporaryDirectory(prefix="offline-decode-") as home:
         return _decode(data, fmt, local_environment(home))

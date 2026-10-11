@@ -49,6 +49,8 @@ def make_plan(root, profile_path, target_name, operation):
     captures = {}
     profile, target, runtime = local_context(root, profile_path, target_name, captures)
     identity = target_identity(target)
+    if operation == "images" and identity["platform"] == "macos":
+        raise ValueError("macos image operations lack a supported catalog contract")
     if operation == "binary" and target["stage"] == "development":
         raise ValueError("development binary planning is blocked")
     paths = [profile_path, *target["inputs"]]

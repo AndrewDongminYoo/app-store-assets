@@ -184,14 +184,14 @@ def read_json(path, captures=None):
     )
 
 
-def digest_stream(stream):
+def digest_stream(stream, limit=FILE_LIMIT):
     before = os.fstat(stream.fileno())
-    if not stat.S_ISREG(before.st_mode) or before.st_size > FILE_LIMIT:
+    if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
         raise ValueError("public file exceeds regular-file/size contract")
     digest, count = hashlib.sha256(), 0
-    for block in iter(lambda: stream.read(1024 * 1024), b""):
+    for block in iter(lambda: stream.read(min(1024 * 1024, limit - count + 1)), b""):
         count += len(block)
-        if count > FILE_LIMIT:
+        if count > limit:
             raise ValueError("public file exceeds byte bound")
         digest.update(block)
     if identity(before) != identity(os.fstat(stream.fileno())):
@@ -204,7 +204,7 @@ def file_digest(path):
         return digest_stream(stream)
 
 
-def _walk(fd, prefix, result, excluded=()):
+def _walk(fd, prefix, result, excluded=(), *, reserve=False, reservations=None):
     before = identity(os.fstat(fd))
     for name in sorted(os.listdir(fd)):
         if name in excluded:
@@ -219,12 +219,34 @@ def _walk(fd, prefix, result, excluded=()):
         except OSError as error:
             raise ValueError("symlink or changed public directory entry") from error
         try:
-            mode = os.fstat(child).st_mode
+            observed = os.fstat(child)
+            mode = observed.st_mode
             if stat.S_ISDIR(mode):
-                _walk(child, PurePosixPath(relative), result)
+                _walk(
+                    child,
+                    PurePosixPath(relative),
+                    result,
+                    reserve=reserve,
+                    reservations=reservations,
+                )
             elif stat.S_ISREG(mode):
-                with os.fdopen(os.dup(child), "rb") as stream:
-                    result[relative] = digest_stream(stream)
+                if reserve:
+                    if observed.st_size > FILE_LIMIT:
+                        raise ValueError("public file exceeds byte bound")
+                    result[relative] = observed
+                else:
+                    if reservations is not None and (
+                        relative not in reservations
+                        or identity(observed) != identity(reservations[relative])
+                    ):
+                        raise ValueError("public inventory changed after reservation")
+                    with os.fdopen(os.dup(child), "rb") as stream:
+                        result[relative] = digest_stream(
+                            stream,
+                            limit=observed.st_size
+                            if reservations is not None
+                            else FILE_LIMIT,
+                        )
             else:
                 raise ValueError("unsupported public input type")
         finally:
@@ -233,10 +255,20 @@ def _walk(fd, prefix, result, excluded=()):
         raise ValueError("public directory changed during inventory")
 
 
-def tree_inventory(root, exclude_root=()):
+def tree_inventory(root, exclude_root=(), *, total_limit=None):
     result = {}
     with open_directory(root) as fd:
-        _walk(fd, PurePosixPath("."), result, exclude_root)
+        reserved = None
+        if total_limit is not None:
+            if type(total_limit) is not int or total_limit < 0:
+                raise ValueError("invalid public inventory byte bound")
+            reserved = {}
+            _walk(fd, PurePosixPath("."), reserved, exclude_root, reserve=True)
+            if sum(item.st_size for item in reserved.values()) > total_limit:
+                raise ValueError("public inventory exceeds total byte bound")
+        _walk(fd, PurePosixPath("."), result, exclude_root, reservations=reserved)
+        if reserved is not None and set(result) != set(reserved):
+            raise ValueError("public inventory changed after reservation")
     return dict(sorted(result.items()))
 
 

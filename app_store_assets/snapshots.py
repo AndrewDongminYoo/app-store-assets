@@ -7,7 +7,7 @@ from .record_types import validate_record
 from .records import file_digest, read_json, record_digest, safe_path, tree_inventory
 
 
-def validate_snapshot(folder, captures=None):
+def validate_snapshot(folder, captures=None, *, total_limit=None):
     folder = Path(folder).absolute()
     observed = {} if captures is None else captures
     manifest_path = safe_path(folder, "manifest.json")
@@ -28,7 +28,9 @@ def validate_snapshot(folder, captures=None):
         raise ValueError("snapshot content address differs from manifest")
     # Validation must not rewrite the bytes used for the content address.
     record = validate_record(manifest["record"])
-    actual = tree_inventory(folder, exclude_root=("manifest.json",))
+    actual = tree_inventory(
+        folder, exclude_root=("manifest.json",), total_limit=total_limit
+    )
     if actual != manifest["files"]:
         raise ValueError("snapshot inventory/hash differs from manifest")
     entries = (
@@ -55,14 +57,17 @@ def validate_snapshot(folder, captures=None):
     else:
         from .decoding import image_info
 
+        decoded = {}
         for item in entries:
             if "file" in item and any(
                 key in item for key in ("width", "height", "size")
             ):
-                width, height, _ = image_info(
-                    safe_path(folder, item["file"]),
-                    expected_sha256=actual[item["file"]],
-                )
+                name = item["file"]
+                if name not in decoded:
+                    decoded[name] = image_info(
+                        safe_path(folder, name), expected_sha256=actual[name]
+                    )
+                width, height, _ = decoded[name]
                 for key, value in (
                     ("width", width),
                     ("height", height),
@@ -72,10 +77,9 @@ def validate_snapshot(folder, captures=None):
                         raise ValueError(
                             "snapshot image dimensions differ from captured bytes"
                         )
-                if file_digest(safe_path(folder, item["file"])) != actual[item["file"]]:
-                    raise ValueError(
-                        "snapshot image changed during dimension validation"
-                    )
+        for name in decoded:
+            if file_digest(safe_path(folder, name)) != actual[name]:
+                raise ValueError("snapshot image changed during dimension validation")
     if file_digest(manifest_path) != observed[manifest_path]:
         raise ValueError("snapshot manifest changed after capture")
     if captures is not None:
