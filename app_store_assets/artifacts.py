@@ -46,7 +46,14 @@ def _preflight_directory(source):
         raise ValueError("unsupported split artifact container")
     start = end[zipfile._ECD_LOCATION] - size
     if end[zipfile._ECD_SIGNATURE] == zipfile.stringEndArchive64:
-        start -= zipfile.sizeEndCentDir64 + zipfile.sizeEndCentDir64Locator
+        # Patched Python releases locate the ZIP64 EOCD itself; older releases
+        # retain the classic EOCD location. Inspect the record, not the version.
+        source.seek(end[zipfile._ECD_LOCATION])
+        signature = source.read(4)
+        if signature == zipfile.stringEndArchive:
+            start -= zipfile.sizeEndCentDir64 + zipfile.sizeEndCentDir64Locator
+        elif signature != zipfile.stringEndArchive64:
+            raise ValueError("invalid artifact ZIP64 end record location")
     if start < 0:
         raise ValueError("invalid artifact central directory offset")
     source.seek(start)

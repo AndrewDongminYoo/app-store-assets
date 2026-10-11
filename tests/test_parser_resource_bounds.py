@@ -96,6 +96,41 @@ class ParserResourceBounds(unittest.TestCase):
             image.write_bytes(png(3840, 3840))
             self.assertEqual(decoding.image_info(image)[:2], (3840, 3840))
 
+    def test_zip64_location_preflight_accepts_both_stdlib_record_locations(self):
+        data = archive_bytes()
+        end = data.rfind(b"PK\x05\x06")
+        classic = list(struct.unpack(zipfile.structEndArchive, data[end:]))
+        zip64 = struct.pack(
+            zipfile.structEndArchive64,
+            zipfile.stringEndArchive64,
+            44,
+            45,
+            45,
+            0,
+            0,
+            1,
+            1,
+            classic[5],
+            classic[6],
+        )
+        locator = struct.pack(
+            zipfile.structEndArchive64Locator,
+            zipfile.stringEndArchive64Locator,
+            0,
+            end,
+            1,
+        )
+        combined = data[:end] + zip64 + locator + data[end:]
+        classic[0] = zipfile.stringEndArchive64
+        for location in (end, end + len(zip64) + len(locator)):
+            with (
+                self.subTest(location=location),
+                patch.object(
+                    zipfile, "_EndRecData", return_value=classic + [b"", location]
+                ),
+            ):
+                artifacts._preflight_directory(io.BytesIO(combined))
+
     def test_png_and_jpeg_dimensions_reject_before_native_decode(self):
         png = b"\x89PNG\r\n\x1a\n" + struct.pack(">I4sII", 13, b"IHDR", 100000, 100000)
         jpeg = (
