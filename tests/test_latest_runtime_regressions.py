@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from offline_support import fixture, git, module, write_json
 
@@ -51,3 +52,27 @@ class LatestReviewRegressions(unittest.TestCase):
             git(runtime, "log", "-1", "--format=%an <%ae>"),
             "Offline Fixture <fixture@example.invalid>",
         )
+
+    def test_raw_reader_paths_still_reject_private_parent_components(self):
+        records = module("records")
+        for name in (
+            ".env/public.txt",
+            "service-account/public.txt",
+            ".codex/public.txt",
+        ):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("Synthetic private marker")
+            for reader in (
+                records.read_text,
+                records.file_digest,
+                records.capture_bytes,
+            ):
+                with self.subTest(name=name, reader=reader.__name__):
+                    with patch.object(
+                        records.os,
+                        "open",
+                        side_effect=AssertionError("read before validation"),
+                    ):
+                        with self.assertRaisesRegex(ValueError, "private|credential"):
+                            reader(path)

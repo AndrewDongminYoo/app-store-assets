@@ -19,8 +19,8 @@ IMAGE_LIMIT = 64 * 1024 * 1024
 def image_bytes(file, *, expected_sha256=None):
     if expected_sha256 is not None:
         digest(expected_sha256)
-    file = Path(file)
     data = capture_bytes(file, limit=IMAGE_LIMIT)
+    file = Path(file)
     if (
         expected_sha256 is not None
         and hashlib.sha256(data).hexdigest() != expected_sha256

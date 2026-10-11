@@ -4,13 +4,13 @@ from pathlib import Path
 
 from .contracts import digest, exact_keys, hash_inventory
 from .record_types import validate_record
-from .records import file_digest, read_json, record_digest, tree_inventory
+from .records import file_digest, read_json, record_digest, safe_path, tree_inventory
 
 
 def validate_snapshot(folder, captures=None):
     folder = Path(folder).absolute()
     observed = {} if captures is None else captures
-    manifest_path = folder / "manifest.json"
+    manifest_path = safe_path(folder, "manifest.json")
     manifest = read_json(manifest_path, observed)
     keys = {"schema_version", "type", "record", "files"}
     exact_keys(manifest, keys, keys)
@@ -60,7 +60,8 @@ def validate_snapshot(folder, captures=None):
                 key in item for key in ("width", "height", "size")
             ):
                 width, height, _ = image_info(
-                    folder / item["file"], expected_sha256=actual[item["file"]]
+                    safe_path(folder, item["file"]),
+                    expected_sha256=actual[item["file"]],
                 )
                 for key, value in (
                     ("width", width),
@@ -71,7 +72,7 @@ def validate_snapshot(folder, captures=None):
                         raise ValueError(
                             "snapshot image dimensions differ from captured bytes"
                         )
-                if file_digest(folder / item["file"]) != actual[item["file"]]:
+                if file_digest(safe_path(folder, item["file"])) != actual[item["file"]]:
                     raise ValueError(
                         "snapshot image changed during dimension validation"
                     )
@@ -81,5 +82,5 @@ def validate_snapshot(folder, captures=None):
         from .records import bind_capture
 
         for name, sha in actual.items():
-            bind_capture(captures, folder / name, sha)
+            bind_capture(captures, safe_path(folder, name), sha)
     return manifest
