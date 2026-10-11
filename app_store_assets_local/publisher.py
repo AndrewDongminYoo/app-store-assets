@@ -72,16 +72,27 @@ def snapshot_manifest(record, files):
             raise ValueError(
                 "snapshot image annotation differs from captured inventory"
             )
+    manifest = {
+        "schema_version": 1,
+        "type": "snapshot",
+        "record": copy.deepcopy(record),
+        "files": hashes,
+    }
+    bounded_json(manifest, canonical, TEXT_LIMIT)
     # Decode only owned ephemeral captures before creating durable history.
     if entries:
         with tempfile.TemporaryDirectory(prefix="public-snapshot-images-") as home:
             folder = Path(home).resolve()
+            staged = set()
             for item in entries:
                 if "file" not in item:
+                    continue
+                if item["file"] in staged:
                     continue
                 path = folder / item["file"]
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(files[item["file"]])
+                staged.add(item["file"])
             if record["type"] == "asset-manifest":
                 from app_store_assets.catalog import validate_images
 
@@ -89,12 +100,16 @@ def snapshot_manifest(record, files):
             else:
                 from app_store_assets.decoding import image_info
 
+                decoded = {}
                 for item in entries:
                     if "file" not in item:
                         continue
-                    width, height, _ = image_info(
-                        folder / item["file"], expected_sha256=hashes[item["file"]]
-                    )
+                    name = item["file"]
+                    if name not in decoded:
+                        decoded[name] = image_info(
+                            folder / name, expected_sha256=hashes[name]
+                        )
+                    width, height, _ = decoded[name]
                     for key, value in (
                         ("width", width),
                         ("height", height),
@@ -104,13 +119,6 @@ def snapshot_manifest(record, files):
                             raise ValueError(
                                 "snapshot dimensions differ from captured bytes"
                             )
-    manifest = {
-        "schema_version": 1,
-        "type": "snapshot",
-        "record": copy.deepcopy(record),
-        "files": hashes,
-    }
-    bounded_json(manifest, canonical, TEXT_LIMIT)
     return manifest
 
 
@@ -127,7 +135,7 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
         hash_inventory(expected_hashes)
         if set(expected_hashes) != set(files):
             raise ValueError("snapshot inspected inventory differs")
-    root = preflight_output(root)
+    root = preflight_output(root, directory_root=True)
     budget = CaptureBudget(FILE_LIMIT)
     captured = {}
     for name, source in files.items():
@@ -148,7 +156,7 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
         raise ValueError("published artifact hash differs from inspected digest")
     if _context_guard is not None:
         _context_guard()
-    root = preflight_output(root)
+    root = preflight_output(root, directory_root=True)
     destination = root / record_digest(manifest)
 
     def winner(path):

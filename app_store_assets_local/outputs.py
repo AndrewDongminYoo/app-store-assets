@@ -55,7 +55,9 @@ def directory(path, create=False):
         os.close(fd)
 
 
-def preflight_output(path, new=False, allow_leaf_snapshot=False):
+def preflight_output(
+    path, new=False, allow_leaf_snapshot=False, *, directory_root=False
+):
     path = Path(path).absolute()
     public_input_name(path)
     fd = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -76,6 +78,8 @@ def preflight_output(path, new=False, allow_leaf_snapshot=False):
             return path
         if stat.S_ISLNK(current.st_mode):
             raise ValueError("output symlink is forbidden")
+        if directory_root and not stat.S_ISDIR(current.st_mode):
+            raise ValueError("publication root must be a directory")
         if stat.S_ISDIR(current.st_mode) and not allow_leaf_snapshot:
             child = os.open(
                 path.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd

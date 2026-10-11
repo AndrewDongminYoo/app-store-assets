@@ -20,6 +20,7 @@ from app_store_assets.contracts import (
     target_identity,
 )
 from app_store_assets.contracts import locale as validate_locale
+from app_store_assets.decoding import IMAGE_LIMIT
 from app_store_assets.identity import runtime_inventory
 from app_store_assets.metadata import (
     IMAGE_FIELDS,
@@ -66,7 +67,6 @@ APPLE_FOLDERS = {
     "APP_IPAD_PRO_3GEN_129": "ipad3gen129",
 }
 EXPORT_MANIFEST = "store-assets-export.json"
-IMAGE_LIMIT = 64 * 1024 * 1024
 
 
 def confined(root, path):
@@ -184,7 +184,7 @@ def export_metadata(
     if destination.is_relative_to(snapshot):
         raise ValueError("export destination overlaps immutable source snapshot")
     captures = {}
-    manifest = validate_snapshot(snapshot, captures)
+    manifest = validate_snapshot(snapshot, captures, total_limit=FILE_LIMIT)
     record = validate_public_metadata(manifest["record"], target)
     if record["type"] != "metadata-snapshot":
         raise ValueError("export snapshot target/type differs")
@@ -216,7 +216,7 @@ def export_metadata(
                 ):
                     raise ValueError("download image annotation/hash differs")
                 source = safe_path(snapshot, image["file"])
-                data = budget.read(source, capture_bytes, per_file=64 * 1024 * 1024)
+                data = budget.read(source, capture_bytes, per_file=IMAGE_LIMIT)
                 if hashlib.sha256(data).hexdigest() != image["sha256"]:
                     raise ValueError("download bytes changed during export")
                 with tempfile.TemporaryDirectory(prefix="public-export-image-") as home:
@@ -253,7 +253,7 @@ def export_metadata(
     )
     export_bytes = budget.take(bounded_json(value, canonical, TEXT_LIMIT))
     # Source address, inventory and complete record must still match captured bytes.
-    if validate_snapshot(snapshot) != manifest:
+    if validate_snapshot(snapshot, total_limit=FILE_LIMIT) != manifest:
         raise ValueError("source snapshot changed during export")
     if _context_guard is not None:
         _context_guard()
@@ -279,7 +279,7 @@ def import_metadata(
         raise ValueError("invalid local import flags")
     source, output, state = (confined(root, path) for path in (source, output, state))
     preflight_output(output, new=True)
-    preflight_output(state)
+    preflight_output(state, directory_root=True)
     if any(
         left.is_relative_to(right) or right.is_relative_to(left)
         for left, right in ((output, source), (state, source))
@@ -342,7 +342,7 @@ def import_metadata(
         if item["sha256"] != expected[item["file"]]:
             raise ValueError("metadata image changed outside bound inventory")
         data = budget.read(
-            safe_path(source, item["file"]), capture_bytes, per_file=64 * 1024 * 1024
+            safe_path(source, item["file"]), capture_bytes, per_file=IMAGE_LIMIT
         )
         if hashlib.sha256(data).hexdigest() != item["sha256"]:
             raise ValueError("import image bytes changed during validation")
@@ -442,7 +442,7 @@ def import_metadata(
         )
     ):
         raise ValueError("import output/history overlaps immutable publication")
-    preflight_output(state)
+    preflight_output(state, directory_root=True)
     preflight_output(output, new=True)
     listing_bytes = bounded_json(listing, canonical, TEXT_LIMIT)
     if _context_guard is not None:
