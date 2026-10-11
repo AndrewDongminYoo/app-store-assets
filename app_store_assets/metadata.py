@@ -151,7 +151,7 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
 
     clean = validate_public_metadata(record, target)
     if clean.get("changelogs"):
-        notes = {}
+        notes = copy.deepcopy(clean.get("release_notes", {}))
         for locale_name, name in clean["changelogs"].items():
             path = safe_path(root if content_root is None else content_root, name)
             for parent in path.parents:
@@ -159,7 +159,10 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
                     break
                 if len(parent.name) == 64:
                     validate_snapshot(parent, captures)
-            notes[locale_name] = read_text(path, captures)
+            note = read_text(path, captures)
+            if locale_name in notes and notes[locale_name] != note:
+                raise ValueError("conflicting inline and changelog release notes")
+            notes[locale_name] = note
         clean["release_notes"] = notes
     return validate_public_metadata(clean, target)
 

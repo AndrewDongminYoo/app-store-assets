@@ -95,7 +95,7 @@ class OfflineContractRegressions(unittest.TestCase):
         container(temp, "apk")
         substitution = temp.read_bytes()
         artifacts = module("artifacts")
-        real_kind = artifacts.container_kind
+        real_kind = artifacts._container_kind
 
         def swap(observed):
             path.write_bytes(substitution)
@@ -104,7 +104,7 @@ class OfflineContractRegressions(unittest.TestCase):
             finally:
                 path.write_bytes(original)
 
-        with patch.object(artifacts, "container_kind", side_effect=swap):
+        with patch.object(artifacts, "_container_kind", side_effect=swap):
             with self.assertRaisesRegex(ValueError, "kind|container"):
                 module("planning").make_plan(
                     self.root, "store-upload.json", "production", "binary"

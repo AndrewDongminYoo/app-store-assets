@@ -131,7 +131,7 @@ def artifact_record(root, profile, target, captures=None):
         if observed.hexdigest() != record["sha256"]:
             raise ValueError("artifact changed while capturing container")
         captured.seek(0)
-        if container_kind(captured) != kind:
+        if _container_kind(captured) != kind:
             raise ValueError("artifact container kind differs")
     if file_digest(path) != record["sha256"]:
         raise ValueError("artifact changed during container validation")
@@ -156,9 +156,9 @@ def artifact_record(root, profile, target, captures=None):
             raise ValueError("native source/inspection declaration missing")
         if git(root, "rev-parse", "HEAD") != record["source_commit"]:
             raise ValueError("artifact source commit differs")
-        if (
-            inventory(root, record.get("adapter", {}).get("inputs", []))
-            != record["source_inputs"]
-        ):
+        source_inputs = inventory(root, record.get("adapter", {}).get("inputs", []))
+        if source_inputs != record["source_inputs"]:
             raise ValueError("artifact source inputs differ")
+        for name, digest in source_inputs.items():
+            bind_capture(captures, safe_path(root, name), digest)
     return record

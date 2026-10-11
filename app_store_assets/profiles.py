@@ -172,7 +172,7 @@ def load_profile(root, path, name, captures=None):
         )
         if len(matches) != 1:
             raise ValueError("version source must contain one exact pubspec version")
-        derived = dict(zip(("name", "build"), matches[0], strict=True))
+        derived = {"name": matches[0][0], "build": matches[0][1]}
         if "version" in target and target["version"] != derived:
             raise ValueError("configured version differs from source")
         target["version"] = derived
