@@ -26,6 +26,10 @@ Confirmed B1 findings and acceptance criteria:
 - Trusted absolute ancestors do not become public inventory names. Every
   untrusted relative component remains checked before access; all absolute
   ancestors still open descriptor-by-descriptor with no-follow protection.
+  `safe_path` retains the explicit trusted root on its returned path, and
+  readers revalidate the entire relative child before opening. Raw direct
+  paths retain all-component private-name checks. Derived paths that lose
+  that root fall back to the stricter raw check rather than inheriting trust.
 - Classify the existing hash-verified artifact capture without another copy.
   The direct public classifier retains its own bounded capture contract.
 - Fixture Git commits use a reserved synthetic name and email.

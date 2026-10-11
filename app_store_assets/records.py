@@ -11,6 +11,12 @@ TEXT_LIMIT = 8 * 1024 * 1024
 FILE_LIMIT = 1024 * 1024 * 1024
 
 
+class _PublicPath(type(Path())):
+    """A path validated relative to an explicit caller-owned trusted root."""
+
+    __slots__ = ("_trusted_root",)
+
+
 def canonical(value):
     return (
         json.dumps(
@@ -30,7 +36,9 @@ def record_digest(value):
 
 def bind_capture(captures, path, digest):
     if captures is not None:
-        path = Path(path).absolute()
+        path = (
+            path.absolute() if isinstance(path, _PublicPath) else Path(path).absolute()
+        )
         if path in captures and captures[path] != digest:
             raise ValueError("input changed between captures")
         captures[path] = digest
@@ -88,7 +96,9 @@ def safe_path(root, relative):
         current = current / part
         if current.is_symlink():
             raise ValueError("symlink input is not allowed")
-    return current
+    result = _PublicPath(current)
+    result._trusted_root = root
+    return result
 
 
 @contextmanager
@@ -111,8 +121,13 @@ def open_directory(path):
 
 @contextmanager
 def open_read(path):
+    trusted_root = (
+        getattr(path, "_trusted_root", None) if isinstance(path, _PublicPath) else None
+    )
     path = Path(path).absolute()
-    public_input_name(path.name)
+    # Raw path helpers retain complete private-component checks. Only safe_path
+    # supplies an explicit root, and every child is checked again before access.
+    public_input_name(path if trusted_root is None else path.relative_to(trusted_root))
     try:
         with open_directory(path.parent) as parent:
             fd = os.open(

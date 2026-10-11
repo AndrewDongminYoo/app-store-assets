@@ -11,7 +11,9 @@ from .environment import local_environment
 from .metadata import normalize_fields
 from .records import capture_bytes, file_digest, read_json, safe_path
 
-CATALOG_FILE = Path(__file__).resolve().parents[1] / "catalog/store-rules-v1.json"
+CATALOG_FILE = safe_path(
+    Path(__file__).resolve().parents[1], "catalog/store-rules-v1.json"
+)
 # Frozen rules bind every direct API as well as pinned plan calls.
 CATALOG_SHA256 = "3ea0db0402f484a7c940186f4ec4acf102dbb4d3d70df11af464d9ca4dee9797"
 
