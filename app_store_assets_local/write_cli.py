@@ -21,10 +21,12 @@ def main(argv=None):
     parser.add_argument("--source", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--state", default="build/store-assets")
-    parser.add_argument("--metadata-only", action="store_true")
+    parser.add_argument("--metadata-only", action="store_true", help="import only")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "export" and args.metadata_only:
+            raise ValueError("--metadata-only is only supported for import")
         root = Path(args.root).resolve()
         captures = {}
         _, target, _ = local_context(root, args.profile, args.target, captures)
