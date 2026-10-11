@@ -127,6 +127,7 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
         hash_inventory(expected_hashes)
         if set(expected_hashes) != set(files):
             raise ValueError("snapshot inspected inventory differs")
+    root = preflight_output(root)
     budget = CaptureBudget(FILE_LIMIT)
     captured = {}
     for name, source in files.items():

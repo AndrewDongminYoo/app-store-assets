@@ -189,6 +189,12 @@ def export_metadata(
     if record["type"] != "metadata-snapshot":
         raise ValueError("export snapshot target/type differs")
     fields = validate_fields(record.get("fields", {}), target["store"], proposed=False)
+    if target["store"] == "apple":
+        for locale, text in selected_notes(record).items():
+            values = fields.setdefault(locale, {})
+            if "release_notes" in values and values["release_notes"] != text:
+                raise ValueError("conflicting Apple release notes")
+            values["release_notes"] = text
     maps = {"fields": [], "images": [], "notes": []}
     files = {}
     budget = CaptureBudget(FILE_LIMIT)
@@ -312,9 +318,10 @@ def import_metadata(
     notes = {}
     captured = {}
     for entry in value["fields"]:
-        fields.setdefault(entry["locale"], {})[entry["key"]] = captured_text(
-            entry["file"]
-        )
+        text = captured_text(entry["file"])
+        fields.setdefault(entry["locale"], {})[entry["key"]] = text
+        if target["store"] == "apple" and entry["key"] == "release_notes":
+            notes[entry["locale"]] = text
     for entry in value["notes"]:
         notes[entry["locale"]] = captured_text(entry["file"])
         normalize_fields({entry["locale"]: {"release_notes": notes[entry["locale"]]}})
