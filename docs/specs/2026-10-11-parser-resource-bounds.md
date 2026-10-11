@@ -5,6 +5,7 @@ It preserves the existing offline reader and transport HOLD.
 
 Before `ZipFile` constructs a directory, the captured APK/AAB/IPA stream must declare at most 100,000 entries and at most 64 MiB of central-directory bytes.
 The stdlib's bounded EOCD and ZIP64 reader locates the directory with the same prefix arithmetic as `ZipFile`.
+Older stdlib versions return the classic EOCD coordinate, while recent patched versions return the ZIP64 coordinate; the preflight reads the signature at that coordinate to select the correct arithmetic.
 A fixed-header streaming pass counts actual entries and validates the exact directory span and declared count.
 Split volumes, malformed spans and larger directories fail before `ZipInfo` allocation.
 The existing 1 GiB artifact bound, duplicate names, container-kind selection and hash binding remain in force.
