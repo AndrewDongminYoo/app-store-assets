@@ -46,11 +46,16 @@ def directory(path, create=False):
             os.close(fd)
             fd = child
             _immutable(fd, name)
-        yield fd
     except OSError as error:
+        os.close(fd)
         raise ValueError(
             "unsafe output parent, symlink or missing directory"
         ) from error
+    except BaseException:
+        os.close(fd)
+        raise
+    try:
+        yield fd
     finally:
         os.close(fd)
 
