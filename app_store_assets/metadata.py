@@ -158,20 +158,26 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
     """Bind referenced notes to their record's content base before normalization.
 
     Callers validate a snapshot content root before passing it. A record's named
-    `source_snapshot` is validated and bound here, and its changelogs must be
-    files of that snapshot. Directory names are never inferred to be snapshots.
+    `source_snapshot` is a bound provenance pointer to metadata for the same
+    target; it never supplies notes, so such a record keeps its notes inline.
+    Directory names are never inferred to be snapshots.
     """
     from .snapshots import validate_snapshot
 
     clean = validate_public_metadata(record, target)
-    snapshot = None
     if "source_snapshot" in clean:
+        if clean.get("changelogs"):
+            raise ValueError("a record with a source snapshot keeps inline notes only")
         manifest = safe_path(root, clean["source_snapshot"])
         if manifest.name != "manifest.json":
             raise ValueError("source snapshot must name manifest.json")
         # Binding its whole inventory puts the snapshot into every plan's inputs.
-        snapshot = manifest.parent.resolve()
-        files = validate_snapshot(manifest.parent, captures)["files"]
+        source = validate_snapshot(manifest.parent, captures)["record"]
+        if (
+            source.get("type") not in ("metadata-snapshot", "metadata-import")
+            or source.get("target") != clean["target"]
+        ):
+            raise ValueError("source snapshot type/target differs from the record")
     if clean.get("changelogs"):
         notes = _selected_notes(clean)
         boundary = Path(root).resolve()
@@ -185,11 +191,6 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
                     break
                 if not parent.resolve().is_relative_to(boundary):
                     raise ValueError("changelog path must stay inside the project")
-            if snapshot is not None and (
-                not path.resolve().is_relative_to(snapshot)
-                or path.resolve().relative_to(snapshot).as_posix() not in files
-            ):
-                raise ValueError("changelog is outside the named source snapshot")
             note = read_text(path, captures)
             if locale_name in notes and notes[locale_name] != note:
                 raise ValueError("conflicting inline and changelog release notes")

@@ -24,8 +24,11 @@ Distinct decodes cannot exceed entries, so the same limit bounds them.
 
 Changelog resolution never infers a snapshot from a directory name.
 A snapshot content root that a caller passes is validated by that caller first.
-A record that names `source_snapshot` must name a `manifest.json`, and that snapshot is validated and its inventory bound whether or not the record has changelogs, so plans list its files as inputs.
-Each changelog of such a record must be a file of that snapshot, and its text must match the snapshot's inventory (contract 1 of `2026-10-09-additional-input-bindings.md`).
+A record's `source_snapshot` is a provenance pointer, never a source of notes.
+It must name a `manifest.json` whose snapshot holds a `metadata-snapshot` or `metadata-import` record for the same target; that snapshot is validated and its inventory bound, so plans list its files as inputs.
+A record that names `source_snapshot` keeps its release notes inline and may not carry `changelogs`.
+This replaced an earlier rule in the same round that let the named snapshot vouch for changelogs below it; each version of that rule drew a new hosted finding, so the special case was removed rather than guarded again.
+Snapshot changelogs read through an explicit snapshot content root still follow contract 1 of `2026-10-09-additional-input-bindings.md`.
 
 ## Google release notes and CLI status
 
