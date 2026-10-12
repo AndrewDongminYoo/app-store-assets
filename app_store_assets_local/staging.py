@@ -1,11 +1,13 @@
 """Copy only captured reviewed public bytes to a new local directory."""
 
 import hashlib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from app_store_assets.contracts import hash_inventory
+from app_store_assets.decoding import FORMAT_EXTENSIONS, IMAGE_LIMIT
 from app_store_assets.records import (
     FILE_LIMIT,
+    TEXT_LIMIT,
     capture_bytes,
     open_directory,
     safe_path,
@@ -14,6 +16,12 @@ from app_store_assets.records import (
 
 from .budgets import CaptureBudget
 from .outputs import preflight_output, publish_tree
+
+IMAGE_SUFFIXES = set().union(*FORMAT_EXTENSIONS.values())
+
+
+def entry_limit(name):
+    return IMAGE_LIMIT if PurePosixPath(name).suffix in IMAGE_SUFFIXES else TEXT_LIMIT
 
 
 def stage_inventory(source, destination, expected):
@@ -33,7 +41,10 @@ def stage_inventory(source, destination, expected):
     preflight_output(destination, new=True)
     budget = CaptureBudget(FILE_LIMIT)
     captured = {
-        name: budget.read(safe_path(source, name), capture_bytes) for name in expected
+        name: budget.read(
+            safe_path(source, name), capture_bytes, per_file=entry_limit(name)
+        )
+        for name in expected
     }
     if sum(map(len, captured.values())) > FILE_LIMIT:
         raise ValueError("staging exceeds total byte bound")
