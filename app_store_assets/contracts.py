@@ -102,6 +102,8 @@ def valid_hostname(host_port, hostname):
         all(HOST_LABEL.fullmatch(label) for label in labels)
         and not any(label.startswith("xn--") for label in labels)
         and any(c.isalpha() for c in labels[-1])
+        # WHATWG "ends in a number": a 0x-hex last label is an IPv4 number.
+        and not re.fullmatch(r"0x[0-9a-f]*", labels[-1])
     )
 
 
