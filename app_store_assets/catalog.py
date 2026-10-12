@@ -194,12 +194,11 @@ def validate_images(root, entries, store, platform):
         seen.add(entry["file"])
         normalize_fields({entry["locale"]: {}})
         rule = slot_rule(store, entry["slot"])
-        expected = file_digest(path)
-        captured = capture_bytes(path, limit=64 * 1024 * 1024)
         import hashlib
 
-        if hashlib.sha256(captured).hexdigest() != expected:
-            raise ValueError("image changed while capturing bytes")
+        # Bound the read first; the final digest check below detects later changes.
+        captured = capture_bytes(path, limit=64 * 1024 * 1024)
+        expected = hashlib.sha256(captured).hexdigest()
         with tempfile.TemporaryDirectory(prefix="image-reader-home-") as home:
             staged = Path(home).resolve() / path.name
             staged.write_bytes(captured)

@@ -63,16 +63,19 @@ def validate_snapshot(folder, captures=None, *, total_limit=None):
         from .decoding import image_info
 
         decoded = {}
+        checked = set()
         for item in entries:
             if "file" in item and any(
                 key in item for key in ("width", "height", "size")
             ):
                 name = item["file"]
-                if name not in decoded:
-                    decoded[name] = image_info(
+                # Decoding depends only on bytes, so one content hash decodes once.
+                if actual[name] not in decoded:
+                    decoded[actual[name]] = image_info(
                         safe_path(folder, name), expected_sha256=actual[name]
                     )
-                width, height, _ = decoded[name]
+                width, height, _ = decoded[actual[name]]
+                checked.add(name)
                 for key, value in (
                     ("width", width),
                     ("height", height),
@@ -82,7 +85,7 @@ def validate_snapshot(folder, captures=None, *, total_limit=None):
                         raise ValueError(
                             "snapshot image dimensions differ from captured bytes"
                         )
-        for name in decoded:
+        for name in checked:
             if file_digest(safe_path(folder, name)) != actual[name]:
                 raise ValueError("snapshot image changed during dimension validation")
     if file_digest(manifest_path) != observed[manifest_path]:

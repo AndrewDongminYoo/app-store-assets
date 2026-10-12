@@ -17,7 +17,7 @@ from .contracts import (
     target_identity,
     version,
 )
-from .records import read_text, record_digest, safe_path
+from .records import FILE_LIMIT, read_text, record_digest, safe_path
 
 PUBLIC_FIELDS = {
     "name",
@@ -172,7 +172,9 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
         if manifest.name != "manifest.json":
             raise ValueError("source snapshot must name manifest.json")
         # Binding its whole inventory puts the snapshot into every plan's inputs.
-        source = validate_snapshot(manifest.parent, captures)["record"]
+        source = validate_snapshot(manifest.parent, captures, total_limit=FILE_LIMIT)[
+            "record"
+        ]
         if (
             source.get("type") not in ("metadata-snapshot", "metadata-import")
             or source.get("target") != clean["target"]
