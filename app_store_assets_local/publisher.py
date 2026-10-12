@@ -105,13 +105,18 @@ def snapshot_manifest(record, files):
                     record["target"]["platform"],
                 )
             else:
-                from app_store_assets.decoding import image_info
+                from app_store_assets.decoding import image_bytes, image_info
 
                 decoded = {}
+                checked = set()
                 for item in entries:
                     if "file" not in item:
                         continue
                     name = item["file"]
+                    if name not in checked:
+                        # Every file keeps its own signature/name/extension check.
+                        image_bytes(folder / name, expected_sha256=hashes[name])
+                        checked.add(name)
                     # Decoding depends only on bytes, so one content hash decodes once.
                     if hashes[name] not in decoded:
                         decoded[hashes[name]] = image_info(

@@ -38,6 +38,18 @@ class PublisherFinalBatch(unittest.TestCase):
             )
         self.assertEqual(decode.call_count, 1)
 
+    def test_cached_decode_still_checks_each_image_name(self):
+        data = png(16, 16)
+        sha = hashlib.sha256(data).hexdigest()
+        images = [
+            {"file": name, "sha256": sha, "width": 16, "height": 16}
+            for name in ("images/a.png", "images/b.jpg")
+        ]
+        with self.assertRaisesRegex(ValueError, "extension"):
+            module("publisher").snapshot_manifest(
+                self.record(images), {item["file"]: data for item in images}
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
