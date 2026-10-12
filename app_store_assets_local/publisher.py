@@ -14,6 +14,7 @@ from app_store_assets.records import (
     canonical,
     capture_bytes,
     record_digest,
+    safe_path,
 )
 from app_store_assets.snapshots import validate_snapshot
 
@@ -115,14 +116,15 @@ def snapshot_manifest(record, files):
                     if "file" not in item:
                         continue
                     name = item["file"]
+                    staged_path = safe_path(folder, name)
                     if name not in checked:
                         # Every file keeps its own signature/name/extension check.
-                        image_bytes(folder / name, expected_sha256=hashes[name])
+                        image_bytes(staged_path, expected_sha256=hashes[name])
                         checked.add(name)
                     # Decoding depends only on bytes, so one content hash decodes once.
                     if hashes[name] not in decoded:
                         decoded[hashes[name]] = image_info(
-                            folder / name, expected_sha256=hashes[name]
+                            staged_path, expected_sha256=hashes[name]
                         )
                     width, height, _ = decoded[hashes[name]]
                     for key, value in (
