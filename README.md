@@ -101,7 +101,8 @@ See [the rollout](docs/plans/2026-10-07-rollout.md) and [the first-stage contrac
 
 ## Offline read commands
 
-`python3 -B -m app_store_assets doctor|plan|diff --root PROJECT --target NAME`
+`python3 -B -m app_store_assets COMMAND --root PROJECT --target NAME`, where
+`COMMAND` is one of `doctor`, `plan` or `diff`,
 uses an explicitly pinned local runtime and supplied public records. `plan` is
 an intent record with `executable: false`; no command constructs a provider or
 writes project state. `diff` additionally takes `--before` and `--after`.
@@ -113,8 +114,10 @@ inventory and each app/platform/account/flavor/stage/version/track identity.
 Unknown keys and malformed nested values fail closed in every target, including
 unselected targets. Public metadata URL queries accept only `lang`, `hl` or
 `locale` with a locale value; credential queries and fragments are rejected.
-All file reads reject symlinks in any component and private name patterns in any
-component, capture bounded bytes, and bind parsed bytes to final hashes.
+All file reads reject symlinks in any component. Private name patterns are
+rejected in every component of a raw path, and in every component below the
+trusted root of a `safe_path` result; that root's trusted absolute ancestors are
+not re-checked. Reads capture bounded bytes and bind parsed bytes to final hashes.
 Snapshots validate the complete supported record as well as their address and
 exact file inventory. Python validators are authoritative; the JSON schema files
 are structural summaries and do not replace runtime validation.
