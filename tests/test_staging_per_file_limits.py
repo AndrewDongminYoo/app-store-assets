@@ -1,4 +1,4 @@
-"""Staging captures each entry within its image or text bound, not the total."""
+"""Staging captures each entry within its image, artifact or text bound."""
 
 import hashlib
 import tempfile
@@ -58,6 +58,33 @@ class StagingPerFileLimits(unittest.TestCase):
                 self.root, destination, self.expected(["notes.txt"])
             )
         self.assertFalse(destination.exists())
+
+    def test_artifacts_are_bounded_only_by_the_remaining_total(self):
+        staging = module("staging")
+        text_limit = module("records").TEXT_LIMIT
+        (self.root / "app.aab").write_bytes(b"a" * (text_limit + 1))
+        (self.root / "app.apk").write_bytes(b"PK")
+        (self.root / "app.ipa").write_bytes(b"PK")
+        limits = {}
+        original = staging.capture_bytes
+
+        def capture(path, *, limit):
+            limits[Path(path).name] = limit
+            return original(path, limit=limit)
+
+        destination = self.output / "staged"
+        with patch.object(staging, "capture_bytes", capture):
+            staging.stage_inventory(
+                self.root,
+                destination,
+                self.expected(["app.aab", "app.apk", "app.ipa"]),
+            )
+        self.assertEqual(set(limits), {"app.aab", "app.apk", "app.ipa"})
+        self.assertTrue(all(limit > text_limit for limit in limits.values()))
+        self.assertEqual(
+            (destination / "app.aab").read_bytes(),
+            (self.root / "app.aab").read_bytes(),
+        )
 
 
 if __name__ == "__main__":
