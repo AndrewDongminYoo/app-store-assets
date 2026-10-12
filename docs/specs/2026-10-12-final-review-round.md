@@ -40,3 +40,6 @@ The reader CLI and PR7's local write CLI print one line and exit with status 2 f
 
 Export decodes each image's pixel stream once per content hash before it publishes the editing tree.
 An existing snapshot winner is validated under `total_limit=FILE_LIMIT`.
+An imported listing keeps its release notes inline and names its history snapshot only as `source_snapshot`; it writes no `changelogs`.
+Local snapshot publication rejects records that carry `changelogs`.
+Export resolves a metadata snapshot's `changelogs` against that snapshot, so their notes are exported and a reference missing from the snapshot inventory rejects before any output.
