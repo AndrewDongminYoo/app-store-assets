@@ -39,6 +39,15 @@ class PublisherTextLimit(unittest.TestCase):
             publisher.publish_snapshot(state, self.record(), {"notes.txt": source})
         self.assertEqual(limits, [publisher.TEXT_LIMIT])
 
+    def test_supplied_text_bytes_are_capped_at_the_text_limit(self):
+        publisher = module("publisher")
+        state = self.root / "state"
+        state.mkdir()
+        payload = b"x" * (publisher.TEXT_LIMIT + 1)
+        with self.assertRaisesRegex(ValueError, "text"):
+            publisher.publish_snapshot(state, self.record(), {"notes.txt": payload})
+        self.assertEqual(list(state.iterdir()), [])
+
 
 if __name__ == "__main__":
     unittest.main()

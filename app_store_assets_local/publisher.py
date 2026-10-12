@@ -63,6 +63,8 @@ def snapshot_manifest(record, files):
             raise ValueError("snapshot requires captured bytes")
         if name in image_names and len(data) > IMAGE_LIMIT:
             raise ValueError("snapshot image exceeds individual byte bound")
+        if name not in image_names and len(data) > TEXT_LIMIT:
+            raise ValueError("snapshot text exceeds individual byte bound")
         total += len(data)
         if total > FILE_LIMIT:
             raise ValueError("snapshot exceeds total captured byte bound")
@@ -155,6 +157,8 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
         if isinstance(source, bytes):
             if name in image_names and len(source) > IMAGE_LIMIT:
                 raise ValueError("snapshot image exceeds individual byte bound")
+            if name not in image_names and len(source) > TEXT_LIMIT:
+                raise ValueError("snapshot text exceeds individual byte bound")
             captured[name] = budget.take(source)
     for name, source in files.items():
         if not isinstance(source, bytes):
