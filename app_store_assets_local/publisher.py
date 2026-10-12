@@ -96,7 +96,12 @@ def snapshot_manifest(record, files):
             if record["type"] == "asset-manifest":
                 from app_store_assets.catalog import validate_images
 
-                validate_images(folder, record["assets"], record["target"]["store"])
+                validate_images(
+                    folder,
+                    record["assets"],
+                    record["target"]["store"],
+                    record["target"]["platform"],
+                )
             else:
                 from app_store_assets.decoding import image_info
 

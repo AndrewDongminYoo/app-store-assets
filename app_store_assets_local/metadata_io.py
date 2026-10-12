@@ -340,7 +340,11 @@ def import_metadata(
         for slot, items in groups.items()
         for item in items
     ]
-    validated = validate_images(source, entries, target["store"]) if entries else []
+    validated = (
+        validate_images(source, entries, target["store"], target["platform"])
+        if entries
+        else []
+    )
     for item in validated:
         if item["sha256"] != expected[item["file"]]:
             raise ValueError("metadata image changed outside bound inventory")
