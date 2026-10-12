@@ -1,4 +1,4 @@
-"""Imported listings bind their changelogs to the named history snapshot."""
+"""Imported listings keep notes inline and stay bound to their history snapshot."""
 
 import json
 import unittest
@@ -8,7 +8,7 @@ from test_offline_boundaries import snapshot_fixture
 
 
 class ImportedHistoryBinding(unittest.TestCase):
-    def test_tampered_history_changelog_rejects_after_import(self):
+    def test_import_listing_keeps_notes_inline_and_binds_history(self):
         root, profile = fixture(self)
         target = module("profiles").target_identity(profile["targets"]["production"])
         record = {
@@ -25,9 +25,8 @@ class ImportedHistoryBinding(unittest.TestCase):
             root, source, target, "listing.json", "state", metadata_only=True
         )
         listing = json.loads((root / result["listing"]).read_text())
-        # Only the history snapshot may vouch for the changelog bytes.
-        listing.pop("release_notes")
-        listing["fields"]["en-US"].pop("release_notes", None)
+        self.assertNotIn("changelogs", listing)
+        self.assertEqual(listing["release_notes"], {"en-US": "Public notes"})
         metadata = module("metadata")
         clean = metadata.resolve_changelogs(root, listing, target, {})
         self.assertEqual(clean["release_notes"], {"en-US": "Public notes"})

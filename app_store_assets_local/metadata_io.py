@@ -439,7 +439,7 @@ def import_metadata(
             "target": target,
             "fields": fields,
             "images": images,
-            "changelogs": changelogs,
+            # The history snapshot is provenance only; the listing keeps notes inline.
             "release_notes": notes,
             "source_snapshot": history.relative_to(root).as_posix() + "/manifest.json",
         },
