@@ -138,10 +138,11 @@ def _selected_notes(record):
         ]
         if len(matches) > 1:
             raise ValueError("ambiguous selected track release notes")
-        supplied = matches[0].get("notes", {}) if matches else {}
-        if notes and notes != supplied:
-            raise ValueError("conflicting selected release notes")
-        notes = copy.deepcopy(supplied)
+        if matches:
+            supplied = matches[0].get("notes", {})
+            if notes and notes != supplied:
+                raise ValueError("conflicting selected release notes")
+            notes = copy.deepcopy(supplied)
     return notes
 
 
@@ -153,9 +154,11 @@ def selected_notes(record):
 
 
 def resolve_changelogs(root, record, target, captures, *, content_root=None):
-    """Bind referenced notes to their record's content base before normalization."""
-    from .snapshots import validate_snapshot
+    """Bind referenced notes to their record's content base before normalization.
 
+    Callers validate a snapshot content root before passing it; directory names
+    are never inferred to be snapshots.
+    """
     clean = validate_public_metadata(record, target)
     if clean.get("changelogs"):
         notes = _selected_notes(clean)
@@ -170,8 +173,6 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
                     break
                 if not parent.resolve().is_relative_to(boundary):
                     raise ValueError("changelog path must stay inside the project")
-                if len(parent.name) == 64:
-                    validate_snapshot(parent, captures)
             note = read_text(path, captures)
             if locale_name in notes and notes[locale_name] != note:
                 raise ValueError("conflicting inline and changelog release notes")
