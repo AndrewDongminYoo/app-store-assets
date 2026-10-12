@@ -156,12 +156,21 @@ def selected_notes(record):
 def resolve_changelogs(root, record, target, captures, *, content_root=None):
     """Bind referenced notes to their record's content base before normalization.
 
-    Callers validate a snapshot content root before passing it; directory names
-    are never inferred to be snapshots.
+    Callers validate a snapshot content root before passing it, and a record's
+    named `source_snapshot` is validated here; directory names are never
+    inferred to be snapshots.
     """
+    from .snapshots import validate_snapshot
+
     clean = validate_public_metadata(record, target)
     if clean.get("changelogs"):
         notes = _selected_notes(clean)
+        if "source_snapshot" in clean:
+            manifest = safe_path(root, clean["source_snapshot"])
+            if manifest.name != "manifest.json":
+                raise ValueError("source snapshot must name manifest.json")
+            # Binding its inventory makes changelogs below it match the snapshot.
+            validate_snapshot(manifest.parent, captures)
         boundary = Path(root).resolve()
         content = root if content_root is None else content_root
         if not Path(content).resolve().is_relative_to(boundary):
