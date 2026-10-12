@@ -200,7 +200,7 @@ def validate_images(root, entries, store, platform):
         captured = capture_bytes(path, limit=64 * 1024 * 1024)
         expected = hashlib.sha256(captured).hexdigest()
         with tempfile.TemporaryDirectory(prefix="image-reader-home-") as home:
-            staged = Path(home).resolve() / path.name
+            staged = safe_path(Path(home).resolve(), path.name)
             staged.write_bytes(captured)
             fmt, header = encoded_format(staged, expected_sha256=expected)
             # Decoding depends only on bytes; each entry name is checked above.

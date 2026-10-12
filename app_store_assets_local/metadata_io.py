@@ -228,7 +228,7 @@ def export_metadata(
                 if hashlib.sha256(data).hexdigest() != image["sha256"]:
                     raise ValueError("download bytes changed during export")
                 with tempfile.TemporaryDirectory(prefix="public-export-image-") as home:
-                    staged = Path(home).resolve() / source.name
+                    staged = safe_path(Path(home).resolve(), source.name)
                     staged.write_bytes(data)
                     fmt, _ = encoded_format(staged, expected_sha256=image["sha256"])
                     # Decode the pixel stream so an export never publishes an
