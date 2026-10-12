@@ -15,8 +15,7 @@ class ImageDecodeCache(unittest.TestCase):
         for name in names:
             (self.root / name).write_bytes(data)
         return [
-            {"file": name, "locale": "en-US", "slot": "APP_IPHONE_67"}
-            for name in names
+            {"file": name, "locale": "en-US", "slot": "APP_IPHONE_67"} for name in names
         ]
 
     def test_identical_image_bytes_decode_once_per_validation(self):
