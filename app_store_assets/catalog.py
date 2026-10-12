@@ -178,6 +178,7 @@ def encoded_format(path, *, expected_sha256=None):
 def validate_images(root, entries, store, platform):
     result = []
     seen = set()
+    decoded = {}
     counts = collections.Counter()
     if store not in ("apple", "google") or not isinstance(entries, list):
         raise ValueError("unsupported image store/inventory")
@@ -202,7 +203,10 @@ def validate_images(root, entries, store, platform):
             staged = Path(home).resolve() / path.name
             staged.write_bytes(captured)
             fmt, header = encoded_format(staged, expected_sha256=expected)
-            width, height, alpha = image_info(staged, expected_sha256=expected)
+            # Decoding depends only on bytes; each entry name is checked above.
+            if expected not in decoded:
+                decoded[expected] = image_info(staged, expected_sha256=expected)
+        width, height, alpha = decoded[expected]
         if fmt not in rule["formats"]:
             raise ValueError("image format is unsupported for slot")
         if rule["alpha"] == "forbidden" and alpha:
