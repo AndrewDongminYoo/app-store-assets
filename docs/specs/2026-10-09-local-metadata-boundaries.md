@@ -33,7 +33,9 @@ Darwin `renameatx_np(RENAME_EXCL)` or Linux `renameat2(RENAME_NOREPLACE)` throug
 stdlib ctypes and fails before writes on unsupported systems. Concurrent existing
 winners require a complete typed snapshot/address/hash/inventory match. A local
 snapshot, stage, import or export caps total retained public content at 1 GiB;
-individual images cap at 64 MiB and public text at 8 MiB. Supplied snapshot bytes
+individual images cap at 64 MiB and public text at 8 MiB. Staging classifies an
+entry by suffix: `.apk`, `.aab` and `.ipa` artifacts are bounded only by the
+remaining total, and any other non-image entry is public text. Supplied snapshot bytes
 are charged before path reads, and each later capture uses the remaining total
 budget. Serialized snapshot manifests, export manifests and final listings also
 cap at the reader's 8 MiB before any durable publication. Exactly 8 MiB is accepted.

@@ -18,10 +18,17 @@ from .budgets import CaptureBudget
 from .outputs import preflight_output, publish_tree
 
 IMAGE_SUFFIXES = set().union(*FORMAT_EXTENSIONS.values())
+ARTIFACT_SUFFIXES = {".apk", ".aab", ".ipa"}
 
 
 def entry_limit(name):
-    return IMAGE_LIMIT if PurePosixPath(name).suffix in IMAGE_SUFFIXES else TEXT_LIMIT
+    suffix = PurePosixPath(name).suffix
+    if suffix in IMAGE_SUFFIXES:
+        return IMAGE_LIMIT
+    # Build artifacts share the artifact reader's bound: the remaining total.
+    if suffix in ARTIFACT_SUFFIXES:
+        return FILE_LIMIT
+    return TEXT_LIMIT
 
 
 def stage_inventory(source, destination, expected):
