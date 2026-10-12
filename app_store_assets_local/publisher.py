@@ -30,6 +30,8 @@ def local_record(record):
         "asset-manifest",
     }:
         raise ValueError("local publication supports only metadata and asset records")
+    if record.get("changelogs"):
+        raise ValueError("local publication keeps release notes inline")
 
 
 def image_entries(record):

@@ -26,6 +26,7 @@ from app_store_assets.identity import runtime_inventory
 from app_store_assets.metadata import (
     IMAGE_FIELDS,
     normalize_fields,
+    resolve_changelogs,
     selected_notes,
     validate_public_metadata,
 )
@@ -188,7 +189,10 @@ def export_metadata(
         raise ValueError("export destination overlaps immutable source snapshot")
     captures = {}
     manifest = validate_snapshot(snapshot, captures, total_limit=FILE_LIMIT)
-    record = validate_public_metadata(manifest["record"], target)
+    # Snapshot changelogs resolve against the snapshot so their notes are exported.
+    record = resolve_changelogs(
+        root, manifest["record"], target, captures, content_root=snapshot
+    )
     if record["type"] != "metadata-snapshot":
         raise ValueError("export snapshot target/type differs")
     fields = validate_fields(record.get("fields", {}), target["store"], proposed=False)
