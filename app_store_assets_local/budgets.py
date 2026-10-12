@@ -5,7 +5,13 @@ import os
 import stat
 from pathlib import PurePosixPath
 
-from app_store_assets.records import identity, open_directory, open_read, safe_path
+from app_store_assets.records import (
+    WalkBudget,
+    identity,
+    open_directory,
+    open_read,
+    safe_path,
+)
 
 
 def _hash_file(path, before, limit):
@@ -29,11 +35,11 @@ def _hash_file(path, before, limit):
 
 def bounded_inventory(root, limits, total):
     """Validate the exact tree and reserve all sizes before hashing any file."""
-    sizes = {}
+    sizes, budget = {}, WalkBudget()
 
-    def scan(fd, prefix):
+    def scan(fd, prefix, depth):
         before = identity(os.fstat(fd))
-        for name in sorted(os.listdir(fd)):
+        for name in budget.names(fd, depth):
             relative = (prefix / name).as_posix()
             safe_path(root, relative)
             observed = os.stat(name, dir_fd=fd, follow_symlinks=False)
@@ -42,12 +48,13 @@ def bounded_inventory(root, limits, total):
                     name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd
                 )
                 try:
-                    scan(child, PurePosixPath(relative))
+                    scan(child, PurePosixPath(relative), depth + 1)
                 finally:
                     os.close(child)
             elif stat.S_ISREG(observed.st_mode):
                 if relative not in limits:
                     raise ValueError("added file outside reviewed inventory")
+                budget.charge(observed.st_size, limits[relative])
                 sizes[relative] = observed
             else:
                 raise ValueError("symlink or unsupported editing input type")
@@ -56,7 +63,7 @@ def bounded_inventory(root, limits, total):
 
     try:
         with open_directory(root) as fd:
-            scan(fd, PurePosixPath("."))
+            scan(fd, PurePosixPath("."), 0)
     except OSError as error:
         raise ValueError("unsafe or changed editing directory") from error
     if set(sizes) != set(limits):

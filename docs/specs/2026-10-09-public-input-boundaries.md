@@ -17,6 +17,17 @@ name patterns apply to every relative component before access. JSON/text/image
 and artifact classification consume bounded captured bytes. Parsed/validated
 digests bind final inventory. No pathname re-open can escape confinement.
 Source directory traversal uses directory descriptors with no-follow checks.
+Every reader and import walk shares one bound per traversal, applied while
+entries stream and before sorting: at most 10000 files plus directories
+(`WALK_ENTRY_LIMIT`; excluded root names count but are not descended), at most
+16 directory levels below the walked root (`WALK_DEPTH_LIMIT`), and at most
+`FILE_LIMIT` bytes of digest work in aggregate; `records.inventory` shares one
+bound across all requested paths and counts each requested path as one entry
+before opening it. Each file's read is bounded by its charged size. Staging
+and snapshot publish apply the entry and depth bounds to the planned tree
+(`check_walk_bounds`) before writing it, so a tree their own read-back would
+refuse is never written. `tests/test_bounded_walk.py` holds the
+cases.
 
 Every serialized or published record is fully typed, including nested values,
 target identities, public URLs, provenance, source/export digests and runtime
