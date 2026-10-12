@@ -65,29 +65,30 @@ def validate_snapshot(folder, captures=None, *, total_limit=None):
         decoded = {}
         checked = set()
         for item in entries:
-            if "file" in item and any(
-                key in item for key in ("width", "height", "size")
-            ):
-                name = item["file"]
-                if name not in checked:
-                    # Every file keeps its own signature/name/extension check.
-                    image_bytes(safe_path(folder, name), expected_sha256=actual[name])
-                # Decoding depends only on bytes, so one content hash decodes once.
-                if actual[name] not in decoded:
-                    decoded[actual[name]] = image_info(
-                        safe_path(folder, name), expected_sha256=actual[name]
-                    )
-                width, height, _ = decoded[actual[name]]
+            if "file" not in item:
+                continue
+            name = item["file"]
+            if name not in checked:
+                # Every file-backed image keeps its own signature/name/extension check.
+                image_bytes(safe_path(folder, name), expected_sha256=actual[name])
                 checked.add(name)
-                for key, value in (
-                    ("width", width),
-                    ("height", height),
-                    ("size", [width, height]),
-                ):
-                    if key in item and item[key] != value:
-                        raise ValueError(
-                            "snapshot image dimensions differ from captured bytes"
-                        )
+            if not any(key in item for key in ("width", "height", "size")):
+                continue
+            # Decoding depends only on bytes, so one content hash decodes once.
+            if actual[name] not in decoded:
+                decoded[actual[name]] = image_info(
+                    safe_path(folder, name), expected_sha256=actual[name]
+                )
+            width, height, _ = decoded[actual[name]]
+            for key, value in (
+                ("width", width),
+                ("height", height),
+                ("size", [width, height]),
+            ):
+                if key in item and item[key] != value:
+                    raise ValueError(
+                        "snapshot image dimensions differ from captured bytes"
+                    )
         for name in checked:
             if file_digest(safe_path(folder, name)) != actual[name]:
                 raise ValueError("snapshot image changed during dimension validation")
