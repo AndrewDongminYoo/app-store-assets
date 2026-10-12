@@ -146,6 +146,22 @@ class OfflinePlanningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "policy|replacement|slot"):
             self.plan("images")
 
+    def test_empty_unsupported_image_group_never_reaches_deletion(self):
+        slot, _ = self.images("google")
+        listing = json.loads((self.root / "metadata/listing.json").read_text())
+        listing["images"]["en-US"]["sevenInchScreenshots"] = []
+        write_json(self.root / "metadata/listing.json", listing)
+        policy = self.profile["targets"]["production"]["replacement"]
+        policy["allow_delete"] = True
+        write_json(self.root / "store-upload.json", self.profile)
+        plan = self.plan("images")
+        self.assertEqual(list(plan["payload"]["listing"]["images"]["en-US"]), [slot])
+        self.assertNotIn("sevenInchScreenshots", json.dumps(plan))
+        policy["slots"] = [slot, "sevenInchScreenshots"]
+        write_json(self.root / "store-upload.json", self.profile)
+        with self.assertRaisesRegex(ValueError, "policy differs"):
+            self.plan("images")
+
     def test_changed_source_and_target_invalidates_plan(self):
         plan = self.plan()
         (self.root / "helpers/source.txt").write_text("changed")
