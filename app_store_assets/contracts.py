@@ -88,8 +88,14 @@ HOST_LABEL = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
 
 def valid_hostname(host_port, hostname):
     # Check the raw host first: urlsplit lowercases with str.lower, which maps
-    # some non-ASCII characters (KELVIN SIGN) onto ASCII letters.
-    if not host_port.isascii() or len(hostname) > 253:
+    # some non-ASCII characters (KELVIN SIGN) onto ASCII letters. It also strips
+    # the brackets of an IP literal, so "[v1.foo]" would pass as two labels.
+    if (
+        not host_port.isascii()
+        or "[" in host_port
+        or "]" in host_port
+        or len(hostname) > 253
+    ):
         return False
     labels = hostname.split(".")
     return (

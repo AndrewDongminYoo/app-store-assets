@@ -20,6 +20,8 @@ REJECTED = (
     "https://127.0.0.1",
     "https://example.123",
     "https://[::1]",
+    "https://[v1.foo]",
+    "https://[v1.foo]:443/x",
     "https://a_b.example",
 )
 ACCEPTED = (

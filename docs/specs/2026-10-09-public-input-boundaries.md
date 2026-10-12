@@ -28,7 +28,8 @@ with no IDNA conversion and at most 253 characters. Each dot-separated label,
 compared lowercased, is 1-63 characters of `[a-z0-9-]` with no leading or
 trailing hyphen, so empty labels and a trailing dot fail. `xn--` labels are
 refused, and the last label must contain a letter, which rejects IPv4 literals
-and numeric TLDs; bracketed IPv6 fails the label rule. Failures raise
+and numeric TLDs; a bracketed authority is refused before the label check, so
+IPv6 and IPvFuture literals fail. Failures raise
 `invalid public URL hostname`; `tests/test_public_url_hostname.py` holds the
 accepted and rejected cases.
 These offline policies are explicit acceptance rules, not live store promises.
