@@ -43,7 +43,7 @@ def target_identity(target):
         raise ValueError("Apple has no Google track/release_status")
     result = {key: target[key] for key in IDENTITY_KEYS}
     if target["store"] == "google":
-        result["track"] = target["track"]
+        result["track"] = target.get("track")
     if "account_id" in target:
         result["account_id"] = target["account_id"]
     return validate_identity(result)
