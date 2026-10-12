@@ -83,6 +83,30 @@ def locale(value):
     return value
 
 
+HOST_LABEL = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
+
+
+def valid_hostname(host_port, hostname):
+    # Check the raw host first: urlsplit lowercases with str.lower, which maps
+    # some non-ASCII characters (KELVIN SIGN) onto ASCII letters. It also strips
+    # the brackets of an IP literal, so "[v1.foo]" would pass as two labels.
+    if (
+        not host_port.isascii()
+        or "[" in host_port
+        or "]" in host_port
+        or len(hostname) > 253
+    ):
+        return False
+    labels = hostname.split(".")
+    return (
+        all(HOST_LABEL.fullmatch(label) for label in labels)
+        and not any(label.startswith("xn--") for label in labels)
+        and any(c.isalpha() for c in labels[-1])
+        # WHATWG "ends in a number": a 0x-hex last label is an IPv4 number.
+        and not re.fullmatch(r"0x[0-9a-f]*", labels[-1])
+    )
+
+
 def public_url(value, origin=False):
     public_text(value, "public URL")
     if any(c.isspace() for c in value) or "\\" in value:
@@ -97,6 +121,8 @@ def public_url(value, origin=False):
         or not parsed.hostname
     ):
         raise ValueError("public URL requires protocol and host")
+    if not valid_hostname(parsed.netloc.rpartition("@")[2], parsed.hostname):
+        raise ValueError("invalid public URL hostname")
     if parsed.username is not None or parsed.password is not None or parsed.fragment:
         raise ValueError("credential/fragment URL cannot enter public records")
     seen = set()

@@ -23,6 +23,16 @@ target identities, public URLs, provenance, source/export digests and runtime
 inventory. Unknown keys fail closed. Metadata URL queries are limited to public
 language selectors `lang`, `hl`, `locale`, with locale-shaped values; fragments
 are rejected. Runtime origin URLs accept HTTPS without query/userinfo/fragment.
+Every public URL host (catalog source, metadata or runtime origin) must be ASCII
+with no IDNA conversion and at most 253 characters. Each dot-separated label,
+compared lowercased, is 1-63 characters of `[a-z0-9-]` with no leading or
+trailing hyphen, so empty labels and a trailing dot fail. `xn--` labels are
+refused, and the last label must contain a letter and must not be `0x`
+followed only by hex digits, which rejects decimal and hex IPv4 spellings and
+numeric TLDs; a bracketed authority is refused before the label check, so
+IPv6 and IPvFuture literals fail. Failures raise
+`invalid public URL hostname`; `tests/test_public_url_hostname.py` holds the
+accepted and rejected cases.
 These offline policies are explicit acceptance rules, not live store promises.
 
 Typed validation applies to raw or snapshot inputs and to the final object after
