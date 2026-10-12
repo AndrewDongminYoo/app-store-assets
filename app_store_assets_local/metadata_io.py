@@ -20,7 +20,7 @@ from app_store_assets.contracts import (
     target_identity,
 )
 from app_store_assets.contracts import locale as validate_locale
-from app_store_assets.decoding import IMAGE_LIMIT
+from app_store_assets.decoding import IMAGE_LIMIT, image_info
 from app_store_assets.identity import runtime_inventory
 from app_store_assets.metadata import (
     IMAGE_FIELDS,
@@ -197,6 +197,7 @@ def export_metadata(
             values["release_notes"] = text
     maps = {"fields": [], "images": [], "notes": []}
     files = {}
+    decoded = {}
     budget = CaptureBudget(FILE_LIMIT)
     for locale, values in fields.items():
         for key, value in values.items():
@@ -223,6 +224,12 @@ def export_metadata(
                     staged = Path(home).resolve() / source.name
                     staged.write_bytes(data)
                     fmt, _ = encoded_format(staged, expected_sha256=image["sha256"])
+                    # Decode the pixel stream so an export never publishes an
+                    # image that the matching import would reject.
+                    if image["sha256"] not in decoded:
+                        decoded[image["sha256"]] = image_info(
+                            staged, expected_sha256=image["sha256"]
+                        )
                 name = f"{locale}/images/{folder}/{index + 1:02}." + (
                     "png" if fmt == "PNG" else "jpg"
                 )
