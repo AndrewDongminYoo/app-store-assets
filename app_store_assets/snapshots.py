@@ -60,7 +60,7 @@ def validate_snapshot(folder, captures=None, *, total_limit=None):
             record["target"]["platform"],
         )
     else:
-        from .decoding import image_info
+        from .decoding import image_bytes, image_info
 
         decoded = {}
         checked = set()
@@ -69,6 +69,9 @@ def validate_snapshot(folder, captures=None, *, total_limit=None):
                 key in item for key in ("width", "height", "size")
             ):
                 name = item["file"]
+                if name not in checked:
+                    # Every file keeps its own signature/name/extension check.
+                    image_bytes(safe_path(folder, name), expected_sha256=actual[name])
                 # Decoding depends only on bytes, so one content hash decodes once.
                 if actual[name] not in decoded:
                     decoded[actual[name]] = image_info(

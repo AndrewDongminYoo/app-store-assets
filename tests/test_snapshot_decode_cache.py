@@ -37,6 +37,25 @@ class SnapshotDecodeCache(unittest.TestCase):
             module("snapshots").validate_snapshot(folder)
         self.assertEqual(decode.call_count, 1)
 
+    def test_cached_decode_still_checks_each_image_name(self):
+        data = png(16, 16)
+        sha = hashlib.sha256(data).hexdigest()
+        images = [
+            {"file": name, "sha256": sha, "width": 16, "height": 16}
+            for name in ("images/a.png", "images/b.jpg")
+        ]
+        record = {
+            "schema_version": 1,
+            "type": "metadata-snapshot",
+            "target": self.target,
+            "fields": {},
+            "images": {"en-US": {"APP_IPHONE_67": images}},
+        }
+        files = {item["file"]: data for item in images}
+        folder = snapshot_fixture(self.root / "downloads", record, files)
+        with self.assertRaisesRegex(ValueError, "extension"):
+            module("snapshots").validate_snapshot(folder)
+
 
 if __name__ == "__main__":
     unittest.main()
