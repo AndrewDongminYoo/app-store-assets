@@ -165,7 +165,7 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
     destination = root / record_digest(manifest)
 
     def winner(path):
-        if validate_snapshot(path) != manifest:
+        if validate_snapshot(path, total_limit=FILE_LIMIT) != manifest:
             raise ValueError("existing snapshot cache differs from expected manifest")
 
     publish_tree(
