@@ -9,6 +9,7 @@ from pathlib import Path
 from app_store_assets.catalog import (
     CATALOG_FILE,
     encoded_format,
+    rules,
     validate_fields,
     validate_images,
 )
@@ -69,6 +70,9 @@ APPLE_FOLDERS = {
     "APP_IPAD_PRO_3GEN_129": "ipad3gen129",
 }
 EXPORT_MANIFEST = "store-assets-export.json"
+# The platform per store that the frozen catalog has slots for; mirrors the
+# platform check in catalog.validate_images.
+CATALOG_PLATFORMS = {"apple": "ios", "google": "android"}
 
 
 def confined(root, path):
@@ -205,6 +209,13 @@ def export_metadata(
     maps = {"fields": [], "images": [], "notes": []}
     files = {}
     decoded = {}
+    # Images outside these slots have no catalog rule; they round-trip only
+    # through metadata-only import, so export keeps them without rule checks.
+    catalog_slots = (
+        rules()["stores"][target["store"]]["slots"]
+        if target["platform"] == CATALOG_PLATFORMS[target["store"]]
+        else {}
+    )
     budget = CaptureBudget(FILE_LIMIT)
     for locale, values in fields.items():
         for key, value in values.items():
@@ -231,9 +242,10 @@ def export_metadata(
                     staged = safe_path(Path(home).resolve(), source.name)
                     staged.write_bytes(data)
                     fmt, _ = encoded_format(staged, expected_sha256=image["sha256"])
-                    # Decode the pixel stream so an export never publishes an
-                    # image that the matching import would reject.
-                    if image["sha256"] not in decoded:
+                    # validate_images decodes catalog-covered images below;
+                    # decode the others here so export never publishes an
+                    # image that cannot be decoded.
+                    if slot not in catalog_slots and image["sha256"] not in decoded:
                         decoded[image["sha256"]] = image_info(
                             staged, expected_sha256=image["sha256"]
                         )
@@ -249,6 +261,26 @@ def export_metadata(
                 maps["images"].append(
                     {"locale": locale, "slot": slot, "file": name, "remote": remote}
                 )
+    # Apply the exact image validation that import applies to the
+    # catalog-covered images, so export never claims success for a tree that
+    # cannot round-trip.
+    entries = [
+        dict(
+            {**entry["remote"], "file": entry["file"]},
+            locale=entry["locale"],
+            slot=entry["slot"],
+        )
+        for entry in maps["images"]
+        if entry["slot"] in catalog_slots
+    ]
+    if entries:
+        with tempfile.TemporaryDirectory(prefix="public-export-tree-") as home:
+            staged_root = Path(home).resolve()
+            for entry in entries:
+                staged = safe_path(staged_root, entry["file"])
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                staged.write_bytes(files[entry["file"]])
+            validate_images(staged_root, entries, target["store"], target["platform"])
     notes = selected_notes(record) if target["store"] == "google" else {}
     for locale, text in notes.items():
         name = locale + "/changelogs/" + target["version"]["build"] + ".txt"
