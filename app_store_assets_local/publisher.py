@@ -13,6 +13,7 @@ from app_store_assets.records import (
     TEXT_LIMIT,
     canonical,
     capture_bytes,
+    check_walk_bounds,
     record_digest,
     safe_path,
 )
@@ -146,6 +147,8 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
         public_path(name)
         if not isinstance(source, (bytes, str, Path)):
             raise ValueError("unsupported snapshot source")
+    # The snapshot tree holds the files plus its manifest; reject before writing.
+    check_walk_bounds({*files, "manifest.json"})
     local_record(record)
     image_names = {item["file"] for item in image_entries(record) if "file" in item}
     if expected_hashes is not None:

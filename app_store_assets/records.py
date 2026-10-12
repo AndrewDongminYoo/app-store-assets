@@ -9,6 +9,63 @@ from pathlib import Path, PurePosixPath
 
 TEXT_LIMIT = 8 * 1024 * 1024
 FILE_LIMIT = 1024 * 1024 * 1024
+WALK_ENTRY_LIMIT = 10000
+WALK_DEPTH_LIMIT = 16
+
+
+class WalkBudget:
+    """Entry, depth and aggregate byte bounds shared by one directory traversal."""
+
+    def __init__(self):
+        self.entries = 0
+        self.remaining = FILE_LIMIT
+
+    def count(self):
+        self.entries += 1
+        if self.entries > WALK_ENTRY_LIMIT:
+            raise ValueError("public directory tree exceeds entry bound")
+
+    def names(self, fd, depth):
+        if depth > WALK_DEPTH_LIMIT:
+            raise ValueError("public directory tree exceeds depth bound")
+        names = []
+        with os.scandir(fd) as entries:
+            for entry in entries:
+                self.count()
+                names.append(entry.name)
+        return sorted(names)
+
+    def charge(self, size, limit=None):
+        """Reserve one file's bytes; return the read bound for that file.
+
+        The bound is the charged size, so a file that grows after this stat
+        fails the read's own size check instead of spending uncharged budget.
+        A file over its own per-file bound is left to the per-file check.
+        """
+        limit = FILE_LIMIT if limit is None else limit
+        if size > limit:
+            return limit
+        if size > self.remaining:
+            raise ValueError("public inventory exceeds aggregate byte bound")
+        self.remaining -= size
+        return size
+
+
+def check_walk_bounds(names):
+    """Reject a planned tree that a bounded walk of its root would refuse.
+
+    Writers call this before writing, so an over-bound tree is never left
+    behind by a failed read-back.
+    """
+    entries, deepest = set(), 0
+    for name in names:
+        parts = PurePosixPath(name).parts
+        deepest = max(deepest, len(parts) - 1)
+        entries.update(parts[:index] for index in range(1, len(parts) + 1))
+    if deepest > WALK_DEPTH_LIMIT:
+        raise ValueError("public directory tree exceeds depth bound")
+    if len(entries) > WALK_ENTRY_LIMIT:
+        raise ValueError("public directory tree exceeds entry bound")
 
 
 class _PublicPath(type(Path())):
@@ -204,9 +261,20 @@ def file_digest(path):
         return digest_stream(stream)
 
 
-def _walk(fd, prefix, result, excluded=(), *, reserve=False, reservations=None):
+def _walk(
+    fd,
+    prefix,
+    result,
+    excluded=(),
+    *,
+    reserve=False,
+    reservations=None,
+    budget=None,
+    depth=0,
+):
+    budget = WalkBudget() if budget is None else budget
     before = identity(os.fstat(fd))
-    for name in sorted(os.listdir(fd)):
+    for name in budget.names(fd, depth):
         if name in excluded:
             continue
         relative = str(prefix / name)
@@ -228,11 +296,14 @@ def _walk(fd, prefix, result, excluded=(), *, reserve=False, reservations=None):
                     result,
                     reserve=reserve,
                     reservations=reservations,
+                    budget=budget,
+                    depth=depth + 1,
                 )
             elif stat.S_ISREG(mode):
                 if reserve:
                     if observed.st_size > FILE_LIMIT:
                         raise ValueError("public file exceeds byte bound")
+                    budget.charge(observed.st_size)
                     result[relative] = observed
                 else:
                     if reservations is not None and (
@@ -240,13 +311,12 @@ def _walk(fd, prefix, result, excluded=(), *, reserve=False, reservations=None):
                         or identity(observed) != identity(reservations[relative])
                     ):
                         raise ValueError("public inventory changed after reservation")
+                    limit = budget.charge(
+                        observed.st_size,
+                        observed.st_size if reservations is not None else None,
+                    )
                     with os.fdopen(os.dup(child), "rb") as stream:
-                        result[relative] = digest_stream(
-                            stream,
-                            limit=observed.st_size
-                            if reservations is not None
-                            else FILE_LIMIT,
-                        )
+                        result[relative] = digest_stream(stream, limit=limit)
             else:
                 raise ValueError("unsupported public input type")
         finally:
@@ -263,19 +333,35 @@ def tree_inventory(root, exclude_root=(), *, total_limit=None):
             if type(total_limit) is not int or total_limit < 0:
                 raise ValueError("invalid public inventory byte bound")
             reserved = {}
-            _walk(fd, PurePosixPath("."), reserved, exclude_root, reserve=True)
+            _walk(
+                fd,
+                PurePosixPath("."),
+                reserved,
+                exclude_root,
+                reserve=True,
+                budget=WalkBudget(),
+            )
             if sum(item.st_size for item in reserved.values()) > total_limit:
                 raise ValueError("public inventory exceeds total byte bound")
-        _walk(fd, PurePosixPath("."), result, exclude_root, reservations=reserved)
+        _walk(
+            fd,
+            PurePosixPath("."),
+            result,
+            exclude_root,
+            reservations=reserved,
+            budget=WalkBudget(),
+        )
         if reserved is not None and set(result) != set(reserved):
             raise ValueError("public inventory changed after reservation")
     return dict(sorted(result.items()))
 
 
 def inventory(root, paths):
-    root, result = Path(root).absolute(), {}
+    root, result, budget = Path(root).absolute(), {}, WalkBudget()
     for name in sorted(set(paths)):
         path = safe_path(root, name)
+        # Each requested path is one entry, counted before it is opened.
+        budget.count()
         try:
             with open_directory(path.parent) as parent:
                 fd = os.open(
@@ -288,10 +374,11 @@ def inventory(root, paths):
         try:
             mode = os.fstat(fd).st_mode
             if stat.S_ISDIR(mode):
-                _walk(fd, PurePosixPath(name), result)
+                _walk(fd, PurePosixPath(name), result, budget=budget)
             elif stat.S_ISREG(mode):
+                limit = budget.charge(os.fstat(fd).st_size)
                 with os.fdopen(os.dup(fd), "rb") as stream:
-                    result[name] = digest_stream(stream)
+                    result[name] = digest_stream(stream, limit=limit)
             else:
                 raise ValueError("unsupported public input type")
         finally:

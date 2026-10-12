@@ -9,6 +9,7 @@ from app_store_assets.records import (
     FILE_LIMIT,
     TEXT_LIMIT,
     capture_bytes,
+    check_walk_bounds,
     open_directory,
     safe_path,
     verify_inventory,
@@ -35,6 +36,7 @@ def stage_inventory(source, destination, expected):
     source = Path(source).absolute()
     destination = Path(destination).absolute()
     hash_inventory(expected)
+    check_walk_bounds(expected)
     # Even an empty inventory must validate the source root without symlinks.
     try:
         with open_directory(source):
