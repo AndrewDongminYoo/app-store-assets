@@ -15,6 +15,7 @@ from app_store_assets.catalog import (
 from app_store_assets.contracts import (
     digest,
     exact_keys,
+    image_count,
     image_entry,
     public_path,
     target_identity,
@@ -112,6 +113,8 @@ def validate_export(value, target):
     for group in ("fields", "images", "notes"):
         if not isinstance(value[group], list):
             raise ValueError("invalid public export entries")
+        if group == "images":
+            image_count(len(value[group]))
         for entry in value[group]:
             required = {"locale", "file"} | (
                 {"key"}
