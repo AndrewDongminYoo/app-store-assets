@@ -175,12 +175,15 @@ def encoded_format(path, *, expected_sha256=None):
     return fmt, data[:26]
 
 
-def validate_images(root, entries, store):
+def validate_images(root, entries, store, platform):
     result = []
     seen = set()
     counts = collections.Counter()
     if store not in ("apple", "google") or not isinstance(entries, list):
         raise ValueError("unsupported image store/inventory")
+    # The frozen catalog has no macOS slots; reject before any slot rule applies.
+    if platform != {"apple": "ios", "google": "android"}[store]:
+        raise ValueError(f"{platform} images lack a supported catalog platform")
     for entry in entries:
         image_entry(entry, grouped=True, required_file=True)
         path = safe_path(root, entry["file"])

@@ -101,7 +101,9 @@ def make_plan(root, profile_path, target_name, operation):
             ]
             if not entries:
                 raise ValueError("empty image listing")
-            validated = validate_images(root, entries, target["store"])
+            validated = validate_images(
+                root, entries, target["store"], identity["platform"]
+            )
             for item in validated:
                 bind_capture(captures, safe_path(root, item["file"]), item["sha256"])
             if set(policy["locales"]) != {i["locale"] for i in validated} or set(

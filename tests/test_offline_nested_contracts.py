@@ -68,7 +68,7 @@ class NestedContractTests(unittest.TestCase):
         ):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 module("catalog").validate_images(
-                    self.root, [dict(entry, **{key: value})], "apple"
+                    self.root, [dict(entry, **{key: value})], "apple", "ios"
                 )
 
     def test_direct_container_classifier_never_follows_leaf_or_parent_symlink(self):
