@@ -115,7 +115,8 @@ def validate_assets(record, target=None):
         raise ValueError("asset manifest target differs")
     exact_keys(record["provenance"], {"status"}, {"status"})
     public_text(record["provenance"]["status"], "asset provenance")
-    if record["provenance"]["status"] not in {"widget-rendered", "unverified-import"}:
+    # No capture-time build evidence is bound here, so no stronger claim is accepted.
+    if record["provenance"]["status"] != "unverified-import":
         raise ValueError("unsupported asset provenance declaration")
     if not isinstance(record["assets"], list) or not record["assets"]:
         raise ValueError("empty asset manifest inventory")

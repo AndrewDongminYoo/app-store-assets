@@ -11,6 +11,9 @@ It rejects any platform the frozen catalog has no slots for (`macos` today) befo
 Every image-validation path passes the platform: offline image plans, the snapshot reader, local import and snapshot publication.
 Text-only metadata for `macos` stays supported.
 
+Asset manifests and image plans accept only `unverified-import` provenance.
+No capture-time build evidence is bound in this package, so a `widget-rendered` label alone is rejected (AGENTS.md: an imported image is never promoted without that evidence).
+
 One `validate_images` call decodes each content hash once.
 Every entry still gets its own name, extension, hash, slot and count checks.
 One listing, asset manifest or `validate_images` call holds at most `IMAGE_ENTRY_LIMIT` (2000) image entries, checked before any entry is read.

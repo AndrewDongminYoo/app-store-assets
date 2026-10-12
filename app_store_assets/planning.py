@@ -132,10 +132,7 @@ def make_plan(root, profile_path, target_name, operation):
                     or assets.get("target") != identity
                 ):
                     raise ValueError("asset manifest target/version differs")
-                if assets.get("provenance", {}).get("status") not in (
-                    "widget-rendered",
-                    "unverified-import",
-                ):
+                if assets.get("provenance", {}).get("status") != "unverified-import":
                     raise ValueError("unsupported asset provenance declaration")
                 prefix = manifest_path.parent.relative_to(root)
                 intended = [
