@@ -99,7 +99,7 @@ class IndependentReviewProbes(unittest.TestCase):
             "height": 1,
         }
         with self.assertRaises(ValueError):
-            module("catalog").validate_images(self.root, [entry], "google")
+            module("catalog").validate_images(self.root, [entry], "google", "android")
 
     def test_snapshot_asset_dimensions_agree_with_captured_bytes(self):
         import hashlib

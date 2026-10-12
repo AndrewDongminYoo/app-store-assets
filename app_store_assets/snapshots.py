@@ -53,7 +53,12 @@ def validate_snapshot(folder, captures=None, *, total_limit=None):
     if record["type"] == "asset-manifest":
         from .catalog import validate_images
 
-        validate_images(folder, record["assets"], record["target"]["store"])
+        validate_images(
+            folder,
+            record["assets"],
+            record["target"]["store"],
+            record["target"]["platform"],
+        )
     else:
         from .decoding import image_info
 
