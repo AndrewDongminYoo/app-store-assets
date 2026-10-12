@@ -19,6 +19,8 @@ Every entry still gets its own name, extension, hash, slot and count checks.
 One listing, asset manifest or `validate_images` call holds at most `IMAGE_ENTRY_LIMIT` (2000) image entries, checked before any entry is read.
 The value is 40 locales at the frozen catalog's 50-image Apple maximum per locale.
 Distinct decodes cannot exceed entries, so the same limit bounds them.
+Every image is captured within its 64 MiB bound before any hash, and metadata snapshot validation and publication also decode each content hash once.
+A named `source_snapshot` is validated under `total_limit=FILE_LIMIT`, and path-backed non-image publication payloads are captured under `TEXT_LIMIT`.
 
 ## Changelog content bases
 
