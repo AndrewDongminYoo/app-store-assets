@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from offline_support import fixture, module
+from offline_support import fixture, module, write_json
 from test_offline_boundaries import snapshot_fixture
 
 
@@ -56,6 +56,26 @@ class NamedSourceSnapshot(unittest.TestCase):
         self.note.write_text("Tampered notes")
         with self.assertRaisesRegex(ValueError, "snapshot"):
             self.resolve()
+
+    def test_changelog_outside_the_named_snapshot_rejects(self):
+        (self.root / "notes.txt").write_text("Unrelated notes")
+        self.record["changelogs"] = {"en-US": "notes.txt"}
+        with self.assertRaisesRegex(ValueError, "named source snapshot"):
+            self.resolve()
+
+    def test_source_snapshot_without_changelogs_is_bound_into_the_plan(self):
+        self.record.pop("changelogs")
+        write_json(self.root / "metadata/listing.json", self.record)
+        planning = module("planning")
+        plan = planning.make_plan(
+            self.root, "store-upload.json", "production", "metadata"
+        )
+        self.assertIn(
+            self.note.relative_to(self.root).as_posix(), plan["payload"]["inputs"]
+        )
+        self.note.write_text("Tampered notes")
+        with self.assertRaises(ValueError):
+            planning.verify_plan(self.root, plan)
 
     def test_source_snapshot_must_name_a_manifest(self):
         self.record["source_snapshot"] = self.record["changelogs"]["en-US"]

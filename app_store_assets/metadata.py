@@ -8,6 +8,7 @@ from .contracts import (
     digest,
     exact_keys,
     hash_inventory,
+    image_count,
     image_entry,
     locale,
     public_path,
@@ -156,21 +157,23 @@ def selected_notes(record):
 def resolve_changelogs(root, record, target, captures, *, content_root=None):
     """Bind referenced notes to their record's content base before normalization.
 
-    Callers validate a snapshot content root before passing it, and a record's
-    named `source_snapshot` is validated here; directory names are never
-    inferred to be snapshots.
+    Callers validate a snapshot content root before passing it. A record's named
+    `source_snapshot` is validated and bound here, and its changelogs must be
+    files of that snapshot. Directory names are never inferred to be snapshots.
     """
     from .snapshots import validate_snapshot
 
     clean = validate_public_metadata(record, target)
+    snapshot = None
+    if "source_snapshot" in clean:
+        manifest = safe_path(root, clean["source_snapshot"])
+        if manifest.name != "manifest.json":
+            raise ValueError("source snapshot must name manifest.json")
+        # Binding its whole inventory puts the snapshot into every plan's inputs.
+        snapshot = manifest.parent.resolve()
+        files = validate_snapshot(manifest.parent, captures)["files"]
     if clean.get("changelogs"):
         notes = _selected_notes(clean)
-        if "source_snapshot" in clean:
-            manifest = safe_path(root, clean["source_snapshot"])
-            if manifest.name != "manifest.json":
-                raise ValueError("source snapshot must name manifest.json")
-            # Binding its inventory makes changelogs below it match the snapshot.
-            validate_snapshot(manifest.parent, captures)
         boundary = Path(root).resolve()
         content = root if content_root is None else content_root
         if not Path(content).resolve().is_relative_to(boundary):
@@ -182,6 +185,11 @@ def resolve_changelogs(root, record, target, captures, *, content_root=None):
                     break
                 if not parent.resolve().is_relative_to(boundary):
                     raise ValueError("changelog path must stay inside the project")
+            if snapshot is not None and (
+                not path.resolve().is_relative_to(snapshot)
+                or path.resolve().relative_to(snapshot).as_posix() not in files
+            ):
+                raise ValueError("changelog is outside the named source snapshot")
             note = read_text(path, captures)
             if locale_name in notes and notes[locale_name] != note:
                 raise ValueError("conflicting inline and changelog release notes")
@@ -269,6 +277,7 @@ def validate_public_metadata(record, target):
     images = clean.get("images", {})
     if not isinstance(images, dict):
         raise ValueError("unsupported public image mapping")
+    count = 0
     for name, groups in images.items():
         locale(name)
         if not isinstance(groups, dict):
@@ -277,6 +286,8 @@ def validate_public_metadata(record, target):
             image_entry({"locale": name, "slot": slot}, grouped=True)
             if not isinstance(items, list):
                 raise ValueError("unsupported public image group")
+            count += len(items)
+            image_count(count)
             for item in items:
                 image_entry(item)
     if "effects" in clean:

@@ -2,6 +2,7 @@
 
 The operator approved one more bounded repair round on 2026-10-12 for the findings left open at PR6 `cc2e2d1` and PR7 `e6c6e1e`.
 It supersedes the earlier "no further repair" boundary in both PR bodies; merge still requires clean exact-head gates.
+The same day the operator approved a second round, for the gaps found at PR6 `9ab4763` and PR7 `22e8207`, and set a total image entry limit; the sections below state the contract after both rounds.
 
 ## Image platform contract
 
@@ -12,20 +13,22 @@ Text-only metadata for `macos` stays supported.
 
 One `validate_images` call decodes each content hash once.
 Every entry still gets its own name, extension, hash, slot and count checks.
-Distinct images still cost one decode each, and the total entry count has no separate cap.
+One listing, asset manifest or `validate_images` call holds at most `IMAGE_ENTRY_LIMIT` (2000) image entries, checked before any entry is read.
+The value is 40 locales at the frozen catalog's 50-image Apple maximum per locale.
+Distinct decodes cannot exceed entries, so the same limit bounds them.
 
 ## Changelog content bases
 
 Changelog resolution never infers a snapshot from a directory name.
 A snapshot content root that a caller passes is validated by that caller first.
-A record that names `source_snapshot` must name a `manifest.json`, and that snapshot is validated and its inventory bound before any changelog is read.
-So a changelog below an imported listing's history snapshot must match that snapshot's inventory (contract 1 of `2026-10-09-additional-input-bindings.md`).
+A record that names `source_snapshot` must name a `manifest.json`, and that snapshot is validated and its inventory bound whether or not the record has changelogs, so plans list its files as inputs.
+Each changelog of such a record must be a file of that snapshot, and its text must match the snapshot's inventory (contract 1 of `2026-10-09-additional-input-bindings.md`).
 
 ## Google release notes and CLI status
 
 A Google record whose releases do not include the target build keeps its top-level notes.
 A release that includes the target build still rejects conflicting notes.
-The CLI prints one line and exits with status 2 for subprocess timeouts and `RecursionError`.
+The reader CLI and PR7's local write CLI print one line and exit with status 2 for subprocess timeouts and `RecursionError`.
 
 ## Local publication (PR7)
 
