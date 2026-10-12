@@ -56,6 +56,26 @@ class SnapshotDecodeCache(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "extension"):
             module("snapshots").validate_snapshot(folder)
 
+    def test_unannotated_image_files_still_get_signature_and_name_checks(self):
+        data = b"not an image"
+        image = {"file": "images/a.png", "sha256": hashlib.sha256(data).hexdigest()}
+        record = {
+            "schema_version": 1,
+            "type": "metadata-snapshot",
+            "target": self.target,
+            "fields": {},
+            "images": {"en-US": {"APP_IPHONE_67": [image]}},
+        }
+        folder = snapshot_fixture(
+            self.root / "downloads", record, {image["file"]: data}
+        )
+        decoding = module("decoding")
+        with patch.object(
+            decoding, "image_info", side_effect=AssertionError("decoded")
+        ):
+            with self.assertRaisesRegex(ValueError, "signature"):
+                module("snapshots").validate_snapshot(folder)
+
 
 if __name__ == "__main__":
     unittest.main()
