@@ -112,11 +112,12 @@ def snapshot_manifest(record, files):
                     if "file" not in item:
                         continue
                     name = item["file"]
-                    if name not in decoded:
-                        decoded[name] = image_info(
+                    # Decoding depends only on bytes, so one content hash decodes once.
+                    if hashes[name] not in decoded:
+                        decoded[hashes[name]] = image_info(
                             folder / name, expected_sha256=hashes[name]
                         )
-                    width, height, _ = decoded[name]
+                    width, height, _ = decoded[hashes[name]]
                     for key, value in (
                         ("width", width),
                         ("height", height),
