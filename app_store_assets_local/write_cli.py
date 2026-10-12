@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -64,6 +65,13 @@ def main(argv=None):
             )
         print(json.dumps(result, sort_keys=True, ensure_ascii=False))
         return 0
-    except (ValueError, OSError, KeyError, TypeError) as error:
+    except (
+        ValueError,
+        OSError,
+        KeyError,
+        TypeError,
+        RecursionError,
+        subprocess.SubprocessError,
+    ) as error:
         print(str(error), file=sys.stderr)
         return 2
