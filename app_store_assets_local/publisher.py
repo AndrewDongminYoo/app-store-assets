@@ -156,7 +156,7 @@ def publish_snapshot(root, record, files, expected_hashes=None, *, _context_guar
             captured[name] = budget.read(
                 source,
                 capture_bytes,
-                per_file=IMAGE_LIMIT if name in image_names else None,
+                per_file=IMAGE_LIMIT if name in image_names else TEXT_LIMIT,
             )
     manifest = snapshot_manifest(record, captured)
     manifest_bytes = bounded_json(manifest, canonical, TEXT_LIMIT)
