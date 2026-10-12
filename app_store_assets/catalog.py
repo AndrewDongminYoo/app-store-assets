@@ -5,7 +5,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from .contracts import exact_keys, image_entry, public_text, public_url
+from .contracts import exact_keys, image_count, image_entry, public_text, public_url
 from .decoding import image_bytes, image_info
 from .metadata import normalize_fields
 from .records import capture_bytes, file_digest, read_json, safe_path
@@ -182,6 +182,7 @@ def validate_images(root, entries, store, platform):
     counts = collections.Counter()
     if store not in ("apple", "google") or not isinstance(entries, list):
         raise ValueError("unsupported image store/inventory")
+    image_count(len(entries))
     # The frozen catalog has no macOS slots; reject before any slot rule applies.
     if platform != {"apple": "ios", "google": "android"}[store]:
         raise ValueError(f"{platform} images lack a supported catalog platform")

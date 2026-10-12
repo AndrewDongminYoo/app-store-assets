@@ -6,6 +6,7 @@ from .contracts import (
     digest,
     exact_keys,
     hash_inventory,
+    image_count,
     image_entry,
     public_path,
     public_text,
@@ -118,6 +119,7 @@ def validate_assets(record, target=None):
         raise ValueError("unsupported asset provenance declaration")
     if not isinstance(record["assets"], list) or not record["assets"]:
         raise ValueError("empty asset manifest inventory")
+    image_count(len(record["assets"]))
     names = set()
     for item in record["assets"]:
         image_entry(item, grouped=True, required_file=True)

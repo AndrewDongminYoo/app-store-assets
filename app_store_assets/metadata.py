@@ -8,6 +8,7 @@ from .contracts import (
     digest,
     exact_keys,
     hash_inventory,
+    image_count,
     image_entry,
     locale,
     public_path,
@@ -269,6 +270,7 @@ def validate_public_metadata(record, target):
     images = clean.get("images", {})
     if not isinstance(images, dict):
         raise ValueError("unsupported public image mapping")
+    count = 0
     for name, groups in images.items():
         locale(name)
         if not isinstance(groups, dict):
@@ -277,6 +279,8 @@ def validate_public_metadata(record, target):
             image_entry({"locale": name, "slot": slot}, grouped=True)
             if not isinstance(items, list):
                 raise ValueError("unsupported public image group")
+            count += len(items)
+            image_count(count)
             for item in items:
                 image_entry(item)
     if "effects" in clean:

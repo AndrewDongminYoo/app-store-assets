@@ -6,6 +6,9 @@ from urllib.parse import parse_qsl, urlsplit
 
 from .records import public_input_name, relative_path
 
+# Bounds the native decodes one record or validation call can request: 40
+# locales at the frozen catalog's 50-image Apple maximum per locale.
+IMAGE_ENTRY_LIMIT = 2000
 IMAGE_KEYS = {
     "id",
     "file",
@@ -154,6 +157,11 @@ def runtime_record(value, pin=False):
     if pin:
         public_path(value["path"])
     return value
+
+
+def image_count(count):
+    if count > IMAGE_ENTRY_LIMIT:
+        raise ValueError("image inventory exceeds the entry limit")
 
 
 def image_entry(value, grouped=False, required_file=False):
