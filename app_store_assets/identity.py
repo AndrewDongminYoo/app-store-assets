@@ -11,7 +11,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 from .contracts import runtime_record
-from .records import capture_bytes, inventory, open_directory, safe_path
+from .records import WalkBudget, capture_bytes, inventory, open_directory, safe_path
 
 
 def validate_derived_cache(root, name, files):
@@ -92,7 +92,9 @@ def git(root, *args):
 def runtime_inventory(root):
     root = Path(root).absolute()
     with open_directory(root) as fd:
-        names = os.listdir(fd)
+        # The root listing is charged against the same entry bound as the walk.
+        budget = WalkBudget()
+        names = budget.names(fd, 0)
         if any(name.endswith((".pyc", ".pyo")) for name in names):
             raise ValueError("runtime contains source-less root bytecode cache")
         paths = [
@@ -115,7 +117,7 @@ def runtime_inventory(root):
         ]
     if "assets.py" not in paths:
         raise ValueError("runtime CLI is missing")
-    result = inventory(root, paths)
+    result = inventory(root, paths, budget=budget)
     caches = [
         name
         for name in result

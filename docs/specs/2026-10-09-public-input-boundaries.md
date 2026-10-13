@@ -23,10 +23,12 @@ entries stream and before sorting: at most 10000 files plus directories
 16 directory levels below the walked root (`WALK_DEPTH_LIMIT`), and at most
 `FILE_LIMIT` bytes of digest work in aggregate; `records.inventory` shares one
 bound across all requested paths and counts each requested path as one entry
-before opening it. Each file's read is bounded by its charged size. Staging
-and snapshot publish apply the entry and depth bounds to the planned tree
-(`check_walk_bounds`) before writing it, so a tree their own read-back would
-refuse is never written. `tests/test_bounded_walk.py` holds the
+before opening it; `identity.runtime_inventory` passes the budget that charged
+its root listing into `records.inventory`, so a root name that is also a
+requested path counts twice. Each file's read is bounded by its charged size.
+Staging and snapshot publish apply the entry and depth bounds to the planned
+tree (`check_walk_bounds`) before writing it, so a tree their own read-back
+would refuse is never written. `tests/test_bounded_walk.py` holds the
 cases.
 
 Every serialized or published record is fully typed, including nested values,
