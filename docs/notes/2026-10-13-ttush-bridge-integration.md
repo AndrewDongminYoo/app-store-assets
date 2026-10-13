@@ -22,6 +22,17 @@ No app-store-assets file changed for it.
 - Same command with `APP_STORE_ASSETS_PERSONAL_ROOT` pointing at that root: `Ran 5 tests`, `OK`.
 - The suite copies only `ios/fastlane/Fastfile` from ttush_push, so the fetched file is the whole Ttush input it reads.
 
+## Consumer inputs of both runs
+
+The suite copies these files and nothing else from the consumers; `git status --porcelain` showed no change to any of them, and the mirae and kkomkkomi revisions were the same for the before and after runs.
+
+| Consumer | Revision | File | SHA-256 |
+| --- | --- | --- | --- |
+| mirae | `9f77e204444cb43e4362dab2bc5a1be0e0de56e8` | `ios/fastlane/Fastfile` | `e4da2a3ded2d0482015a5d44f13b8588802692f2bfaf818c03cf310a082422b2` |
+| mirae | `9f77e204444cb43e4362dab2bc5a1be0e0de56e8` | `scripts/store_assets/fastlane.rb` | `ce700b76205648cce9b38ff8d3403c85ae1d33423d8f5f60f40c33405ae3431e` |
+| kkomkkomi | `630f26df8c9b91a1476b480d92170a6b6049a8ff` | `fastlane/Fastfile` | `4622d2f25f6992cdcf0d073b772e242f9f14da33474f9d8070c0c2e093d986b4` |
+| ttush_push (after) | `8b6d15da77bca2f3eed87335c818c1a60b81f7a9` | `ios/fastlane/Fastfile` | `818653cd86c453510a9548a4ceba05cf812e942bf0a9391f59c137ea5dd95919` |
+
 ## Reconciliation
 
 The dated unit specifications that require the six Ttush failures to stay explicit (`docs/specs/2026-10-09-legacy-bridge-boundary.md`, `2026-10-09-image-byte-binding.md`, `2026-10-09-public-input-boundaries.md`, `2026-10-10-supplied-byte-reservation.md`, `2026-10-11-review-input-preservation.md`) record what those units had to preserve at the time and are left as written.
