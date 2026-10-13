@@ -356,8 +356,9 @@ def tree_inventory(root, exclude_root=(), *, total_limit=None):
     return dict(sorted(result.items()))
 
 
-def inventory(root, paths):
-    root, result, budget = Path(root).absolute(), {}, WalkBudget()
+def inventory(root, paths, *, budget=None):
+    root, result = Path(root).absolute(), {}
+    budget = WalkBudget() if budget is None else budget
     for name in sorted(set(paths)):
         path = safe_path(root, name)
         # Each requested path is one entry, counted before it is opened.

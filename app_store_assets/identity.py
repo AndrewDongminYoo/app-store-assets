@@ -93,7 +93,8 @@ def runtime_inventory(root):
     root = Path(root).absolute()
     with open_directory(root) as fd:
         # The root listing is charged against the same entry bound as the walk.
-        names = WalkBudget().names(fd, 0)
+        budget = WalkBudget()
+        names = budget.names(fd, 0)
         if any(name.endswith((".pyc", ".pyo")) for name in names):
             raise ValueError("runtime contains source-less root bytecode cache")
         paths = [
@@ -116,7 +117,7 @@ def runtime_inventory(root):
         ]
     if "assets.py" not in paths:
         raise ValueError("runtime CLI is missing")
-    result = inventory(root, paths)
+    result = inventory(root, paths, budget=budget)
     caches = [
         name
         for name in result
