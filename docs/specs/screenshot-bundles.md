@@ -38,7 +38,7 @@ The legacy `AppStoreAssets.prepare` entrypoint fails before local process launch
 `AppStoreAssets.prepare_local` explicitly performs local validation/preparation and returns a prepared path without an overwrite flag.
 A locally prepared path does not authorize remote replacement.
 No authenticated transfer, planner or runtime launcher is introduced by this boundary.
-Actual consumers that directly call Fastlane remain separate consumer work; Ttush's six safety failures remain visible in opt-in integration checks.
+Actual consumers that directly call Fastlane remain separate consumer work; all three personal consumers pass the opt-in integration checks, as recorded in `docs/notes/2026-10-13-ttush-bridge-integration.md`.
 The later remote adapter must bind a reviewed plan/digest to the exact target, compare complete intended placement groups and read back processing and order.
 
 ## Sources

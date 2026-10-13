@@ -83,7 +83,7 @@ Local preparation rejects hidden screenshots, mixed-case extensions such as `.Pn
 Future screenshot transfer requires a separately reviewed plan, exact target and complete local/remote placement policy.
 The existing external Fastlane replacement behavior can affect remote display classes absent from a local tree.
 Consumers that call Fastlane directly need their own guarded integration; this bridge cannot block those calls.
-The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases pass with external actions stubbed; Ttush routes its iOS screenshot uploads through the bridge since AndrewDongminYoo/ttush_push#177.
+The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases pass with external actions stubbed; `docs/notes/2026-10-13-ttush-bridge-integration.md` records the consumer commits and results.
 
 No command in this repository currently logs into App Store Connect, uploads files, or submits review.
 Fastlane lane execution remains an external action requiring authorization.
