@@ -60,13 +60,15 @@ Repository: app-store-assets (Python only).
 Work:
 
 1. Add the `transfer-approval` record that [the specification](../specs/2026-10-14-guarded-screenshot-transfer.md#approval-record) defines, with exact-key validation.
-2. Add a read-only verification command: run `verify_plan`, validate the approval record against the verified plan, check every planned image's SHA-256, and print the verified intent as JSON (invariants 1 and 2).
+2. Add a verification command that makes no remote call: run `verify_plan`, validate the approval record against the verified plan, and for every planned image read the bytes once, check their SHA-256, and write those same bytes into a private staging directory that the run owns; then print the verified intent as JSON with each image's staged path, SHA-256 and MD5 (invariants 1 and 2).
+   Ruby uploads only these staged files, so no byte crosses the process boundary that the Python check did not hash.
 3. Add the record's structural summary to `schemas/` and keep the Python validator authoritative.
 
 Acceptance:
 
 - A changed plan input, a different `plan_digest`, a different target field, a missing `account_id` when the plan has one, a different operation, an unknown key and a credential-shaped path each fail with a distinct error.
 - An image that changed after planning fails, whichever declared group it belongs to.
+- Each staged file equals the bytes that were hashed, and a source replaced after staging does not change what the intent points at.
 - The plan payload type, `executable: false` and `effects: []` are unchanged, and the reader package still constructs no provider.
 
 ## U3: Read-only live readback
@@ -96,12 +98,13 @@ Work:
 
 1. Add a transfer mode to the U3 entrypoint that keeps one lock from the U2 command through the final read.
 2. Settle every check, every group's action and the health of every unchanged group before the first remote write (invariant 5).
-3. Write only declared groups, following the [provider behaviors](#provider-behaviors): create absent sets, upload the checked bytes from private temporary copies with explicit positions, and replace a group only under `allow_delete`.
+3. Write only declared groups, following the [provider behaviors](#provider-behaviors): create absent sets, upload the U2 staged files with explicit positions after re-checking each staged file's SHA-256, and replace a group only under `allow_delete`.
 4. Poll each group within the bound, read back count, MD5 order and processing, and reorder once when only the order differs.
 5. Do the final read of invariant 7.
 
 Acceptance (fake states, each with the outcome the specification's invariants require):
 
+- A source image replaced after U2 staged it is never uploaded, and a staged file that no longer matches its SHA-256 refuses before the first write.
 - A non-empty, different group with `allow_delete: false` refuses before the first write, also when an earlier group would only upload.
 - A matching group with an errored screenshot refuses before the first write; a matching group that is still processing passes only after its bounded poll, before the first write.
 - A declared group with no remote set passes after exactly one `create_app_screenshot_set` call on its localization with its slot, then the upload into the new set.
