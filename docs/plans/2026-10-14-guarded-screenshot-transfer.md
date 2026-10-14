@@ -99,6 +99,8 @@ Acceptance:
 - A processing state or checksum that is late but becomes correct within the limit passes; one that stays incomplete or empty fails at the limit.
 - An order that differs only after upload passes after exactly one `reorder_screenshots` call; an order that still differs after that call fails.
 - `allow_delete: false` with a non-empty, different group refuses before the first write, also when an earlier group would only upload.
+- A build or version state that changes during the run fails the post-transfer checks.
+- A screenshot creation that keeps failing ends the upload call within the bounded `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT`, and the previous value of that variable is restored.
 - A matching group with an errored screenshot refuses before the first write; a matching group that is still processing passes only after its bounded readback, also before the first write.
 - A declared group with no remote set passes after exactly one `create_app_screenshot_set` call on that locale's localization with that slot as `screenshotDisplayType`, followed by the upload into the new set.
 - No set other than a declared group receives a delete, upload or reorder call, also a declared slot of a declared locale that the listing does not pair.
@@ -114,7 +116,7 @@ Preconditions:
 - U1 to U4 have merged.
 - The operator gives explicit authorization for kkomkkomi and for each operation of this run (upload, and deletion when `allow_delete` is `true`), as `AGENTS.md` requires.
 - A fresh supplied snapshot, a fresh plan and a new approval record exist for this run.
-- The operator declares an exclusive App Store Connect writer window for kkomkkomi for the whole run, as [the specification's approval record section](../specs/2026-10-14-guarded-screenshot-transfer.md#approval-record) defines: no other tool, machine, fastlane or deliver run, or App Store Connect web edit writes to its screenshots.
+- The operator declares an exclusive App Store Connect writer window for kkomkkomi for the whole run, as [the specification's approval record section](../specs/2026-10-14-guarded-screenshot-transfer.md#approval-record) defines: no other tool, machine, fastlane or deliver run, or App Store Connect web edit writes to its screenshots, selects a different build, or changes the version's state, including a review submission.
 
 Work:
 

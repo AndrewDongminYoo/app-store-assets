@@ -94,7 +94,7 @@ A retry after a partial failure therefore needs a new snapshot, a new plan and a
 No other writer may change the target's screenshots during a run, because App Store Connect has no conditional write: the adapter cannot make a delete or an upload depend on the state that its live readback saw.
 A run therefore requires an exclusive App Store Connect writer window for the target, which the operator declares before the run.
 The window lasts from the live readback to the end of the [post-transfer checks](#post-transfer-checks).
-In it, no other tool, machine, fastlane or deliver run, or App Store Connect web edit writes to the target's screenshots.
+In it, no other tool, machine, fastlane or deliver run, or App Store Connect web edit writes to the target's screenshots, selects a different build for the version, or changes the version's state, including a review submission.
 The adapter cannot verify the window; it is an operator precondition, like the authorization that `AGENTS.md` requires.
 
 Two runs for the same target on the same machine must not overlap, because both could pass the live readback before either writes.
@@ -213,6 +213,11 @@ After the uploads of a group, the adapter polls the group's screenshot set until
 The default poll interval is 5 seconds and the default limit is 600 seconds per group.
 Both are parameters of the entrypoint with upper bounds; there is no unbounded wait.
 
+The upload call itself must be bounded too.
+When placeholder creation fails, `AppScreenshot.create` in Spaceship 2.240.1 catches the error and retries every 30 seconds until `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT` minutes have passed (default 20), and it does not cap a value from the environment.
+So while provider calls run, the entrypoint sets `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT` to the group limit in whole minutes, rounded up and at least 1, and restores the previous value in an `ensure`.
+One upload call can then wait at most that many minutes plus one 30-second retry interval, and a creation that still fails fails the run.
+
 The readback then requires all of these for the group:
 
 - The count equals the planned count.
@@ -225,7 +230,8 @@ A readback that does not match is never reported as a success.
 
 ### Post-transfer checks
 
-After all declared groups pass the readback, the adapter reads the screenshot sets of the declared locales again.
+After all declared groups pass the readback, the adapter reads the version and the screenshot sets of the declared locales again.
+The version's attached build number must still equal `target.version.build`, and the version must still be editable with no active review, as the [live remote readback](#live-remote-readback) required before the first write.
 Every declared group must still pass the [readback requirements](#bounded-processing-readback) (count, ordered `source_file_checksum` values, `complete?`), because a writer that breaks the writer window can change a group after its own readback while later groups transfer.
 Every preserved set must have the same ordered screenshot IDs as in the pre-execution live read.
 A declared locale must have no screenshot set other than its declared groups and the preserved sets of the pre-execution live read.
@@ -273,6 +279,8 @@ The fake must be able to produce each state that a guard exists for:
 - An order that differs after upload.
 - A preserved set that changes during the run, including a declared slot of a declared locale that the listing does not pair.
 - A declared group that changes after its own readback while a later group transfers.
+- A version whose attached build or state changes during the run.
+- A screenshot creation that keeps failing, so that the upload call must end within the bounded `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT`.
 - A lock file that already exists for the target.
 - A provider call that writes to standard output; the entrypoint's standard output must still parse as exactly one JSON document.
 
