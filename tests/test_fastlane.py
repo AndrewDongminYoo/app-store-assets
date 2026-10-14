@@ -19,10 +19,6 @@ class FastlaneIntegrationTests(unittest.TestCase):
             fastfile = repo / location
             fastfile.parent.mkdir(parents=True)
             shutil.copyfile(PERSONAL / project / location, fastfile)
-            if project == 'mirae':
-                helper = repo / 'scripts/store_assets/fastlane.rb'
-                helper.parent.mkdir(parents=True)
-                shutil.copyfile(PERSONAL / project / 'scripts/store_assets/fastlane.rb', helper)
             source = repo / ('fastlane/metadata/ios/en-US/images/iphone65' if project == 'mirae' else 'fastlane/screenshots/ios/en-US')
             source.mkdir(parents=True)
             (source / filename).write_bytes(image if image is not None else png())
@@ -82,11 +78,6 @@ class FastlaneIntegrationTests(unittest.TestCase):
         for project in ('mirae', 'ttush_push', 'kkomkkomi'):
             with self.subTest(project=project):
                 result, report = self.lane(project, image=b'broken', skip_screenshots=True)
-                if project == 'mirae':
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(report['uploads'], [])
-                    self.assertRegex(result.stderr, r'reviewed.*plan')
-                    continue
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue(report['uploads'][0]['skip_screenshots'])
 
