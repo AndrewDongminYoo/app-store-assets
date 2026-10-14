@@ -39,3 +39,5 @@ jobs:
         run: |
           ruby -c lib/fastlane_assets.rb
           ruby -c tests/fastlane_harness.rb
+          ruby -c tests/snapshot_export_harness.rb
+          ruby -c tests/fake_spaceship/spaceship.rb
