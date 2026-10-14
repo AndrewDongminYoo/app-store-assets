@@ -99,6 +99,7 @@ Acceptance:
 - A processing state or checksum that is late but becomes correct within the limit passes; one that stays incomplete or empty fails at the limit.
 - An order that differs only after upload passes after exactly one `reorder_screenshots` call; an order that still differs after that call fails.
 - `allow_delete: false` with a non-empty, different group refuses before the first write, also when an earlier group would only upload.
+- A matching group with an errored screenshot refuses before the first write; a matching group that is still processing passes only after its bounded readback, also before the first write.
 - A declared group with no remote set passes after exactly one `create_app_screenshot_set` call on that locale's localization with that slot as `screenshotDisplayType`, followed by the upload into the new set.
 - No set other than a declared group receives a delete, upload or reorder call, also a declared slot of a declared locale that the listing does not pair.
 - No `create_app_screenshot_set` call is made for a display type or locale outside the declared groups, also a declared slot of a declared locale that the listing does not pair; the test asserts the fake's call log.

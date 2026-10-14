@@ -159,6 +159,10 @@ For each declared group, the adapter decides one action:
 The adapter decides the action of every group before it changes any group.
 A refusal in one group therefore prevents writes in all groups.
 
+A "No change" group must also be healthy before the first write: every screenshot has a non-empty `source_file_checksum` and is `complete?`.
+A group that is still processing gets the same [bounded processing readback](#bounded-processing-readback) before the first write, and it becomes "No change" only when that readback passes.
+A screenshot that is `error?`, or a poll that reaches its limit, refuses the whole run before any write.
+
 ### Absent-set creation
 
 `upload_screenshot` is a method of an existing `AppScreenshotSet`, so a declared group with no remote set needs the set first.
@@ -262,6 +266,7 @@ The fake must be able to produce each state that a guard exists for:
 - A live group that differs from the snapshot.
 - A version whose attached build differs from the approved build, or that has no attached build, while its name and `version_id` stay the same.
 - A non-empty group with `allow_delete: false`.
+- A group whose checksums match the plan while a screenshot is still processing or has errored, so that it is not yet a healthy "No change" group.
 - A declared group whose remote set is absent, so that the adapter must create the set before the upload.
 - A processing state that is late, that errors, or that never completes.
 - A checksum that is empty at first, then different from the planned MD5.
