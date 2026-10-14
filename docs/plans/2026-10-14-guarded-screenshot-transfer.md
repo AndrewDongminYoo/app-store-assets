@@ -32,6 +32,7 @@ Each row names the invariant it affects and what U3 or U4 must do about it; the 
 | A screenshot set that does not exist must be created with `AppStoreVersionLocalization#create_app_screenshot_set(client: nil, attributes:)` before `upload_screenshot` can be called, as deliver's [`app_screenshot_iterator.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/deliver/lib/deliver/app_screenshot_iterator.rb) does ([`app_store_version_localization.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_store_version_localization.rb)). | 4 | Create a set only for a declared group with no remote set, on that locale's live localization, with `screenshotDisplayType` set to the declared slot. |
 | Selecting another build for a version keeps the version's ID and name; `AppStoreVersion#get_build` returns the attached build, whose `version` is the build number ([`app_store_version.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_store_version.rb), [`build.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/build.rb)). | 3, 7 | Read the attached build in the live read and in the final read, and compare its number with `target.version.build`. |
 | `AppScreenshot` exposes `complete?`, `error?`, `error_messages` and `asset_delivery_state`, and processing state can lag right after an upload. | 3, 5, 7 | Treat a group as unchanged only when every screenshot is complete, polling within the bound first; an errored screenshot refuses the run. |
+| `APIClient#with_asc_retry` retries an HTTP 429 response with exponential backoff (1, 2, 4 … seconds) until the backoff exceeds 3600 seconds, independent of its 5-try budget for 500 and 504 ([`api_client.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/api_client.rb)); `SPACESHIP_TIMEOUT` bounds only each HTTP attempt. | 6 | Wrap every provider call, reads included, in an adapter-level deadline (Ruby's `Timeout.timeout`, default 120 seconds per call, a parameter with an upper bound); reaching it fails the run. |
 
 ## U1: kkomkkomi offline-profile v1
 
@@ -79,6 +80,7 @@ Work:
 
 1. Add the new Ruby entrypoint with a read-only mode that loads Spaceship only inside it.
 2. Take an exclusive lock file for the target's bundle identifier under the system temporary directory, with create-new semantics, before the U2 command and the live read, and remove it when the run ends; an existing lock refuses the run and is removed only by the operator.
+   The entrypoint creates the U2 staging directory and passes it to the U2 command, so it owns that directory and removes it in an `ensure` on every exit.
 3. Call the U2 command through `Open3`, then read the app, the version, its attached build, the localizations of the declared locales, the declared groups and the preserved sets.
 4. Compare with the supplied snapshot (invariant 3), defining and testing the mapping of each snapshot field to a Spaceship value, and print the per-group result as JSON with provider output on standard error (invariant 8).
 5. Add the fake App Store Connect to the tests.
@@ -88,6 +90,8 @@ Acceptance (fake states):
 - A different `version_id`; a version that is not editable or has an active review; an attached build that differs from the approved one or is missing while the version name and ID stay the same; a changed screenshot ID or order; a group present on one side only; a snapshot field with no mapping: each refuses and names the group.
 - An existing lock file refuses before any Spaceship call.
 - The read-only mode makes no remote write; the test asserts the fake's call log.
+- The staging directory is gone after a successful run and after a refused or failed one.
+- A provider call that keeps returning HTTP 429 fails the run at the adapter's per-call deadline.
 - `AppStoreAssets.prepare` stays blocked.
 
 ## U4: Transfer mode
@@ -114,6 +118,7 @@ Acceptance (fake states, each with the outcome the specification's invariants re
 - A preserved set, a declared group after its own readback, or the attached build or version state that changes during the run fails the final read.
 - No create, upload, delete or reorder call reaches a preserved set, an undeclared locale, or a declared slot of a declared locale that the listing does not pair; the test asserts the fake's call log.
 - A provider call that prints to standard output leaves exactly one JSON document on standard output.
+- A create, upload, delete or reorder call that keeps returning HTTP 429 fails the run at the per-call deadline, and the staging directory and the lock are removed.
 - Provenance stays `unverified-import`.
 
 ## U5: Authorized smoke upload for kkomkkomi
