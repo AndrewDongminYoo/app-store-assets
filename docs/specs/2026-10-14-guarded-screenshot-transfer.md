@@ -217,7 +217,11 @@ Both are parameters of the entrypoint with upper bounds; there is no unbounded w
 The upload call itself must be bounded too.
 When placeholder creation fails, `AppScreenshot.create` in Spaceship 2.240.1 catches the error and retries every 30 seconds until `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT` minutes have passed (default 20), and it does not cap a value from the environment.
 So while provider calls run, the entrypoint sets `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT` to the group limit in whole minutes, rounded up and at least 1, and restores the previous value in an `ensure`.
-One upload call can then wait at most that many minutes plus one 30-second retry interval, and a creation that still fails fails the run.
+Placeholder creation then waits at most that many minutes plus one 30-second retry interval, and a creation that still fails fails the run.
+
+After creation, `FileUploader.upload` in `spaceship/lib/spaceship/connect_api/file_uploader.rb` sends each upload operation with a request timeout of `SPACESHIP_TIMEOUT` seconds (default 300) and tries it up to 5 times, 3 seconds apart.
+So while provider calls run, the entrypoint also sets `SPACESHIP_TIMEOUT` to a bounded value (default 60 seconds, a parameter with an upper bound) and restores it in the same `ensure`.
+One upload call is therefore bounded by the creation bound plus, for each upload operation, 5 × (`SPACESHIP_TIMEOUT` + 3) seconds; the result reports a call that exceeds it as a failure, never as a success.
 
 The readback then requires all of these for the group:
 
@@ -283,6 +287,7 @@ The fake must be able to produce each state that a guard exists for:
 - A version whose attached build or state changes during the run.
 - An image of a later group whose bytes change or disappear after the Python verification.
 - A screenshot creation that keeps failing, so that the upload call must end within the bounded `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT`.
+- A successful creation followed by upload requests that time out, so that the call must end within the bounded `SPACESHIP_TIMEOUT` retries.
 - A lock file that already exists for the target.
 - A provider call that writes to standard output; the entrypoint's standard output must still parse as exactly one JSON document.
 

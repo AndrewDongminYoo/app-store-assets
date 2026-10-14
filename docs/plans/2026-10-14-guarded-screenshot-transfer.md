@@ -68,7 +68,7 @@ Work:
 2. Load Spaceship only inside the entrypoint, so loading `lib/fastlane_assets.rb` works without the fastlane gem.
 3. Compare each declared placement group with the plan's `remote` field and print the per-group result as JSON.
    Define and test the mapping of each snapshot field to a Spaceship value; a field with no mapping fails the comparison.
-   Also record the ordered screenshot IDs of the preserved sets, as the baseline for U4 step 6.
+   Also record the ordered screenshot IDs of the preserved sets, as the baseline for U4 step 7.
 4. Take the target's exclusive lock file before the live read and remove it at exit, as [the specification's approval record section](../specs/2026-10-14-guarded-screenshot-transfer.md#approval-record) defines.
 5. Add the fake App Store Connect to the tests, in place of the Spaceship objects that the entrypoint calls.
 
@@ -85,12 +85,13 @@ Repository: app-store-assets (Ruby entrypoint, fake-tested).
 
 Work:
 
-1. Decide every group's action before any write, as the [placement-group comparison](../specs/2026-10-14-guarded-screenshot-transfer.md#placement-group-comparison) defines.
-2. For a declared group with no remote set, create the set with `create_app_screenshot_set` on the declared locale's localization and the declared slot only, as [the specification's absent-set creation](../specs/2026-10-14-guarded-screenshot-transfer.md#absent-set-creation) defines.
-3. Bind bytes before the first remote write: for every uploading group, check SHA-256 against the plan, write a private temporary copy, and compute MD5 from the same bytes; then upload the copies.
-4. Upload with explicit positions, after confirming Spaceship 2.240.1's position convention from its source.
-5. Poll with the bounded interval and limit, then read back count, checksum order and processing state; reorder once when only the order differs.
-6. Read the declared locales again: every declared group still passes its readback, the preserved sets are unchanged, and no other set exists.
+1. Add the transfer mode to the U3 entrypoint, so one run takes the target's lock, runs the U2 verification and the U3 live read, and keeps the lock through the writes and the post-transfer checks; the read-only mode's lock does not carry over between runs.
+2. Decide every group's action before any write, as the [placement-group comparison](../specs/2026-10-14-guarded-screenshot-transfer.md#placement-group-comparison) defines.
+3. For a declared group with no remote set, create the set with `create_app_screenshot_set` on the declared locale's localization and the declared slot only, as [the specification's absent-set creation](../specs/2026-10-14-guarded-screenshot-transfer.md#absent-set-creation) defines.
+4. Bind bytes before the first remote write: for every uploading group, check SHA-256 against the plan, write a private temporary copy, and compute MD5 from the same bytes; then upload the copies.
+5. Upload with explicit positions, after confirming Spaceship 2.240.1's position convention from its source.
+6. Poll with the bounded interval and limit, then read back count, checksum order and processing state; reorder once when only the order differs.
+7. Read the declared locales again: every declared group still passes its readback, the preserved sets are unchanged, and no other set exists.
 
 Acceptance:
 
