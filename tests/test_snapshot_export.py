@@ -515,6 +515,16 @@ class SnapshotExportTests(unittest.TestCase):
                 self.assertRefused(result, message)
                 self.assertEqual(calls, [])
 
+    def test_malformed_identity_fields_are_refused_before_any_provider_call(self):
+        # Without the up-front identity validation, these reach every provider read first.
+        cases = [dict(target(), account=None), dict(target(), flavor=''), dict(target(), stage='bad\nstage'),
+                 dict(target(), account_id='')]
+        for identity in cases:
+            with self.subTest(identity=identity):
+                result, calls = self.run_export(scenario(), identity=identity)
+                self.assertRefused(result, 'target fails the identity validator')
+                self.assertEqual(calls, [])
+
     def test_target_without_an_account_id_is_recorded_unchanged(self):
         identity = {k: v for k, v in target().items() if k != 'account_id'}
         record, _, _ = self.export(scenario(), identity=identity)

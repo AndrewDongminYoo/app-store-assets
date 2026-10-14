@@ -49,12 +49,20 @@ module AppStoreAssets
     validate_public_metadata(record, record["target"])
     remote_observation(record)
   PYTHON
+  SNAPSHOT_TARGET_VALIDATOR = <<~PYTHON.freeze
+    import json, sys
+    sys.path.insert(0, sys.argv[1])
+    from app_store_assets.contracts import target_identity
+    target_identity(json.loads(sys.stdin.read()))
+  PYTHON
 
   # Reads the App Store Connect state of one Apple iOS target and writes one
   # metadata-snapshot record. Call it only after the lane has authenticated Spaceship.
   # It makes no remote write and never replaces an existing file.
   def self.export_snapshot(target:, output:, deadline: SNAPSHOT_DEFAULT_DEADLINE)
     identity = snapshot_target(target)
+    # The same identity validation that the record faces at the end, before any provider read.
+    snapshot_python(SNAPSHOT_TARGET_VALIDATOR, JSON.generate(identity), "target fails the identity validator")
     unless deadline.is_a?(Numeric) && deadline.positive? && deadline <= SNAPSHOT_MAX_DEADLINE
       raise snapshot_error("deadline must be more than 0 and at most #{SNAPSHOT_MAX_DEADLINE} seconds")
     end
@@ -301,13 +309,17 @@ module AppStoreAssets
   end
 
   # The Python validators are authoritative; a record they reject is never written.
-  # -B keeps bytecode caches out of the runtime checkout.
   def self.snapshot_validate(data)
-    command = [ENV.fetch("PYTHON", "python3"), "-I", "-B", "-c", SNAPSHOT_VALIDATOR, snapshot_checkout]
+    snapshot_python(SNAPSHOT_VALIDATOR, data, "record fails the public metadata validators")
+  end
+
+  # Runs a validator from this checkout; -B keeps bytecode caches out of it.
+  def self.snapshot_python(script, data, message)
+    command = [ENV.fetch("PYTHON", "python3"), "-I", "-B", "-c", script, snapshot_checkout]
     _, errors, result = Open3.capture3(*command, stdin_data: data)
     return if result.success?
 
-    raise snapshot_error("record fails the public metadata validators: #{errors.strip.lines.last.to_s.strip}")
+    raise snapshot_error("#{message}: #{errors.strip.lines.last.to_s.strip}")
   end
 
   # Publishes inside the directory that snapshot_output validated, even when its path was
