@@ -37,7 +37,7 @@ Work:
 Acceptance:
 
 - `python3 -B -m app_store_assets plan --root <kkomkkomi> --profile <v1 profile> --target <name> --operation images` returns a plan with `remote_evidence: supplied-snapshot-freshness-unverified`.
-- `replacement.locales` and `replacement.slots` equal the listing's groups, so `make_plan` accepts the policy.
+- `replacement.locales` and `replacement.slots` equal the listing's locales and slots, so `make_plan` accepts the policy.
 - No store call, no credential and no change to the kkomkkomi Fastfile lanes.
 
 ## U2: Approval record
@@ -67,12 +67,14 @@ Work:
 2. Load Spaceship only inside the entrypoint, so loading `lib/fastlane_assets.rb` works without the fastlane gem.
 3. Compare each declared placement group with the plan's `remote` field and print the per-group result as JSON.
    Define and test the mapping of each snapshot field to a Spaceship value; a field with no mapping fails the comparison.
-   Also record the ordered screenshot IDs of the undeclared display classes in the declared locales, as the baseline for U4 step 5.
-4. Add the fake App Store Connect to the tests, in place of the Spaceship objects that the entrypoint calls.
+   Also record the ordered screenshot IDs of the preserved sets, as the baseline for U4 step 5.
+4. Take the target's exclusive lock file before the live read and remove it at exit, as [the specification's approval record section](../specs/2026-10-14-guarded-screenshot-transfer.md#approval-record) defines.
+5. Add the fake App Store Connect to the tests, in place of the Spaceship objects that the entrypoint calls.
 
 Acceptance:
 
 - A different `version_id`, a version that is not editable or has an active review, a changed screenshot ID, a changed order and a group present on one side only each refuse, with the differing groups named.
+- An existing lock file for the target refuses before any Spaceship call.
 - The read-only mode makes no write call on the fake; the test asserts the fake's call log.
 - `AppStoreAssets.prepare` stays blocked.
 
@@ -86,7 +88,7 @@ Work:
 2. Bind bytes: check SHA-256 against the plan, write a private temporary copy, compute MD5 from the same bytes, upload the copy.
 3. Upload with explicit positions, after confirming Spaceship 2.240.1's position convention from its source.
 4. Poll with the bounded interval and limit, then read back count, checksum order and processing state; reorder once when only the order differs.
-5. Check that undeclared display classes in the declared locales are unchanged.
+5. Check that the preserved sets are unchanged.
 
 Acceptance:
 
@@ -95,7 +97,7 @@ Acceptance:
 - A processing state or checksum that is late but becomes correct within the limit passes; one that stays incomplete or empty fails at the limit.
 - An order that differs only after upload passes after exactly one `reorder_screenshots` call; an order that still differs after that call fails.
 - `allow_delete: false` with a non-empty, different group refuses before the first write, also when an earlier group would only upload.
-- No group outside `replacement.locales` × `replacement.slots` receives a delete, upload or reorder call.
+- No set other than a declared group receives a delete, upload or reorder call, also a declared slot of a declared locale that the listing does not pair.
 - Provenance stays `unverified-import`.
 
 ## U5: Authorized smoke upload for kkomkkomi
@@ -116,6 +118,6 @@ Work:
 
 Acceptance:
 
-- The readback matches for every declared group, and the undeclared display classes are unchanged.
+- The readback matches for every declared group, and the preserved sets are unchanged.
 - No review submission happens.
 - A failed readback is recorded as a failure, with no retry under the same approval record.

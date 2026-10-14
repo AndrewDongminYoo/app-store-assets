@@ -21,6 +21,9 @@ It does not change how images are captured, composed or prepared.
 - **Slot**: a catalog display class name, such as `APP_IPHONE_65`, as `catalog/store-rules-v1.json` lists it.
 - **Placement group**: all screenshots of one locale in one slot, in order.
   The plan's `listing.images[locale][slot]` is the intended group; App Store Connect's screenshot set for that localization and display type is the remote group.
+- **Declared group**: a placement group whose locale and slot pair is a key pair of the plan's `listing.images`.
+  `make_plan` compares `replacement.locales` and `replacement.slots` with the listing only as separate sets, so a pair of a declared locale and a declared slot that the listing does not contain is not a declared group.
+- **Preserved set**: every other screenshot set of a declared locale, whatever its display class.
 - **Supplied snapshot**: the `metadata-snapshot` record that the target's `remote` path supplies, as `remote_observation` reduces it into the plan's `remote` field.
 - **Approval record**: the separate record that this specification defines in [Approval record](#approval-record).
 
@@ -81,10 +84,15 @@ Validation follows the existing exact-key rules (`exact_keys` in `app_store_asse
 The approval record is not one of the plan's inputs, because the plan digest would then depend on its own approval.
 It is supplied to the entrypoint by path and read with the same no-follow, private-name checks as other inputs (`safe_path` in `app_store_assets/records.py`).
 
-One approval record authorizes one execution attempt.
-No database records its use.
-Instead, a repeated run fails at the [live readback](#live-remote-readback): after any upload or deletion, the remote state differs from the supplied snapshot.
+An approval record authorizes a run only while the live remote state still equals the supplied snapshot.
+No database records its use, so the record itself does not prevent a second run.
+A second run with the same record is refused at the [live readback](#live-remote-readback) once any upload or deletion has changed the remote state; a run that made no remote change can be repeated, and it then repeats the same checks against the same state.
 A retry after a partial failure therefore needs a new snapshot, a new plan and a new approval record.
+
+Two runs for the same target must not overlap, because both could pass the live readback before either writes.
+The entrypoint creates an exclusive lock file for the target's bundle identifier under the system temporary directory, with create-new semantics, before the live readback, and removes it when the run ends.
+An existing lock file refuses the run; a lock that a crashed run left behind is removed by the operator, never automatically.
+The lock guards one machine only, and the [post-transfer checks](#post-transfer-checks) report any change that another writer makes during the run.
 
 ## Pre-execution checks
 
@@ -109,8 +117,8 @@ The live read covers:
 - The version's ID, which must equal the snapshot's `version_id`.
   This equality also confirms that the authenticated session reaches the app and version that the snapshot was taken from.
 - The version state, which must still be editable with no active review, as `validate_apple_localizations` requires of the snapshot.
-- For each locale in `replacement.locales`, the screenshot set (`AppScreenshotSet.all`) of each slot in `replacement.slots`, with the screenshots of each set in their current order.
-- For each locale in `replacement.locales`, the ordered screenshot IDs of every other display class.
+- The screenshot set (`AppScreenshotSet.all`) of each declared group, with its screenshots in their current order.
+- The ordered screenshot IDs of every preserved set.
   This is a read-only baseline for the [post-transfer checks](#post-transfer-checks); it is not compared with the snapshot.
 
 For each declared placement group, the live group must match the snapshot group in every field that the snapshot records.
@@ -123,7 +131,7 @@ Any difference stops the run before a write; the adapter reports the differing g
 ## Placement-group comparison
 
 The unit of comparison and of change is the complete placement group, never a single file.
-`make_plan` already requires `replacement.locales` and `replacement.slots` to equal the listing's groups exactly.
+`make_plan` already requires `replacement.locales` and `replacement.slots` to equal the listing's locales and slots as sets; the adapter acts on the declared groups, the listing's actual locale and slot pairs, only.
 
 For each declared group, the adapter decides one action:
 
@@ -137,8 +145,8 @@ For each declared group, the adapter decides one action:
 The adapter decides the action of every group before it changes any group.
 A refusal in one group therefore prevents writes in all groups.
 
-Deletion happens only when `replacement.allow_delete` is `true`, and only in a group whose locale is in `replacement.locales` and whose slot is in `replacement.slots`.
-A display class that the plan does not declare is never read for a write, never deleted and never reordered, also in a declared locale.
+Deletion happens only when `replacement.allow_delete` is `true`, and only in a declared group.
+A preserved set is never written, deleted or reordered, also when its display class is declared for another locale.
 A locale that the plan does not declare is never touched.
 
 Delete-then-upload leaves a group empty for a short time.
@@ -190,7 +198,7 @@ A readback that does not match is never reported as a success.
 ### Post-transfer checks
 
 After all declared groups pass the readback, the adapter reads the screenshot sets of the declared locales again.
-Every display class that the plan does not declare must have the same ordered screenshot IDs as in the pre-execution live read.
+Every preserved set must have the same ordered screenshot IDs as in the pre-execution live read.
 A difference is reported as a failure, even though the adapter did not request it.
 
 ### Result
@@ -224,7 +232,8 @@ The fake must be able to produce each state that a guard exists for:
 - A processing state that is late, that errors, or that never completes.
 - A checksum that is empty at first, then different from the planned MD5.
 - An order that differs after upload.
-- An undeclared display class that changes during the run.
+- A preserved set that changes during the run, including a declared slot of a declared locale that the listing does not pair.
+- A lock file that already exists for the target.
 
 Each guard's test must fail when the guard is removed.
 
