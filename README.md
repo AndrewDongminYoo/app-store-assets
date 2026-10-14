@@ -87,7 +87,7 @@ The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases pass with ext
 
 No command in this repository currently logs into App Store Connect, uploads files, or submits review.
 Fastlane lane execution remains an external action requiring authorization.
-Remote readback and guarded transfer remain a later separately reviewed adapter.
+Remote readback and guarded transfer remain a later separately reviewed adapter; [the guarded screenshot transfer specification](docs/specs/2026-10-14-guarded-screenshot-transfer.md) defines its contract.
 
 ## Evidence limits
 
