@@ -185,7 +185,8 @@ This is acceptable because the selected version must be editable with no active 
 The plan binds each image by the SHA-256 of its final bytes.
 App Store Connect reports `source_file_checksum`, which is the MD5 of the uploaded file, so the plan does not contain the value that the readback compares.
 
-For each planned image, the adapter reads the bytes once, checks their SHA-256 against the plan, and writes them to a private temporary file.
+Before the first remote write, the adapter stages every planned image of every declared group whose action uploads: it reads the bytes once, checks their SHA-256 against the plan, and writes them to a private temporary file.
+A missing, unreadable or mismatching image in any group refuses the whole run before any write, so a late group cannot fail after earlier groups changed.
 It computes the expected MD5 from those same bytes and uploads that temporary file.
 It never computes the MD5 from, or uploads, a second read of the source path.
 
@@ -280,6 +281,7 @@ The fake must be able to produce each state that a guard exists for:
 - A preserved set that changes during the run, including a declared slot of a declared locale that the listing does not pair.
 - A declared group that changes after its own readback while a later group transfers.
 - A version whose attached build or state changes during the run.
+- An image of a later group whose bytes change or disappear after the Python verification.
 - A screenshot creation that keeps failing, so that the upload call must end within the bounded `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT`.
 - A lock file that already exists for the target.
 - A provider call that writes to standard output; the entrypoint's standard output must still parse as exactly one JSON document.

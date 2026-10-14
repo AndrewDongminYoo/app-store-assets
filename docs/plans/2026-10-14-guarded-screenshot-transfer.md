@@ -87,7 +87,7 @@ Work:
 
 1. Decide every group's action before any write, as the [placement-group comparison](../specs/2026-10-14-guarded-screenshot-transfer.md#placement-group-comparison) defines.
 2. For a declared group with no remote set, create the set with `create_app_screenshot_set` on the declared locale's localization and the declared slot only, as [the specification's absent-set creation](../specs/2026-10-14-guarded-screenshot-transfer.md#absent-set-creation) defines.
-3. Bind bytes: check SHA-256 against the plan, write a private temporary copy, compute MD5 from the same bytes, upload the copy.
+3. Bind bytes before the first remote write: for every uploading group, check SHA-256 against the plan, write a private temporary copy, and compute MD5 from the same bytes; then upload the copies.
 4. Upload with explicit positions, after confirming Spaceship 2.240.1's position convention from its source.
 5. Poll with the bounded interval and limit, then read back count, checksum order and processing state; reorder once when only the order differs.
 6. Read the declared locales again: every declared group still passes its readback, the preserved sets are unchanged, and no other set exists.
@@ -100,6 +100,7 @@ Acceptance:
 - An order that differs only after upload passes after exactly one `reorder_screenshots` call; an order that still differs after that call fails.
 - `allow_delete: false` with a non-empty, different group refuses before the first write, also when an earlier group would only upload.
 - A build or version state that changes during the run fails the post-transfer checks.
+- An image of a later group that is missing or no longer matches its SHA-256 refuses before the first remote write; the test asserts the fake's call log has no write.
 - A screenshot creation that keeps failing ends the upload call within the bounded `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT`, and the previous value of that variable is restored.
 - A matching group with an errored screenshot refuses before the first write; a matching group that is still processing passes only after its bounded readback, also before the first write.
 - A declared group with no remote set passes after exactly one `create_app_screenshot_set` call on that locale's localization with that slot as `screenshotDisplayType`, followed by the upload into the new set.
