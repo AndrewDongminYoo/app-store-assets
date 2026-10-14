@@ -63,17 +63,18 @@ Repository: app-store-assets (Ruby entrypoint, tests driven from Python as `test
 Work:
 
 1. Add the new Ruby entrypoint with a read-only mode.
-   It calls the U2 command through `Open3`, then reads the app, the version and the declared screenshot sets through Spaceship.
+   It calls the U2 command through `Open3`, then reads the app, the version, the version's attached build, the localizations of the declared locales and the declared screenshot sets through Spaceship.
+   The attached build's number must equal `target.version.build`, as [the specification's live remote readback](../specs/2026-10-14-guarded-screenshot-transfer.md#live-remote-readback) defines.
 2. Load Spaceship only inside the entrypoint, so loading `lib/fastlane_assets.rb` works without the fastlane gem.
 3. Compare each declared placement group with the plan's `remote` field and print the per-group result as JSON.
    Define and test the mapping of each snapshot field to a Spaceship value; a field with no mapping fails the comparison.
-   Also record the ordered screenshot IDs of the preserved sets, as the baseline for U4 step 5.
+   Also record the ordered screenshot IDs of the preserved sets, as the baseline for U4 step 6.
 4. Take the target's exclusive lock file before the live read and remove it at exit, as [the specification's approval record section](../specs/2026-10-14-guarded-screenshot-transfer.md#approval-record) defines.
 5. Add the fake App Store Connect to the tests, in place of the Spaceship objects that the entrypoint calls.
 
 Acceptance:
 
-- A different `version_id`, a version that is not editable or has an active review, a changed screenshot ID, a changed order and a group present on one side only each refuse, with the differing groups named.
+- A different `version_id`, a version that is not editable or has an active review, an attached build that differs from the approved build or is missing while the version name and `version_id` stay the same, a changed screenshot ID, a changed order and a group present on one side only each refuse, with the differing groups named.
 - An existing lock file for the target refuses before any Spaceship call.
 - The read-only mode makes no write call on the fake; the test asserts the fake's call log.
 - `AppStoreAssets.prepare` stays blocked.
@@ -85,10 +86,11 @@ Repository: app-store-assets (Ruby entrypoint, fake-tested).
 Work:
 
 1. Decide every group's action before any write, as the [placement-group comparison](../specs/2026-10-14-guarded-screenshot-transfer.md#placement-group-comparison) defines.
-2. Bind bytes: check SHA-256 against the plan, write a private temporary copy, compute MD5 from the same bytes, upload the copy.
-3. Upload with explicit positions, after confirming Spaceship 2.240.1's position convention from its source.
-4. Poll with the bounded interval and limit, then read back count, checksum order and processing state; reorder once when only the order differs.
-5. Read the declared locales again: every declared group still passes its readback, and the preserved sets are unchanged.
+2. For a declared group with no remote set, create the set with `create_app_screenshot_set` on the declared locale's localization and the declared slot only, as [the specification's absent-set creation](../specs/2026-10-14-guarded-screenshot-transfer.md#absent-set-creation) defines.
+3. Bind bytes: check SHA-256 against the plan, write a private temporary copy, compute MD5 from the same bytes, upload the copy.
+4. Upload with explicit positions, after confirming Spaceship 2.240.1's position convention from its source.
+5. Poll with the bounded interval and limit, then read back count, checksum order and processing state; reorder once when only the order differs.
+6. Read the declared locales again: every declared group still passes its readback, the preserved sets are unchanged, and no other set exists.
 
 Acceptance:
 
@@ -97,7 +99,9 @@ Acceptance:
 - A processing state or checksum that is late but becomes correct within the limit passes; one that stays incomplete or empty fails at the limit.
 - An order that differs only after upload passes after exactly one `reorder_screenshots` call; an order that still differs after that call fails.
 - `allow_delete: false` with a non-empty, different group refuses before the first write, also when an earlier group would only upload.
+- A declared group with no remote set passes after exactly one `create_app_screenshot_set` call on that locale's localization with that slot as `screenshotDisplayType`, followed by the upload into the new set.
 - No set other than a declared group receives a delete, upload or reorder call, also a declared slot of a declared locale that the listing does not pair.
+- No `create_app_screenshot_set` call is made for a display type or locale outside the declared groups, also a declared slot of a declared locale that the listing does not pair; the test asserts the fake's call log.
 - Provenance stays `unverified-import`.
 
 ## U5: Authorized smoke upload for kkomkkomi
@@ -109,6 +113,7 @@ Preconditions:
 - U1 to U4 have merged.
 - The operator gives explicit authorization for kkomkkomi and for each operation of this run (upload, and deletion when `allow_delete` is `true`), as `AGENTS.md` requires.
 - A fresh supplied snapshot, a fresh plan and a new approval record exist for this run.
+- The operator declares an exclusive App Store Connect writer window for kkomkkomi for the whole run, as [the specification's approval record section](../specs/2026-10-14-guarded-screenshot-transfer.md#approval-record) defines: no other tool, machine, fastlane or deliver run, or App Store Connect web edit writes to its screenshots.
 
 Work:
 

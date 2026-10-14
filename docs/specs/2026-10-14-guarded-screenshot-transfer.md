@@ -91,10 +91,16 @@ No database records its use, so the record itself does not prevent a second run.
 A second run with the same record is refused at the [live readback](#live-remote-readback) once any upload or deletion has changed the remote state; a run that made no remote change can be repeated, and it then repeats the same checks against the same state.
 A retry after a partial failure therefore needs a new snapshot, a new plan and a new approval record.
 
-Two runs for the same target must not overlap, because both could pass the live readback before either writes.
+No other writer may change the target's screenshots during a run, because App Store Connect has no conditional write: the adapter cannot make a delete or an upload depend on the state that its live readback saw.
+A run therefore requires an exclusive App Store Connect writer window for the target, which the operator declares before the run.
+The window lasts from the live readback to the end of the [post-transfer checks](#post-transfer-checks).
+In it, no other tool, machine, fastlane or deliver run, or App Store Connect web edit writes to the target's screenshots.
+The adapter cannot verify the window; it is an operator precondition, like the authorization that `AGENTS.md` requires.
+
+Two runs for the same target on the same machine must not overlap, because both could pass the live readback before either writes.
 The entrypoint creates an exclusive lock file for the target's bundle identifier under the system temporary directory, with create-new semantics, before the live readback, and removes it when the run ends.
 An existing lock file refuses the run; a lock that a crashed run left behind is removed by the operator, never automatically.
-The lock guards one machine only, and the [post-transfer checks](#post-transfer-checks) report any change that another writer makes during the run.
+The lock prevents only an overlapping run on the same machine, and it does not replace the writer window.
 
 ## Pre-execution checks
 
@@ -118,7 +124,12 @@ The live read covers:
 - The app found by the target's bundle identifier, and the App Store version for the target's platform and version name.
 - The version's ID, which must equal the snapshot's `version_id`.
   This equality also confirms that the authenticated session reaches the app and version that the snapshot was taken from.
+- The build attached to that version (`AppStoreVersion#get_build`), whose build number (`Build#version`) must equal `target.version.build`.
+  When the snapshot records a `binary`, `validate_public_metadata` already requires its `version` to equal the target's version, so the same build number binds the snapshot too.
+  The version name and `version_id` do not change when a different build is selected, so neither of those checks detects a build change after approval.
+  A missing build or a different build number stops the run before any write.
 - The version state, which must still be editable with no active review, as `validate_apple_localizations` requires of the snapshot.
+- The version localization (`AppStoreVersionLocalization`) of each declared locale.
 - The screenshot set (`AppScreenshotSet.all`) of each declared group, with its screenshots in their current order.
 - The ordered screenshot IDs of every preserved set.
   This is a read-only baseline for the [post-transfer checks](#post-transfer-checks); it is not compared with the snapshot.
@@ -137,15 +148,24 @@ The unit of comparison and of change is the complete placement group, never a si
 
 For each declared group, the adapter decides one action:
 
-| Remote group (live, matched to the snapshot)                                        | `allow_delete` | Action                                                        |
-| ----------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------- |
-| Same count, and the `source_file_checksum` values equal the planned MD5s in order   | any            | No change.                                                    |
-| Empty or absent                                                                     | any            | Upload the planned group.                                     |
-| Not empty and different                                                             | `true`         | Delete the remote screenshots, then upload the planned group. |
-| Not empty and different                                                             | `false`        | Refuse the whole run before any write.                        |
+| Remote group (live, matched to the snapshot)                                        | `allow_delete` | Action                                                                         |
+| ----------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------ |
+| Same count, and the `source_file_checksum` values equal the planned MD5s in order   | any            | No change.                                                                     |
+| Set exists and is empty                                                             | any            | Upload the planned group into that set.                                        |
+| Set absent                                                                          | any            | [Create the set](#absent-set-creation), then upload the planned group into it. |
+| Not empty and different                                                             | `true`         | Delete the remote screenshots, then upload the planned group.                  |
+| Not empty and different                                                             | `false`        | Refuse the whole run before any write.                                         |
 
 The adapter decides the action of every group before it changes any group.
 A refusal in one group therefore prevents writes in all groups.
+
+### Absent-set creation
+
+`upload_screenshot` is a method of an existing `AppScreenshotSet`, so a declared group with no remote set needs the set first.
+The adapter creates it with `AppStoreVersionLocalization#create_app_screenshot_set(attributes: { screenshotDisplayType: <slot> })` on the localization of the declared locale, as deliver 2.240.1 does in `deliver/lib/deliver/app_screenshot_iterator.rb`.
+The display type is the declared slot only, and the localization is the one that the live read found for the declared locale; a declared locale with no live localization refuses the run before any write.
+The adapter creates a set only for a declared group whose action is "Set absent", and only after the actions of all groups are decided.
+It never creates a set for a preserved set, for an undeclared locale, or for a declared slot of a declared locale that the listing does not pair.
 
 Deletion happens only when `replacement.allow_delete` is `true`, and only in a declared group.
 A preserved set is never written, deleted or reordered, also when its display class is declared for another locale.
@@ -167,9 +187,11 @@ It never computes the MD5 from, or uploads, a second read of the source path.
 
 ### Upload order
 
-The adapter uploads each group's images in plan order with `upload_screenshot(path:, wait_for_processing:, position:)`.
+The adapter uploads each group's images in plan order with `upload_screenshot(path:, wait_for_processing: false, position:)`.
 Each call gives an explicit position that is derived from the image's index in the planned group.
-The value of `wait_for_processing:` does not replace the adapter's own [bounded processing readback](#bounded-processing-readback); that readback is the gate.
+The adapter always passes `wait_for_processing: false`.
+Spaceship 2.240.1 defaults it to `true`, and then `AppScreenshot.create` in `app_screenshot.rb` polls every 2 seconds until the screenshot is `complete?` or `error?`, with no deadline.
+With the default, the adapter would block inside Spaceship before its own [bounded processing readback](#bounded-processing-readback) starts; that readback is the gate.
 The implementation confirms Spaceship 2.240.1's position convention from its source before it relies on it, and records the result in its tests.
 
 ### Bounded processing readback
@@ -200,13 +222,20 @@ A readback that does not match is never reported as a success.
 ### Post-transfer checks
 
 After all declared groups pass the readback, the adapter reads the screenshot sets of the declared locales again.
-Every declared group must still pass the [readback requirements](#bounded-processing-readback) (count, ordered `source_file_checksum` values, `complete?`), because another writer can change a group after its own readback while later groups transfer.
+Every declared group must still pass the [readback requirements](#bounded-processing-readback) (count, ordered `source_file_checksum` values, `complete?`), because a writer that breaks the writer window can change a group after its own readback while later groups transfer.
 Every preserved set must have the same ordered screenshot IDs as in the pre-execution live read.
+A declared locale must have no screenshot set other than its declared groups and the preserved sets of the pre-execution live read.
 A difference is reported as a failure, even though the adapter did not request it.
+
+These checks detect only a change that is still visible in the final state.
+A concurrent edit to a declared group that the transfer then deletes or replaces leaves no trace, because the final state then equals the plan; the checks cannot detect it, and only the [writer window](#approval-record) prevents it.
 
 ### Result
 
 The entrypoint prints one JSON result to standard output: the plan digest, the target, and for each declared group the action, the readback result and the remote screenshot IDs.
+Standard output contains only that JSON document.
+Spaceship 2.240.1 writes status lines with `puts`: `AppScreenshot.create` in `app_screenshot.rb` writes one on each retry after a screenshot creation fails, and other calls write them when `Spaceship::Globals.verbose?` is set.
+So the entrypoint sends Ruby's standard output to standard error while provider calls run (for example `$stdout = $stderr`, restored in an `ensure`), and it writes the JSON result to the original standard output.
 It writes no file into the repository and no record into a store of its own.
 It exits non-zero on any failure, also after writes have started; the result then names the groups that changed before the failure.
 
@@ -231,13 +260,16 @@ The default test command must not need the fastlane gem, network access or crede
 The fake must be able to produce each state that a guard exists for:
 
 - A live group that differs from the snapshot.
+- A version whose attached build differs from the approved build, or that has no attached build, while its name and `version_id` stay the same.
 - A non-empty group with `allow_delete: false`.
+- A declared group whose remote set is absent, so that the adapter must create the set before the upload.
 - A processing state that is late, that errors, or that never completes.
 - A checksum that is empty at first, then different from the planned MD5.
 - An order that differs after upload.
 - A preserved set that changes during the run, including a declared slot of a declared locale that the listing does not pair.
 - A declared group that changes after its own readback while a later group transfers.
 - A lock file that already exists for the target.
+- A provider call that writes to standard output; the entrypoint's standard output must still parse as exactly one JSON document.
 
 Each guard's test must fail when the guard is removed.
 
@@ -248,6 +280,8 @@ It is out of scope for every implementation unit except the final authorized smo
 
 - Spaceship 2.240.1 [`app_screenshot_set.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_screenshot_set.rb): `AppScreenshotSet.all`, `.get`, `#upload_screenshot(path:, wait_for_processing:, position:)`, `#reorder_screenshots(app_screenshot_ids:)`, `#delete!`.
 - Spaceship 2.240.1 [`app_screenshot.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_screenshot.rb): `source_file_checksum`, `asset_delivery_state`, `complete?`, `error?`, `error_messages`, `delete!`.
+- Spaceship 2.240.1 [`app_store_version_localization.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_store_version_localization.rb): `#create_app_screenshot_set(client:, attributes:)`; deliver 2.240.1 [`app_screenshot_iterator.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/deliver/lib/deliver/app_screenshot_iterator.rb) calls it with `screenshotDisplayType` when a set is missing.
+- Spaceship 2.240.1 [`app_store_version.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_store_version.rb): `#get_build`; [`build.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/build.rb): `version`, the build number.
 - The closed pull request #3 branch (`9fc5395`) has no screenshot transport code; its `provider_ruby.py` is a Ruby file-loading shim.
 - QuestKeeper store-asset precedent: `/Users/dongminyu/Development/01_personal/llm-wiki-dongminyu/wiki/sources/claude--projects---users-dongminyu-development-01-personal-quest-keeper--memory--store-assets-pipeline.md`, as [the first-stage contract](screenshot-bundles.md#sources) cites it.
 - Current contracts: `app_store_assets/planning.py` (`make_plan`, `verify_plan`), `app_store_assets/metadata.py` (`remote_observation`), `app_store_assets/catalog.py` (`validate_apple_localizations`), `app_store_assets/records.py` (credential input rejection).
