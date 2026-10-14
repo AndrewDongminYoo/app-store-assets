@@ -66,6 +66,8 @@ It binds the plan digest to the exact target and operation:
     "account": "<target account>",
     "app_id": "<bundle identifier>",
     "platform": "ios",
+    "flavor": "<flavor>",
+    "stage": "<stage>",
     "version": { "name": "<version name>", "build": "<build>" }
   },
   "operation": "images"
@@ -76,8 +78,8 @@ Validation follows the existing exact-key rules (`exact_keys` in `app_store_asse
 
 - Unknown keys, missing keys and wrong value types fail.
 - `plan_digest` must equal the plan's `digest` after `verify_plan` succeeds.
-- Every `target` field must equal the same field of the plan's `target`.
-  When the plan's target has `account_id`, the approval record must contain the same `account_id`.
+- `target` passes the same identity validation as a plan target (`target_identity` in `app_store_assets/contracts.py`), which requires `flavor` and `stage` for Apple too, and it must equal the plan's whole `target`.
+  So when the plan's target has `account_id`, the approval record must contain the same `account_id`, and when it has none, the record must have none.
 - `operation` must be `images` and must equal the plan's `operation`.
 - The record contains no credential, key path, token or other secret.
 
@@ -198,6 +200,7 @@ A readback that does not match is never reported as a success.
 ### Post-transfer checks
 
 After all declared groups pass the readback, the adapter reads the screenshot sets of the declared locales again.
+Every declared group must still pass the [readback requirements](#bounded-processing-readback) (count, ordered `source_file_checksum` values, `complete?`), because another writer can change a group after its own readback while later groups transfer.
 Every preserved set must have the same ordered screenshot IDs as in the pre-execution live read.
 A difference is reported as a failure, even though the adapter did not request it.
 
@@ -233,6 +236,7 @@ The fake must be able to produce each state that a guard exists for:
 - A checksum that is empty at first, then different from the planned MD5.
 - An order that differs after upload.
 - A preserved set that changes during the run, including a declared slot of a declared locale that the listing does not pair.
+- A declared group that changes after its own readback while a later group transfers.
 - A lock file that already exists for the target.
 
 Each guard's test must fail when the guard is removed.

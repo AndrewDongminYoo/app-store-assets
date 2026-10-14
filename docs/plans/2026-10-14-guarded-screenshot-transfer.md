@@ -88,7 +88,7 @@ Work:
 2. Bind bytes: check SHA-256 against the plan, write a private temporary copy, compute MD5 from the same bytes, upload the copy.
 3. Upload with explicit positions, after confirming Spaceship 2.240.1's position convention from its source.
 4. Poll with the bounded interval and limit, then read back count, checksum order and processing state; reorder once when only the order differs.
-5. Check that the preserved sets are unchanged.
+5. Read the declared locales again: every declared group still passes its readback, and the preserved sets are unchanged.
 
 Acceptance:
 
