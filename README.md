@@ -141,3 +141,16 @@ Local copy operations charge supplied bytes before reading paths and bound each
 capture by the remaining 1 GiB total budget (64 MiB per image, 8 MiB per text).
 Snapshot manifests, export manifests and final listings must serialize within
 the public reader's 8 MiB limit before any durable output is created.
+
+## Read-only snapshot export
+
+`AppStoreAssets.export_snapshot(target:, output:)` in `lib/fastlane_assets.rb` writes the `metadata-snapshot` record that a plan target supplies as its remote state.
+Call it from a consumer Fastlane lane after the lane has authenticated Spaceship; this repository has no such lane, and loading the library still needs no fastlane gem.
+It supports one Apple iOS target, makes read calls only, and ends each provider call at `deadline:` seconds (`SNAPSHOT_DEFAULT_DEADLINE`, at most `SNAPSHOT_MAX_DEADLINE`).
+It refuses an existing output path, an output directory inside this checkout, and a record that the Python validators reject; it never replaces a file.
+It also refuses, and writes nothing, for a missing app, a missing or ambiguous version, an attached build other than the target's, a duplicate locale or screenshot set, or a full provider page.
+A version that is not editable or has an active review is recorded with `editable` or `review_active` set, and the planner refuses it later; a version with no attached build has no `binary` key.
+`app_info_id` and the app-info fields come only from an editable app info, never from one that is waiting for review; without one, `app_info_id` is `null`.
+A screenshot set that exists with no screenshots is an empty list, and a set that does not exist has no key.
+Standard output carries one JSON result with the output path, the record's SHA-256 and counts; provider output goes to standard error.
+The record is an observation at one point in time; [the guarded screenshot transfer specification](docs/specs/2026-10-14-guarded-screenshot-transfer.md) defines how a later run compares it with the live state.

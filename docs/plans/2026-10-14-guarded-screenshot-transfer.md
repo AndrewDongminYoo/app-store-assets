@@ -142,3 +142,27 @@ Acceptance:
 - The final read passes for every declared group, and the preserved sets are unchanged.
 - No review submission happens.
 - A failed readback is recorded as a failure, with no retry under the same approval record.
+
+## Reconciliation 2026-10-14: U0 and the U1 runtime pin
+
+The operator made two decisions on 2026-10-14 while starting U1.
+This section adds to the steps above and does not rewrite them; for U0, the shipped `AppStoreAssets.export_snapshot` in `lib/fastlane_assets.rb` and its tests in `tests/test_snapshot_export.py` are the authority.
+
+1. The U1 profile's runtime is a git submodule of app-store-assets inside kkomkkomi, pinned at a `main` commit.
+   The current profile contract already requires `runtime.path` to be a clean checkout inside the consumer root, so the contract does not change.
+2. A U1 plan needs a supplied `metadata-snapshot` of the real App Store Connect state, but no command produced one and U1 makes no store call.
+   A new unit, U0, adds a read-only snapshot export, and the operator runs it once for kkomkkomi with their own login before U1 finishes.
+
+Effect on the units:
+
+- U0 precedes U1.
+- U0 lives in app-store-assets: `AppStoreAssets.export_snapshot(target:, output:)` makes read calls only and writes one `metadata-snapshot` record that passes `validate_public_metadata` and `remote_observation`.
+  Its tests use the fake App Store Connect, as the rules for every unit require; only the operator's own run reaches App Store Connect, with read calls only.
+- U1 now also adds the app-store-assets submodule to kkomkkomi and a kkomkkomi lane that authenticates Spaceship and calls `export_snapshot`.
+
+Lines above that these decisions supersede:
+
+- U1 step 3, "Keep the existing file and lanes unchanged", and the U1 acceptance line "no change to the kkomkkomi Fastfile lanes": the new export lane is now in U1's scope, and the existing lanes stay unchanged.
+  The plan could not supply a snapshot without a lane that reads App Store Connect, and the lane belongs to the consumer, not to app-store-assets.
+- The rule "No unit except U5 makes a real App Store Connect call" and the U1 acceptance line "No store call, no credential": they still hold for every pull request's code and verification, which use the fake.
+  The operator's one read-only export run for kkomkkomi is the single exception; it happens outside any pull request's verification, with the operator's own login, and makes no remote write.
