@@ -27,6 +27,11 @@ module FakeASC
     if SCENARIO["create_output"] && name == SCENARIO["create_output"]["during"]
       File.write(SCENARIO["create_output"]["path"], SCENARIO["create_output"]["content"])
     end
+    # Stands for an output directory that is moved away and replaced by a symbolic link.
+    if (swap = SCENARIO["swap_directory"]) && name == swap["during"]
+      File.rename(swap["path"], swap["moved_to"])
+      File.symlink(swap["replacement"], swap["path"])
+    end
     # Stands for a provider call that keeps retrying an HTTP 429 response.
     sleep(SCENARIO["hang"]["seconds"]) if SCENARIO["hang"] && name == SCENARIO["hang"]["call"]
   end

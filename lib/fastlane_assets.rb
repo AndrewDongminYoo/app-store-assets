@@ -59,7 +59,7 @@ module AppStoreAssets
       raise snapshot_error("deadline must be more than 0 and at most #{SNAPSHOT_MAX_DEADLINE} seconds")
     end
 
-    output = snapshot_output(output)
+    output, directory = snapshot_output(output)
     record = nil
     original_stdout = $stdout
     saved_stdout = STDOUT.dup
@@ -84,7 +84,7 @@ module AppStoreAssets
     end
     data = JSON.pretty_generate(record) + "\n"
     snapshot_validate(data)
-    snapshot_publish(output, data)
+    snapshot_publish(output, directory, data)
     result = {
       output: output,
       sha256: Digest::SHA256.hexdigest(data),
@@ -164,7 +164,9 @@ module AppStoreAssets
       raise snapshot_error("output must stay outside the app-store-assets checkout")
     end
 
-    File.join(parent, File.basename(output))
+    # The directory's identity binds publication to the directory validated here.
+    stat = File.stat(parent)
+    [File.join(parent, File.basename(output)), [stat.dev, stat.ino]]
   end
 
   # Every provider call, including Spaceship's own 429 backoff and retries, ends at the deadline.
@@ -308,26 +310,43 @@ module AppStoreAssets
     raise snapshot_error("record fails the public metadata validators: #{errors.strip.lines.last.to_s.strip}")
   end
 
-  def self.snapshot_publish(output, data)
-    temporary = File.join(File.dirname(output), ".#{File.basename(output)}.#{SecureRandom.hex(8)}.tmp")
-    created = false
+  # Publishes inside the directory that snapshot_output validated, even when its path was
+  # replaced during the provider read: after the chdir, the identity check binds the working
+  # directory to that directory, and every relative name below resolves inside it.
+  # The exporter runs single-threaded in a lane, so the block's working directory is safe to use.
+  def self.snapshot_publish(output, directory, data)
+    name = File.basename(output)
+    # An opaque name, so a long output name cannot exceed the file-name limit here.
+    temporary = ".snapshot-#{SecureRandom.hex(16)}.tmp"
     begin
-      File.open(temporary, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |file|
-        created = true
-        file.write(data)
-        file.flush
-        file.fsync
+      Dir.chdir(File.dirname(output)) do
+        stat = File.stat(".")
+        unless [stat.dev, stat.ino] == directory
+          raise snapshot_error("output directory changed during the export: #{File.dirname(output)}")
+        end
+
+        created = false
+        begin
+          File.open(temporary, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |file|
+            created = true
+            file.write(data)
+            file.flush
+            file.fsync
+          end
+          # A hard link publishes the complete file atomically and, unlike rename, never replaces one.
+          begin
+            File.link(temporary, name)
+          rescue Errno::EEXIST
+            raise snapshot_error("output already exists: #{output}")
+          rescue SystemCallError => error
+            raise snapshot_error("could not publish #{output} with a hard link: #{error.class.name.split('::').last}")
+          end
+        ensure
+          File.unlink(temporary) if created
+        end
       end
-      # A hard link publishes the complete file atomically and, unlike rename, never replaces one.
-      begin
-        File.link(temporary, output)
-      rescue Errno::EEXIST
-        raise snapshot_error("output already exists: #{output}")
-      rescue SystemCallError => error
-        raise snapshot_error("could not publish #{output} with a hard link: #{error.class.name.split('::').last}")
-      end
-    ensure
-      File.unlink(temporary) if created
+    rescue SystemCallError => error
+      raise snapshot_error("could not publish #{output}: #{error.class.name.split('::').last}")
     end
   end
 end

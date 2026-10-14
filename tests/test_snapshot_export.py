@@ -412,6 +412,31 @@ class SnapshotExportTests(unittest.TestCase):
         self.assertEqual([p.name for p in self.output.parent.iterdir()], ['snapshot.json'])
         self.assertReadOnly(calls)
 
+    def test_output_directory_replaced_during_the_read_receives_nothing(self):
+        # Without the identity check, the record would land in the replacement directory.
+        replacement = self.tmp / 'elsewhere'
+        replacement.mkdir()
+        moved = self.tmp / 'out-moved'
+        data = scenario()
+        data['swap_directory'] = {'during': 'AppStoreVersion#get_build', 'path': str(self.output.parent),
+                                  'moved_to': str(moved), 'replacement': str(replacement)}
+        result, calls = self.run_export(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('snapshot export refused: output directory changed during the export', result.stderr)
+        self.assertEqual(result.stdout, '')
+        self.assertEqual(list(replacement.iterdir()), [])
+        self.assertEqual(list(moved.iterdir()), [])
+        self.assertReadOnly(calls)
+
+    def test_long_output_name_is_published(self):
+        # A temporary name built from the output name would exceed the 255-byte name limit.
+        output = self.output.parent / ('s' * 250 + '.json')
+        result, calls = self.run_export(scenario(), output=output)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['output'], str(output))
+        self.assertEqual([p.name for p in output.parent.iterdir()], [output.name])
+        self.assertReadOnly(calls)
+
     def runtime_copy(self):
         runtime = self.tmp / 'runtime'
         (runtime / 'lib').mkdir(parents=True)
