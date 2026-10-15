@@ -65,21 +65,27 @@ def main(argv=None):
         if args.command == "doctor":
             paths = [args.profile, *target["inputs"]]
             asset_directories = []
+            requested_files = set()
+            requested_directories = set()
             if "version_source" in target:
                 paths.append(target["version_source"]["file"])
             if target.get("assets"):
                 asset_directories = doctor_assets(root, target, captures)
-                paths.extend(
-                    directory for directory in asset_directories
-                    if not any(
-                        directory != other and Path(directory).is_relative_to(other)
-                        for other in asset_directories
-                    )
-                )
-                paths.extend(
-                    path.relative_to(root).as_posix() for path in captures
-                    if not any(path.is_relative_to(root / directory) for directory in asset_directories)
-                )
+                paths.extend(asset_directories)
+                paths.extend(path.relative_to(root).as_posix() for path in captures)
+                requested = set(paths)
+                for name in requested:
+                    path = safe_path(root, name)
+                    if path.is_file():
+                        requested_files.add(name)
+                    elif path.is_dir():
+                        requested_directories.add(name)
+                    else:
+                        raise ValueError("missing bound input or unsupported input type")
+                paths = [
+                    name for name in sorted(requested)
+                    if not any(parent.as_posix() in requested for parent in Path(name).parents)
+                ]
             result = {
                 "runtime": runtime,
                 "target": identity,
@@ -89,6 +95,10 @@ def main(argv=None):
                 "authenticated_account_verified": False,
                 "account_id_declared": "account_id" in target,
             }
+            if not requested_files.issubset(result["inputs"]):
+                raise ValueError("missing bound input after inventory")
+            if any(not safe_path(root, name).is_dir() for name in requested_directories):
+                raise ValueError("missing bound input directory after inventory")
             for path, sha in captures.items():
                 if result["inputs"].get(path.relative_to(root).as_posix()) != sha:
                     raise ValueError(

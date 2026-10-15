@@ -96,21 +96,59 @@ class DoctorAssetBindingTests(unittest.TestCase):
         self.assert_refused("asset manifest.*listing")
 
     def test_snapshot_bytes_are_charged_only_once_in_final_inventory(self):
-        code, out, err = self.doctor()
-        self.assertEqual(code, 0, err)
-        expected = json.loads(out)["inputs"]
-        size = sum((self.root / name).stat().st_size for name in expected)
-        records = module("records")
+        original = list(self.target["inputs"])
+        for extra in ([], ["state"], [self.target["assets"]["manifest"]], [self.listing["source_snapshot"]]):
+            with self.subTest(extra=extra):
+                self.target["inputs"] = original + extra
+                self.save()
+                code, out, err = self.doctor()
+                self.assertEqual(code, 0, err)
+                expected = json.loads(out)["inputs"]
+                size = sum((self.root / name).stat().st_size for name in expected)
+                records = module("records")
 
-        def bounded(root, paths):
-            budget = records.WalkBudget()
-            budget.remaining = size
-            return records.inventory(root, paths, budget=budget)
+                def bounded(root, paths):
+                    budget = records.WalkBudget()
+                    budget.remaining = size
+                    return records.inventory(root, paths, budget=budget)
 
-        with patch.object(module("cli"), "inventory", side_effect=bounded):
+                with patch.object(module("cli"), "inventory", side_effect=bounded):
+                    code, out, err = self.doctor()
+                self.assertEqual(code, 0, err)
+                self.assertEqual(json.loads(out)["inputs"], expected)
+
+    def test_overlapping_inputs_do_not_hide_a_missing_declared_child(self):
+        self.target["inputs"].extend(["state", "state/missing.txt"])
+        self.save()
+        self.assert_refused("missing bound input")
+
+    def test_declared_child_removed_before_inventory_is_refused(self):
+        self.target["inputs"].append("helpers/source.txt")
+        self.save()
+        inventory = module("cli").inventory
+
+        def remove_child(root, paths):
+            (self.root / "helpers/source.txt").unlink()
+            return inventory(root, paths)
+
+        with patch.object(module("cli"), "inventory", side_effect=remove_child):
             code, out, err = self.doctor()
-        self.assertEqual(code, 0, err)
-        self.assertEqual(json.loads(out)["inputs"], expected)
+        self.assertEqual(code, 2, out)
+        self.assertRegex(err, "missing bound input")
+
+    def test_declared_empty_directory_removed_before_inventory_is_refused(self):
+        directory = self.root / "state/declared-empty"
+        directory.mkdir()
+        self.target["inputs"].extend(["state", "state/declared-empty"])
+        self.save()
+        inventory = module("cli").inventory
+
+        def remove_directory(root, paths):
+            directory.rmdir()
+            return inventory(root, paths)
+
+        with patch.object(module("cli"), "inventory", side_effect=remove_directory):
+            self.assert_refused("missing bound input")
 
     def test_tampered_snapshot_bytes_are_refused(self):
         (self.asset_dir / "en-US/01.png").write_bytes(self.data + b"changed")
