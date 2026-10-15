@@ -42,6 +42,78 @@ def local_context(root, profile_path, target_name, captures=None):
     return (profile, target, runtime)
 
 
+def bind_asset_manifest(root, target, listing, entries, captures):
+    """Bind the immutable asset inventory and its import provenance to a listing."""
+    descriptor = target["assets"]
+    exact_keys(descriptor, {"manifest"}, ("manifest",))
+    manifest_path = safe_path(root, descriptor["manifest"])
+    if manifest_path.name != "manifest.json":
+        raise ValueError("asset snapshot requires manifest.json")
+    assets = validate_snapshot(manifest_path.parent, captures)["record"]
+    if (
+        assets.get("type") != "asset-manifest"
+        or assets.get("target") != target_identity(target)
+    ):
+        raise ValueError("asset manifest target/version differs")
+    prefix = manifest_path.parent.relative_to(root)
+    intended = [
+        (str(prefix / i["file"]), i["locale"], i["slot"], i["sha256"])
+        for i in assets["assets"]
+    ]
+    actual = [(i["file"], i["locale"], i["slot"], i["sha256"]) for i in entries]
+    if intended != actual:
+        raise ValueError("asset manifest ordered inventory differs from listing")
+    sources = [listing]
+    if "source_snapshot" in listing:
+        source_path = safe_path(root, listing["source_snapshot"])
+        sources.append(validate_snapshot(source_path.parent, captures)["record"])
+    for key in ("inputs", "source_export"):
+        values = [source[key] for source in sources if key in source]
+        if (key in sources[-1]) != (key in assets) or any(value != assets.get(key) for value in values):
+            raise ValueError("asset manifest import provenance differs from listing")
+    return assets, prefix.as_posix()
+
+
+def check_asset_inventory(root, directory, inputs, captures):
+    def belongs(name):
+        return directory == "." or name.startswith(directory + "/")
+
+    expected = {
+        path.relative_to(root).as_posix(): sha
+        for path, sha in captures.items()
+        if belongs(path.relative_to(root).as_posix())
+    }
+    actual = {name: sha for name, sha in inputs.items() if belongs(name)}
+    if actual != expected:
+        raise ValueError("asset snapshot inventory changed after validation")
+
+
+def doctor_assets(root, target, captures):
+    if not target.get("metadata"):
+        raise ValueError("asset manifest requires a declared listing")
+    identity = target_identity(target)
+    listing = resolve_changelogs(
+        root, read_json(safe_path(root, target["metadata"]), captures), identity, captures
+    )
+    if listing["type"] != "metadata":
+        raise ValueError("asset manifest requires a local metadata listing")
+    entries = [
+        dict(item, locale=name, slot=slot)
+        for name, groups in listing.get("images", {}).items()
+        for slot, images in groups.items()
+        for item in images
+    ]
+    validated = validate_images(root, entries, identity["store"], identity["platform"])
+    for item in validated:
+        bind_capture(captures, safe_path(root, item["file"]), item["sha256"])
+    _, directory = bind_asset_manifest(root, target, listing, validated, captures)
+    directories = {directory}
+    if "source_snapshot" in listing:
+        source = safe_path(root, listing["source_snapshot"])
+        directories.add(source.parent.relative_to(root).as_posix())
+    return sorted(directories)
+
+
 def make_plan(root, profile_path, target_name, operation):
     root = Path(root).resolve()
     if operation not in OPERATIONS:
@@ -64,6 +136,7 @@ def make_plan(root, profile_path, target_name, operation):
             paths.extend(build["adapter"]["inputs"])
     listing = None
     assets = None
+    asset_directory = None
     notes = {}
     if operation in ("metadata", "images"):
         if not target.get("metadata"):
@@ -122,31 +195,10 @@ def make_plan(root, profile_path, target_name, operation):
             if profile["mode"] == "live" and (not descriptor):
                 raise ValueError("live image intent requires immutable asset snapshot")
             if descriptor:
-                exact_keys(descriptor, {"manifest"}, ("manifest",))
-                manifest_path = safe_path(root, descriptor["manifest"])
-                if manifest_path.name != "manifest.json":
-                    raise ValueError("asset snapshot requires manifest.json")
-                assets = validate_snapshot(manifest_path.parent, captures)["record"]
-                if (
-                    assets.get("type") != "asset-manifest"
-                    or assets.get("target") != identity
-                ):
-                    raise ValueError("asset manifest target/version differs")
-                if assets.get("provenance", {}).get("status") != "unverified-import":
-                    raise ValueError("unsupported asset provenance declaration")
-                prefix = manifest_path.parent.relative_to(root)
-                intended = [
-                    (str(prefix / i["file"]), i["locale"], i["slot"], i["sha256"])
-                    for i in assets["assets"]
-                ]
-                actual = [
-                    (i["file"], i["locale"], i["slot"], i["sha256"]) for i in validated
-                ]
-                if intended != actual:
-                    raise ValueError(
-                        "asset manifest ordered inventory differs from listing"
-                    )
-                paths.append(manifest_path.parent.relative_to(root).as_posix())
+                assets, asset_directory = bind_asset_manifest(
+                    root, target, listing, validated, captures
+                )
+                paths.append(asset_directory)
     remote = None
     if target.get("remote"):
         paths.append(target["remote"])
@@ -191,6 +243,8 @@ def make_plan(root, profile_path, target_name, operation):
     for path, digest in captures.items():
         if inputs.get(path.relative_to(root).as_posix()) != digest:
             raise ValueError("parsed/validated input changed before plan inventory")
+    if asset_directory is not None:
+        check_asset_inventory(root, asset_directory, inputs, captures)
     if build and profile["mode"] == "live":
         source_inputs = {
             name: digest

@@ -109,6 +109,10 @@ writes project state. `diff` additionally takes `--before` and `--after`.
 `--dry-run` keeps the same read-only behavior. Image validation may create
 private temporary decoder files which are removed on completion.
 
+When a target declares `assets.manifest`, `doctor` validates the local listing and asset snapshot without reading `remote`.
+It binds the ordered locale/slot paths and image hashes, checks the snapshot's files against their bytes, and compares recorded import inputs and source export with the listing's provenance.
+Its input inventory includes the checked listing, snapshots and images; `plan --operation images` remains the selected-version and replacement-policy check.
+
 The profile lists a public runtime URL, exact Git commit, complete runtime hash
 inventory and each app/platform/account/flavor/stage/version/track identity.
 Unknown keys and malformed nested values fail closed in every target, including
