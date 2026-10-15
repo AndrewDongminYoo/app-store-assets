@@ -70,7 +70,10 @@ def main(argv=None):
             if target.get("assets"):
                 asset_directory = doctor_assets(root, target, captures)
                 paths.append(asset_directory)
-                paths.extend(path.relative_to(root).as_posix() for path in captures)
+                paths.extend(
+                    path.relative_to(root).as_posix() for path in captures
+                    if not path.is_relative_to(root / asset_directory)
+                )
             result = {
                 "runtime": runtime,
                 "target": identity,

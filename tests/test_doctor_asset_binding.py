@@ -95,6 +95,23 @@ class DoctorAssetBindingTests(unittest.TestCase):
         self.save()
         self.assert_refused("asset manifest.*listing")
 
+    def test_snapshot_bytes_are_charged_only_once_in_final_inventory(self):
+        code, out, err = self.doctor()
+        self.assertEqual(code, 0, err)
+        expected = json.loads(out)["inputs"]
+        size = sum((self.root / name).stat().st_size for name in expected)
+        records = module("records")
+
+        def bounded(root, paths):
+            budget = records.WalkBudget()
+            budget.remaining = size
+            return records.inventory(root, paths, budget=budget)
+
+        with patch.object(module("cli"), "inventory", side_effect=bounded):
+            code, out, err = self.doctor()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["inputs"], expected)
+
     def test_tampered_snapshot_bytes_are_refused(self):
         (self.asset_dir / "en-US/01.png").write_bytes(self.data + b"changed")
         self.assert_refused("hash|inventory")
