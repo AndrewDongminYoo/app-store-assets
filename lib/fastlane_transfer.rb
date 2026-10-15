@@ -32,7 +32,8 @@ module AppStoreAssets
         expires = transfer_now + group_deadline
         shots = item[:set] ? Array(item[:set].app_screenshots) : []
         if shots.any? { |shot| shot.source_file_checksum.to_s.empty? }
-          item[:set] = transfer_settle_checksums(item, expires, deadline, poll_interval, check_lock)
+          item[:set] = transfer_settle_checksums(item, expires, deadline, poll_interval, check_lock,
+                                                intent.fetch("replacement").fetch("allow_delete"))
           shots = Array(item[:set].app_screenshots)
         end
         planned = item[:group].fetch("images").map { |image| image.fetch("md5") }
@@ -213,7 +214,7 @@ module AppStoreAssets
     set
   end
 
-  def self.transfer_settle_checksums(item, expires, deadline, interval, check_lock)
+  def self.transfer_settle_checksums(item, expires, deadline, interval, check_lock, allow_delete)
     loop do
       check_lock.call
       set = transfer_read_set(item, transfer_remaining(expires, deadline, item[:label]))
@@ -224,7 +225,9 @@ module AppStoreAssets
       if shots.any? { |shot| shot["processing_state"] == "FAILED" }
         raise transfer_error("#{item[:label]}: screenshot processing failed")
       end
-      return set if shots.all? { |shot| !shot["md5"].to_s.empty? }
+      if shots.all? { |shot| !shot["md5"].to_s.empty? || (allow_delete && shot["processing_state"] == "AWAITING_UPLOAD") }
+        return set
+      end
 
       sleep [interval, transfer_remaining(expires, deadline, item[:label])].min
     end

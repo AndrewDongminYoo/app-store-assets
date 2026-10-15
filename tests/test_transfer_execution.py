@@ -200,6 +200,40 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.assert_refused(result, "processing failed")
         self.assertEqual(self.writes(calls), [])
 
+    def test_invariants_4_and_5_approved_retry_replaces_abandoned_placeholder(self):
+        for allow_delete in (False, True):
+            with self.subTest(allow_delete=allow_delete):
+                self.matching(1, "AWAITING_UPLOAD")
+                self.declared[1]["screenshots"][0]["source_file_checksum"] = ""
+                self.refresh(allow_delete=allow_delete)
+                result, calls = self.run_transfer()
+                if allow_delete:
+                    report = self.success(result)
+                    self.assertEqual(report["groups"][1]["action"], "replace")
+                    self.assertEqual([c["arguments"]["id"] for c in calls if c["call"] == "delete"], ["matching-1-0"])
+                else:
+                    self.assert_refused(result, "deadline")
+                    self.assertEqual(self.writes(calls), [])
+
+    def test_invariant_5_placeholder_does_not_bypass_other_missing_checksums(self):
+        self.matching(0, "AWAITING_UPLOAD")
+        for image in self.declared[0]["screenshots"]:
+            image["source_file_checksum"] = ""
+        self.declared[0]["screenshots"][1]["asset_delivery_state"] = {"state": "PROCESSING"}
+        self.refresh(allow_delete=True)
+        result, calls = self.run_transfer()
+        self.assert_refused(result, "deadline")
+        self.assertEqual(self.writes(calls), [])
+
+    def test_invariant_3_placeholder_recovery_still_checks_ids_before_writes(self):
+        self.matching(1, "AWAITING_UPLOAD")
+        self.declared[1]["screenshots"][0]["source_file_checksum"] = ""
+        self.data["poll_change_id"] = True
+        self.refresh(allow_delete=True)
+        result, calls = self.run_transfer()
+        self.assert_refused(result, "IDs changed during preflight")
+        self.assertEqual(self.writes(calls), [])
+
     def test_invariant_7_fully_unchanged_run_still_gets_final_read(self):
         self.matching(0)
         self.matching(1)

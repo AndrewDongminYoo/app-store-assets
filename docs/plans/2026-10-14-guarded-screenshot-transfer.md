@@ -189,6 +189,8 @@ Final declared-group reads must also match their own completed readbacks, includ
 Before deciding actions, the adapter checks all staged paths and hashes.
 It also validates all declared localization and existing set resource IDs before any write.
 Missing source checksums on an existing group are settled before choosing its action, retaining its initial screenshot IDs throughout that poll.
+When deletion is authorized, a confirmed `AWAITING_UPLOAD` placeholder may remain without a checksum and proceed to replacement; other missing checksums still wait, and failed processing or changed IDs still refuses the whole run.
+This recovers an abandoned placeholder under a newly approved retry and the exclusive writer window; Fastlane creates the placeholder before uploading bytes and patching its checksum.
 Checksum resolution and an unchanged group's processing poll share one preflight group deadline.
 It checks all staged files again after unchanged groups finish polling, and checks each image immediately before upload.
 The staging directory remains private for the entire run; as with the U3 ownership contract, deliberate same-UID mutation inside that directory is outside portable pathname isolation guarantees.
