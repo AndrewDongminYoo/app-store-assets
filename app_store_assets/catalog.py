@@ -254,21 +254,24 @@ def validate_fields(fields, store, proposed=True):
         raise ValueError("unsupported metadata store")
     clean = normalize_fields(fields)
     if store == "google":
-        for values in clean.values():
+        for name, values in clean.items():
             if "description" in values:
                 if (
                     "full_description" in values
                     and values["full_description"] != values["description"]
                 ):
-                    raise ValueError("conflicting Google description alias")
+                    raise ValueError(
+                        f"fields.{name}.description: conflicting Google description alias"
+                    )
                 values["full_description"] = values.pop("description")
     store_rules = rules()["stores"].get(store, {})
     limits = store_rules.get("text_limits", {})
-    for values in clean.values():
+    for name, values in clean.items():
         if store in ("apple", "google") and set(values) - set(
             store_rules["supported_fields"]
         ):
-            raise ValueError(f"unsupported {store} metadata field")
+            key = sorted(set(values) - set(store_rules["supported_fields"]))[0]
+            raise ValueError(f"fields.{name}.{key}: unsupported {store} metadata field")
         for key, value in values.items():
             if (
                 proposed
@@ -276,7 +279,9 @@ def validate_fields(fields, store, proposed=True):
                 and key in ("support_url", "privacy_url")
                 and not value
             ):
-                raise ValueError("required Apple URL cannot be cleared")
+                raise ValueError(
+                    f"fields.{name}.{key}: required Apple URL cannot be cleared"
+                )
             if key in limits:
                 limit, unit = limits[key]
                 length = (
@@ -285,9 +290,13 @@ def validate_fields(fields, store, proposed=True):
                 if proposed and length < store_rules.get("text_minimums", {}).get(
                     key, 0
                 ):
-                    raise ValueError(f"metadata field minimum not met: {key}")
+                    raise ValueError(
+                        f"fields.{name}.{key}: metadata field minimum not met: {key}"
+                    )
                 if length > limit:
-                    raise ValueError(f"metadata field limit exceeded: {key}")
+                    raise ValueError(
+                        f"fields.{name}.{key}: metadata field limit exceeded: {key}"
+                    )
     return clean
 
 

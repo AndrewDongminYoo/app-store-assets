@@ -104,9 +104,13 @@ def normalize_fields(fields):
         exact_keys(values, PUBLIC_FIELDS)
         clean = {}
         for key, value in values.items():
-            text(value)
-            if value and (key.endswith("_url") or key == "video"):
-                public_url(value)
+            try:
+                text(value)
+                if value and (key.endswith("_url") or key == "video"):
+                    public_url(value)
+            except ValueError as error:
+                # Only validated locale and field names enter diagnostics, never values.
+                raise ValueError(f"fields.{name}.{key}: {error}") from None
             clean[key] = value
         result[name] = clean
     return result
