@@ -19,6 +19,10 @@ class FastlaneIntegrationTests(unittest.TestCase):
             fastfile = repo / location
             fastfile.parent.mkdir(parents=True)
             shutil.copyfile(PERSONAL / project / location, fastfile)
+            if project == 'mirae':
+                helper = Path('scripts/store_assets/fastlane.rb')
+                (repo / helper).parent.mkdir(parents=True)
+                shutil.copyfile(PERSONAL / project / helper, repo / helper)
             source = repo / ('fastlane/metadata/ios/en-US/images/iphone65' if project == 'mirae' else 'fastlane/screenshots/ios/en-US')
             source.mkdir(parents=True)
             (source / filename).write_bytes(image if image is not None else png())
@@ -28,7 +32,11 @@ class FastlaneIntegrationTests(unittest.TestCase):
             env = {'PATH': os.environ['PATH'], 'APP_STORE_ASSETS_ROOT': str(ROOT),
                    'LANG': 'C.UTF-8', 'HOME': str(Path(scratch) / 'empty-home')}
             result = subprocess.run(['ruby', str(ROOT / 'tests/fastlane_harness.rb'), str(fastfile), json.dumps(options)], capture_output=True, text=True, env=env, timeout=30)
-            report = json.loads(result.stdout)
+            try:
+                report = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                self.fail(f'{project} Fastlane harness did not emit valid JSON (exit {result.returncode})\n'
+                          f'stdout:\n{result.stdout}\nstderr:\n{result.stderr}')
             # Read the actual folder passed to the external upload action.
             if report['uploads'] and report['uploads'][0].get('screenshots_path') and not report['uploads'][0].get('skip_screenshots'):
                 tree = Path(report['uploads'][0]['screenshots_path'])
@@ -74,12 +82,21 @@ class FastlaneIntegrationTests(unittest.TestCase):
                     self.assertEqual(report['review_reads'], 0)
                     self.assertRegex(result.stderr, r'reviewed.*plan')
 
-    def test_metadata_only_option_does_not_require_a_screenshot_tool(self):
-        for project in ('mirae', 'ttush_push', 'kkomkkomi'):
+    def test_legacy_metadata_only_option_does_not_require_a_screenshot_tool(self):
+        for project in ('ttush_push', 'kkomkkomi'):
             with self.subTest(project=project):
                 result, report = self.lane(project, image=b'broken', skip_screenshots=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue(report['uploads'][0]['skip_screenshots'])
+
+    def test_mirae_metadata_only_still_requires_plan_and_digest(self):
+        for options in ({}, {'plan': 'reviewed-plan.json'}, {'expected_digest': 'a' * 64}):
+            with self.subTest(options=options):
+                result, report = self.lane('mirae', image=b'broken', skip_screenshots=True, **options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(report['uploads'], [])
+                self.assertEqual(report['review_reads'], 0)
+                self.assertIn('Provide plan and expected_digest', result.stderr)
 
 
 if __name__ == '__main__':
