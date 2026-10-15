@@ -187,6 +187,16 @@ class DoctorAssetBindingTests(unittest.TestCase):
                 self.save()
                 self.assert_refused("asset manifest.*provenance")
 
+    def test_listing_keys_cannot_replace_missing_source_snapshot_provenance(self):
+        for missing in (("inputs",), ("source_export",), ("inputs", "source_export")):
+            with self.subTest(missing=missing):
+                history = {name: value for name, value in self.history.items() if name not in missing}
+                directory = snapshot_fixture(self.root / "state/metadata", history)
+                self.listing.update(inputs=self.asset_record["inputs"], source_export=self.asset_record["source_export"])
+                self.listing["source_snapshot"] = str(directory.relative_to(self.root) / "manifest.json")
+                self.save()
+                self.assert_refused("asset manifest.*provenance")
+
     def test_added_snapshot_file_before_final_inventory_is_refused(self):
         inventory = module("cli").inventory
 

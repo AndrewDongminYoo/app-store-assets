@@ -69,7 +69,7 @@ def bind_asset_manifest(root, target, listing, entries, captures):
         sources.append(validate_snapshot(source_path.parent, captures)["record"])
     for key in ("inputs", "source_export"):
         values = [source[key] for source in sources if key in source]
-        if bool(values) != (key in assets) or any(value != assets.get(key) for value in values):
+        if (key in sources[-1]) != (key in assets) or any(value != assets.get(key) for value in values):
             raise ValueError("asset manifest import provenance differs from listing")
     return assets, prefix.as_posix()
 
