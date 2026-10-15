@@ -39,7 +39,7 @@ The legacy `AppStoreAssets.prepare` entrypoint fails before local process launch
 A locally prepared path does not authorize remote replacement.
 No authenticated transfer, planner or runtime launcher is introduced by this boundary.
 Actual consumers that directly call Fastlane remain separate consumer work; all three personal consumers passed the opt-in integration checks at the revisions recorded in [the 2026-10-14 integration evidence](../notes/2026-10-14-mirae-direct-lanes-integration.md).
-The current Mirae fixture is missing a required local helper, tracked in [issue #41](https://github.com/AndrewDongminYoo/app-store-assets/issues/41).
+The Mirae fixture copies its required local helper and checks its plan/digest requirement, including metadata-only calls, as defined by the [fixture contract](2026-10-16-fastlane-integration-fixture.md).
 The separate guarded transfer adapter binds a reviewed plan/digest to the exact target, compares declared placement groups and reads back processing and order; [the guarded screenshot transfer specification](2026-10-14-guarded-screenshot-transfer.md) defines that contract.
 
 ## Sources
