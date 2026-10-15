@@ -178,6 +178,28 @@ Acceptance (fake states, each with the outcome the specification's invariants re
 - A create, upload, delete or reorder call that keeps returning HTTP 429 fails the run at the per-call deadline, and the staging directory and the lock are removed.
 - Provenance stays `unverified-import`.
 
+### U4 implementation and verification
+
+`lib/fastlane_assets.rb` owns the entrypoint, U2 boundary and lock; `lib/fastlane_transfer.rb` contains the transfer helpers loaded by that entrypoint.
+The snapshot reader optionally retains the provider localization and set objects for the transfer, without changing the U0 public snapshot schema or its default behavior.
+Transfer mode uses these objects only for actual listing pairs.
+The preserved-set baseline includes set IDs, screenshot IDs, order, checksums, processing and dimensions, and final readback compares it exactly.
+Final declared-group reads must also match their own completed readbacks, including IDs, and the final build ID and version state must equal the initial live read.
+
+Before deciding actions, the adapter checks all staged paths and hashes.
+It checks all staged files again after unchanged groups finish polling, and checks each image immediately before upload.
+The staging directory remains private for the entire run; as with the U3 ownership contract, deliberate same-UID mutation inside that directory is outside portable pathname isolation guarantees.
+The source image paths are never read by the Ruby uploader.
+All write calls mark the group as possibly changed before entering the provider, because a timeout can follow a successful server-side write.
+That group list survives provider, final-read and cleanup errors.
+
+`group_deadline` bounds the complete write and polling sequence for a changed group, or the preflight poll for an unchanged group.
+Each provider operation uses the smaller of the remaining group time and the per-call `deadline`.
+Polling uses a monotonic clock and sleeps no longer than the remaining time.
+The environment bounds and provider-output redirection are restored with `ensure`.
+`tests/test_transfer_execution.py` uses the real U2 verifier and the opt-in `tests/fake_spaceship/transfer.rb` writer; the existing snapshot fake still rejects writes unless explicitly opted into this fixture.
+The fastlane 2.240.1 upload, delete, create, read and reorder signatures were checked against the pinned source before implementation.
+
 ## U5: Authorized smoke upload for kkomkkomi
 
 Repository: app-store-assets, run against the U1 kkomkkomi profile.

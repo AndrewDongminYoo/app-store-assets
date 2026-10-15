@@ -77,17 +77,18 @@ Explicit local preparation can enable this option for opaque alpha inputs.
 The legacy Ruby `AppStoreAssets.prepare` entrypoint is blocked before it starts a local process or returns options that a lane can use for screenshot transfer.
 Consumers can explicitly call `AppStoreAssets.prepare_local` to prepare validated local bundles.
 It returns `screenshots_path` without `overwrite_screenshots`; that path is local output and does not authorize an upload.
-No replacement planner, authenticated executor or consumer launcher is introduced by this boundary change.
+The guarded transfer entrypoint below is separate from this legacy boundary.
 
 Local preparation rejects hidden screenshots, mixed-case extensions such as `.Png`, and mismatched file formats.
-Future screenshot transfer requires a separately reviewed plan, exact target and complete local/remote placement policy.
+Screenshot transfer requires a separately reviewed plan, exact target and complete local/remote placement policy.
 The existing external Fastlane replacement behavior can affect remote display classes absent from a local tree.
 Consumers that call Fastlane directly need their own guarded integration; this bridge cannot block those calls.
 The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases pass with external actions stubbed; `docs/notes/2026-10-14-mirae-direct-lanes-integration.md` records the consumer commits and results.
 
-No command in this repository currently logs into App Store Connect, uploads files, or submits review.
+The Python commands remain offline; the Ruby transfer entrypoint uses an already-authenticated Spaceship session and can upload approved screenshots.
+No entrypoint logs in or submits review.
 Fastlane lane execution remains an external action requiring authorization.
-Remote readback and guarded transfer remain a later separately reviewed adapter; [the guarded screenshot transfer specification](docs/specs/2026-10-14-guarded-screenshot-transfer.md) defines its contract.
+The [guarded screenshot transfer specification](docs/specs/2026-10-14-guarded-screenshot-transfer.md) defines the readback and transfer contract.
 
 ## Evidence limits
 
@@ -183,11 +184,11 @@ On failure the command removes only files it created; it never replaces existing
 Standard output contains one `verified-transfer-intent` JSON document with the plan digest, target, mode, supplied remote observation, replacement policy, unchanged provenance, and the listing's actual locale/slot pairs.
 Each image has a private `staged_path`, SHA-256 and MD5 derived from the same captured bytes.
 MD5 is only a provider comparison value; SHA-256 binds the approved bytes.
-Transport remains U4, and real uploads still require the specification's explicit operator authorization and writer window.
+Real uploads require the specification's explicit operator authorization and writer window.
 
 ## Verify the live screenshot state
 
-U3 adds `AppStoreAssets.transfer_screenshots` with `mode: "read-only"` only.
+`AppStoreAssets.transfer_screenshots` defaults to `mode: "read-only"`.
 Call it from an authenticated Fastlane lane with the same whole target used by the reviewed plan and approval:
 
 ```ruby
@@ -215,6 +216,29 @@ Provider output goes to standard error, including an already-created STDOUT logg
 Standard output contains one JSON result with the plan digest, target, actual declared groups, snapshot comparison results, remote screenshot IDs, and preserved sets of the declared locales.
 
 The read-only mode verifies snapshot freshness and the approved attached build.
-It does not choose upload or replacement actions or certify screenshot processing completion; those checks belong to U4.
+It does not choose upload or replacement actions or certify screenshot processing completion.
 The mode rejects snapshot fields that have no live mapping, and keeps provenance as `unverified-import`.
 The exact mappings and fake-provider acceptance cases are in the [U3 plan](docs/plans/2026-10-14-guarded-screenshot-transfer.md#u3-live-mappings-and-entrypoint).
+
+## Transfer approved screenshots
+
+After the operator authorizes the target and operations and establishes the [writer window](docs/specs/2026-10-14-guarded-screenshot-transfer.md#operator-preconditions), use the same entrypoint with `mode: "transfer"`.
+The approval record, reviewed plan and fresh supplied snapshot are still required.
+The legacy `prepare` entrypoint remains blocked.
+
+The adapter checks every staged image, selects every declared group's action, and waits for every unchanged group to finish processing before its first remote write.
+It creates absent sets, uploads empty groups, and replaces different non-empty groups only when the reviewed plan has `replacement.allow_delete: true`.
+Replacement deletes screenshots within the declared set; it does not delete preserved sets.
+Uploads use staged paths with explicit positions and `wait_for_processing: false`.
+
+Optional bounds are `group_deadline: 600`, `poll_interval: 5`, and `request_timeout: 60`, all in seconds, positive and at most 600.
+Each group's writes and readback share its group deadline; each provider call also has the existing `deadline: 120` limit.
+The adapter temporarily sets `SPACESHIP_TIMEOUT` to the request timeout rounded up to whole seconds and `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT` to the group limit rounded up to whole minutes, at least one minute, and restores both variables on exit.
+The adapter deadline still bounds provider retries when their internal timeout is longer.
+
+The transfer result reports `upload`, `replace`, or `unchanged` for each declared pair, its readback completion and checksum match, and the remote screenshot IDs.
+Success requires the planned count and MD5 order, completed processing, unchanged preserved sets, and the approved build and editable version without active review in the final read.
+One corrective reorder is allowed when only the uploaded group's order differs.
+A failure reports groups that may have changed, including calls whose response timed out; it does not roll back remote writes.
+After a partial failure, obtain a new snapshot, plan and approval record before retrying.
+Provenance remains `unverified-import`.

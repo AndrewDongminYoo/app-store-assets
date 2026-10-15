@@ -170,3 +170,5 @@ module Spaceship
     end
   end
 end
+
+require_relative "transfer" if FakeASC::SCENARIO["transfer"]
