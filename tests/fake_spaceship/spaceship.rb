@@ -106,9 +106,14 @@ module Spaceship
       writes :update, :select_build, :create_app_store_version_localization,
              :create_app_store_version_submission, :create_app_store_version_release_request, :reject!
 
+      # Like Spaceship 2.240.1: a version without a build gets `"data": null`, and
+      # Models.parse raises "No data" instead of returning nil.
       def get_build(client: nil, build_id: nil)
         FakeASC.call("AppStoreVersion#get_build")
-        @data["build"] && Build.new(@data["build"])
+        raise @data["build_error"] if @data["build_error"]
+        raise "No data" unless @data["build"]
+
+        Build.new(@data["build"])
       end
 
       def get_app_store_version_localizations(client: nil, filter: {}, includes: nil, limit: nil, sort: nil)

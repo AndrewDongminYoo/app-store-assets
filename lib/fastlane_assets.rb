@@ -213,7 +213,7 @@ module AppStoreAssets
     submission = snapshot_call("review submission", deadline) do
       app.get_in_progress_review_submission(platform: "IOS")
     end
-    build = snapshot_call("attached build", deadline) { version.get_build }
+    build = snapshot_call("attached build", deadline) { snapshot_attached_build(version) }
     app_info = snapshot_call("app info", deadline) { app.fetch_edit_app_info }
     # fetch_edit_app_info also returns an app info in WAITING_FOR_REVIEW, which accepts no edit.
     app_info = nil unless app_info.nil? || SNAPSHOT_APP_INFO_EDITABLE_STATES.include?(app_info.state)
@@ -277,6 +277,17 @@ module AppStoreAssets
     }
     record["binary"] = snapshot_binary(identity, build) if build
     record
+  end
+
+  # The build attached to the version, or nil when none is. For a version without a
+  # build, App Store Connect answers with `"data": null`, and Spaceship 2.240.1's
+  # Models.parse raises exactly "No data" for it instead of returning nothing.
+  def self.snapshot_attached_build(version)
+    version.get_build
+  rescue RuntimeError => error
+    raise unless error.message == "No data"
+
+    nil
   end
 
   # Only fields with a defined live equivalent; App Store Connect reports no SHA-256.

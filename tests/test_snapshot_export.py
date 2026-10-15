@@ -281,6 +281,16 @@ class SnapshotExportTests(unittest.TestCase):
         self.assertNotIn('binary', record)
         remote_observation(record)
 
+    def test_other_build_lookup_errors_are_not_read_as_no_build(self):
+        # Only Spaceship's exact "No data" means that no build is attached.
+        data = scenario()
+        version_of(data)['build_error'] = 'Server error got 500'
+        result, calls = self.run_export(data)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Server error got 500', result.stderr)
+        self.assertFalse(self.output.exists())
+        self.assertReadOnly(calls)
+
     def test_attached_build_that_differs_from_the_target_is_refused(self):
         for build in ({'version': '41', 'processing_state': 'VALID'}, {'version': '42', 'processing_state': None}):
             with self.subTest(build=build):
