@@ -107,7 +107,11 @@ def doctor_assets(root, target, captures):
     for item in validated:
         bind_capture(captures, safe_path(root, item["file"]), item["sha256"])
     _, directory = bind_asset_manifest(root, target, listing, validated, captures)
-    return directory
+    directories = {directory}
+    if "source_snapshot" in listing:
+        source = safe_path(root, listing["source_snapshot"])
+        directories.add(source.parent.relative_to(root).as_posix())
+    return sorted(directories)
 
 
 def make_plan(root, profile_path, target_name, operation):

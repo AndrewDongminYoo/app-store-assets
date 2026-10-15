@@ -64,15 +64,21 @@ def main(argv=None):
         identity = target_identity(target)
         if args.command == "doctor":
             paths = [args.profile, *target["inputs"]]
-            asset_directory = None
+            asset_directories = []
             if "version_source" in target:
                 paths.append(target["version_source"]["file"])
             if target.get("assets"):
-                asset_directory = doctor_assets(root, target, captures)
-                paths.append(asset_directory)
+                asset_directories = doctor_assets(root, target, captures)
+                paths.extend(
+                    directory for directory in asset_directories
+                    if not any(
+                        directory != other and Path(directory).is_relative_to(other)
+                        for other in asset_directories
+                    )
+                )
                 paths.extend(
                     path.relative_to(root).as_posix() for path in captures
-                    if not path.is_relative_to(root / asset_directory)
+                    if not any(path.is_relative_to(root / directory) for directory in asset_directories)
                 )
             result = {
                 "runtime": runtime,
@@ -88,8 +94,8 @@ def main(argv=None):
                     raise ValueError(
                         "doctor inventory differs from parsed input capture"
                     )
-            if asset_directory is not None:
-                check_asset_inventory(root, asset_directory, result["inputs"], captures)
+            for directory in asset_directories:
+                check_asset_inventory(root, directory, result["inputs"], captures)
         elif args.command == "plan":
             result = make_plan(root, args.profile, args.target, args.operation)
         else:

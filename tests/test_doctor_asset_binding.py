@@ -159,6 +159,17 @@ class DoctorAssetBindingTests(unittest.TestCase):
         with patch.object(module("cli"), "inventory", side_effect=changed):
             self.assert_refused("snapshot inventory")
 
+    def test_added_metadata_snapshot_file_before_final_inventory_is_refused(self):
+        inventory = module("cli").inventory
+        directory = (self.root / self.listing["source_snapshot"]).parent
+
+        def changed(root, paths):
+            (directory / "added.txt").write_text("outside provenance manifest")
+            return inventory(root, paths)
+
+        with patch.object(module("cli"), "inventory", side_effect=changed):
+            self.assert_refused("snapshot inventory")
+
     def test_plan_keeps_the_same_asset_binding_and_remote_requirement(self):
         planning = module("planning")
         with self.assertRaisesRegex(ValueError, "missing input"):
