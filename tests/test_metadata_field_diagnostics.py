@@ -7,6 +7,17 @@ from test_snapshot_export import target
 
 
 class MetadataFieldDiagnosticsTests(unittest.TestCase):
+    def test_google_description_alias_keeps_its_source_error_path(self):
+        identity = target(store="google", platform="android", track="production")
+        record = dict(schema_version=1, type="metadata-snapshot", target=identity,
+                      fields={"en-US": {"description": "x" * 4001}})
+        with self.assertRaises(ValueError) as caught:
+            validate_public_metadata(record, identity)
+        self.assertTrue(str(caught.exception).startswith("fields.en-US.description:"), str(caught.exception))
+        record["fields"]["en-US"]["description"] = "Public description"
+        clean = validate_public_metadata(record, identity)
+        self.assertEqual(clean["fields"]["en-US"], {"full_description": "Public description"})
+
     def test_release_note_errors_name_their_actual_container(self):
         cases = [
             (target(), {"release_notes": {"en-US": "private\x00text"}}, "release_notes.en-US"),

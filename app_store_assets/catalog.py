@@ -255,9 +255,12 @@ def validate_fields(
     if store not in ("apple", "google"):
         raise ValueError("unsupported metadata store")
     clean = normalize_fields(fields, diagnostic_path=diagnostic_path)
+    description_aliases = set()
     if store == "google":
         for name, values in clean.items():
             if "description" in values:
+                if "full_description" not in values:
+                    description_aliases.add(name)
                 if (
                     "full_description" in values
                     and values["full_description"] != values["description"]
@@ -275,7 +278,12 @@ def validate_fields(
             location = diagnostic_path.format(locale=name, field=key)
             raise ValueError(f"{location}: unsupported {store} metadata field")
         for key, value in values.items():
-            location = diagnostic_path.format(locale=name, field=key)
+            source_key = (
+                "description"
+                if key == "full_description" and name in description_aliases
+                else key
+            )
+            location = diagnostic_path.format(locale=name, field=source_key)
             if (
                 proposed
                 and store == "apple"
@@ -294,11 +302,11 @@ def validate_fields(
                     key, 0
                 ):
                     raise ValueError(
-                        f"{location}: metadata field minimum not met: {key}"
+                        f"{location}: metadata field minimum not met: {source_key}"
                     )
                 if length > limit:
                     raise ValueError(
-                        f"{location}: metadata field limit exceeded: {key}"
+                        f"{location}: metadata field limit exceeded: {source_key}"
                     )
     return clean
 
