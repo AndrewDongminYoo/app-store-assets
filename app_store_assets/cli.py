@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .metadata import metadata_diff, resolve_changelogs
-from .planning import local_context, make_plan
+from .planning import doctor_assets, local_context, make_plan
 from .profiles import target_identity
 from .records import inventory, read_json, safe_path
 from .snapshots import validate_snapshot
@@ -66,6 +66,9 @@ def main(argv=None):
             paths = [args.profile, *target["inputs"]]
             if "version_source" in target:
                 paths.append(target["version_source"]["file"])
+            if target.get("assets"):
+                paths.append(doctor_assets(root, target, captures))
+                paths.extend(path.relative_to(root).as_posix() for path in captures)
             result = {
                 "runtime": runtime,
                 "target": identity,
