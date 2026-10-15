@@ -67,6 +67,7 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         locale = ("en-US", "ko")[index]
         self.declared[index]["screenshots"] = [
             {"id": f"matching-{index}-{i}", "source_file_checksum": hashlib.md5(p.read_bytes()).hexdigest(),
+             "expected_md5": hashlib.md5(p.read_bytes()).hexdigest(),
              "asset_delivery_state": {"state": state}, "image_asset": {"width": 1242, "height": 2688}}
             for i, p in enumerate(p for p in self.sources if p.parent.name == locale)
         ]
@@ -114,6 +115,19 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.assert_refused(result, "allow_delete")
         self.assertEqual(self.writes(calls), [])
 
+    def test_invariants_4_and_5_invalid_later_resource_id_refuses_before_writes(self):
+        for resource, value in ((self.declared[1], None), (self.declared[1], ""), (self.locals[1], None)):
+            with self.subTest(resource=resource.get("locale", "set"), value=value):
+                original = resource["id"]
+                resource["id"] = value
+                try:
+                    self.refresh()
+                    result, calls = self.run_transfer()
+                finally:
+                    resource["id"] = original
+                self.assert_refused(result, "ID")
+                self.assertEqual(self.writes(calls), [])
+
     def test_invariant_4_explicit_replacement_deletes_only_declared_images(self):
         self.matching(0)
         self.declared[0]["screenshots"][0]["source_file_checksum"] = "0" * 32
@@ -145,6 +159,45 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.refresh()
         result, calls = self.run_transfer()
         self.assert_refused(result, "deadline")
+        self.assertEqual(self.writes(calls), [])
+
+    def test_invariants_4_and_5_late_existing_checksums_never_trigger_replacement(self):
+        for allow_delete in (False, True):
+            with self.subTest(allow_delete=allow_delete):
+                self.matching(0)
+                for image in self.declared[0]["screenshots"]:
+                    image["source_file_checksum"] = ""
+                self.data["settle_after"] = 2
+                self.refresh(allow_delete=allow_delete)
+                result, calls = self.run_transfer()
+                report = self.success(result)
+                self.assertEqual(report["groups"][0]["action"], "unchanged")
+                self.assertEqual([c["call"] for c in self.writes(calls)], ["upload"])
+                self.assertEqual(self.writes(calls)[0]["arguments"]["set"], self.declared[1]["id"])
+
+    def test_invariants_5_and_6_existing_checksum_timeout_refuses_before_any_write(self):
+        self.matching(1)
+        self.declared[1]["screenshots"][0]["source_file_checksum"] = ""
+        self.refresh(allow_delete=True)
+        result, calls = self.run_transfer()
+        self.assert_refused(result, "deadline")
+        self.assertEqual(self.writes(calls), [])
+
+    def test_invariants_3_and_5_checksum_poll_refuses_changed_ids_before_replacement(self):
+        self.matching(1)
+        self.declared[1]["screenshots"][0].update(source_file_checksum="", expected_md5="0" * 32)
+        self.data.update(settle_after=2, poll_change_id=True)
+        self.refresh(allow_delete=True)
+        result, calls = self.run_transfer()
+        self.assert_refused(result, "IDs changed during preflight")
+        self.assertEqual(self.writes(calls), [])
+
+    def test_invariant_5_errored_missing_checksum_refuses_before_any_write(self):
+        self.matching(1, "FAILED")
+        self.declared[1]["screenshots"][0]["source_file_checksum"] = ""
+        self.refresh(allow_delete=True)
+        result, calls = self.run_transfer()
+        self.assert_refused(result, "processing failed")
         self.assertEqual(self.writes(calls), [])
 
     def test_invariant_7_fully_unchanged_run_still_gets_final_read(self):

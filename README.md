@@ -227,6 +227,8 @@ The approval record, reviewed plan and fresh supplied snapshot are still require
 The legacy `prepare` entrypoint remains blocked.
 
 The adapter checks every staged image, selects every declared group's action, and waits for every unchanged group to finish processing before its first remote write.
+All declared localization and existing set IDs must be valid before that first write.
+Missing remote checksums are polled before action selection; they cannot by themselves trigger replacement, and screenshot IDs must stay unchanged during this preflight poll.
 It creates absent sets, uploads empty groups, and replaces different non-empty groups only when the reviewed plan has `replacement.allow_delete: true`.
 Replacement deletes screenshots within the declared set; it does not delete preserved sets.
 Uploads use staged paths with explicit positions and `wait_for_processing: false`.

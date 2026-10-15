@@ -187,6 +187,9 @@ The preserved-set baseline includes set IDs, screenshot IDs, order, checksums, p
 Final declared-group reads must also match their own completed readbacks, including IDs, and the final build ID and version state must equal the initial live read.
 
 Before deciding actions, the adapter checks all staged paths and hashes.
+It also validates all declared localization and existing set resource IDs before any write.
+Missing source checksums on an existing group are settled before choosing its action, retaining its initial screenshot IDs throughout that poll.
+Checksum resolution and an unchanged group's processing poll share one preflight group deadline.
 It checks all staged files again after unchanged groups finish polling, and checks each image immediately before upload.
 The staging directory remains private for the entire run; as with the U3 ownership contract, deliberate same-UID mutation inside that directory is outside portable pathname isolation guarantees.
 The source image paths are never read by the Ruby uploader.

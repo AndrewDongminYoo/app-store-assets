@@ -10,20 +10,16 @@ module AppStoreAssets
       label = "#{locale}/#{slot}"
       localization = context.fetch(:localizations)[locale]
       raise transfer_error("#{label}: version localization is missing") unless localization
+      unless localization.id.is_a?(String) && !localization.id.empty?
+        raise transfer_error("#{label}: version localization has no ID")
+      end
 
       set = context.fetch(:sets).fetch(locale).fetch(slot, nil)
+      if set && (!set.id.is_a?(String) || set.id.empty?)
+        raise transfer_error("#{label}: existing screenshot set has no ID")
+      end
       shots = set ? Array(set.app_screenshots) : []
-      planned = group.fetch("images").map { |image| image.fetch("md5") }
-      action = if shots.map(&:source_file_checksum) == planned
-                 "unchanged"
-               elsif shots.empty?
-                 "upload"
-               elsif intent.fetch("replacement").fetch("allow_delete")
-                 "replace"
-               else
-                 raise transfer_error("#{label}: different non-empty group requires allow_delete")
-               end
-      { group: group, label: label, localization: localization, set: set, action: action,
+      { group: group, label: label, localization: localization, set: set,
         original_ids: shots.map(&:id) }
     end
 
@@ -32,8 +28,26 @@ module AppStoreAssets
     begin
       ENV["SPACESHIP_TIMEOUT"] = [request_timeout.ceil, 1].max.to_s
       ENV["SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT"] = [(group_deadline / 60.0).ceil, 1].max.to_s
-      actions.select { |item| item[:action] == "unchanged" }.each do |item|
-        item[:readback] = transfer_poll(item, deadline, group_deadline, poll_interval, false, changed, check_lock)
+      actions.each do |item|
+        expires = transfer_now + group_deadline
+        shots = item[:set] ? Array(item[:set].app_screenshots) : []
+        if shots.any? { |shot| shot.source_file_checksum.to_s.empty? }
+          item[:set] = transfer_settle_checksums(item, expires, deadline, poll_interval, check_lock)
+          shots = Array(item[:set].app_screenshots)
+        end
+        planned = item[:group].fetch("images").map { |image| image.fetch("md5") }
+        item[:action] = if shots.map(&:source_file_checksum) == planned
+                          "unchanged"
+                        elsif shots.empty?
+                          "upload"
+                        elsif intent.fetch("replacement").fetch("allow_delete")
+                          "replace"
+                        else
+                          raise transfer_error("#{item[:label]}: different non-empty group requires allow_delete")
+                        end
+        next unless item[:action] == "unchanged"
+
+        item[:readback] = transfer_poll(item, deadline, group_deadline, poll_interval, false, changed, check_lock, expires)
         unless item[:readback].map { |shot| shot.fetch("id") } == item[:original_ids]
           raise transfer_error("#{item[:label]}: unchanged group IDs changed during preflight")
         end
@@ -159,12 +173,7 @@ module AppStoreAssets
     loop do
       check_lock.call
       limit = transfer_remaining(expires, deadline, item[:label])
-      set = transfer_call("#{item[:label]}: processing read", limit) do
-        Spaceship::ConnectAPI::AppScreenshotSet.get(app_screenshot_set_id: item[:set].id)
-      end
-      unless set && set.id == item[:set].id && set.screenshot_display_type == item[:group].fetch("slot")
-        raise transfer_error("#{item[:label]}: screenshot set changed during readback")
-      end
+      set = transfer_read_set(item, limit)
       shots = transfer_shots(set)
       if shots.any? { |shot| shot["processing_state"] == "FAILED" }
         raise transfer_error("#{item[:label]}: screenshot processing failed")
@@ -190,6 +199,33 @@ module AppStoreAssets
         reordered = true
         next
       end
+      sleep [interval, transfer_remaining(expires, deadline, item[:label])].min
+    end
+  end
+
+  def self.transfer_read_set(item, limit)
+    set = transfer_call("#{item[:label]}: processing read", limit) do
+      Spaceship::ConnectAPI::AppScreenshotSet.get(app_screenshot_set_id: item[:set].id)
+    end
+    unless set && set.id == item[:set].id && set.screenshot_display_type == item[:group].fetch("slot")
+      raise transfer_error("#{item[:label]}: screenshot set changed during readback")
+    end
+    set
+  end
+
+  def self.transfer_settle_checksums(item, expires, deadline, interval, check_lock)
+    loop do
+      check_lock.call
+      set = transfer_read_set(item, transfer_remaining(expires, deadline, item[:label]))
+      shots = transfer_shots(set)
+      unless shots.map { |shot| shot.fetch("id") } == item[:original_ids]
+        raise transfer_error("#{item[:label]}: screenshot IDs changed during preflight")
+      end
+      if shots.any? { |shot| shot["processing_state"] == "FAILED" }
+        raise transfer_error("#{item[:label]}: screenshot processing failed")
+      end
+      return set if shots.all? { |shot| !shot["md5"].to_s.empty? }
+
       sleep [interval, transfer_remaining(expires, deadline, item[:label])].min
     end
   end

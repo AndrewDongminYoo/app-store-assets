@@ -54,6 +54,9 @@ module Spaceship
             s["source_file_checksum"] = s["expected_md5"] if s["expected_md5"]
           end
         end
+        if FakeASC::SCENARIO["poll_change_id"] && !data["screenshots"].empty?
+          data["screenshots"].first["id"] = "foreign-during-poll"
+        end
         if FakeASC::SCENARIO["reverse"] && !data["reversed"] && data["screenshots"].size > 1
           data["screenshots"].reverse!
           data["reversed"] = true
