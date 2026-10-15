@@ -253,6 +253,115 @@ class DoctorAssetBindingTests(unittest.TestCase):
         with patch.object(module("cli"), "inventory", side_effect=changed):
             self.assert_refused("capture|changed|inventory")
 
+    def supply_plan_remote(self):
+        write_json(self.root / "remote.json", {
+            "schema_version": 1, "type": "metadata-snapshot",
+            "target": self.listing["target"], "version_id": "version-1",
+            "editable": True, "review_active": False,
+            "fields": {"en-US": {"description": "Available locale"}},
+            "images": {"en-US": {}},
+        })
+
+    def image_plan(self):
+        return module("planning").make_plan(
+            self.root, "store-upload.json", "production", "images"
+        )
+
+    def test_plan_rechecks_complete_metadata_provenance_inventory(self):
+        self.supply_plan_remote()
+        planning = module("planning")
+        inventory = planning.inventory
+        added = (self.root / self.listing["source_snapshot"]).parent / "added.txt"
+        descriptor = self.target["assets"]
+        for with_assets in (True, False):
+            for ancestor in (False, True):
+                with self.subTest(with_assets=with_assets, ancestor=ancestor):
+                    if with_assets:
+                        self.target["assets"] = descriptor
+                    else:
+                        self.target.pop("assets", None)
+                    self.target["inputs"] = ["helpers", *(["state"] if ancestor else [])]
+                    self.save()
+
+                    def changed(root, paths):
+                        added.write_text("outside provenance manifest")
+                        return inventory(root, paths)
+
+                    try:
+                        with patch.object(planning, "inventory", side_effect=changed):
+                            with self.assertRaisesRegex(ValueError, "snapshot inventory"):
+                                self.image_plan()
+                        self.assertTrue(added.is_file())
+                    finally:
+                        added.unlink(missing_ok=True)
+
+    def test_plan_charges_overlapping_inputs_once_at_exact_byte_bound(self):
+        self.supply_plan_remote()
+        planning, records = module("planning"), module("records")
+        image = self.listing["images"]["en-US"]["APP_IPHONE_65"][0]["file"]
+        names = {
+            "store-upload.json", "helpers/source.txt", "metadata/listing.json",
+            "remote.json", self.target["assets"]["manifest"],
+            self.listing["source_snapshot"], image,
+        }
+        expected = {name: hashlib.sha256((self.root / name).read_bytes()).hexdigest() for name in names}
+        for extra in ([], ["state"], [image], [self.listing["source_snapshot"]],
+                      ["state", self.target["assets"]["manifest"], "helpers/source.txt"]):
+            with self.subTest(extra=extra):
+                self.target["inputs"] = ["helpers", *extra]
+                self.save()
+                expected["store-upload.json"] = hashlib.sha256((self.root / "store-upload.json").read_bytes()).hexdigest()
+                size = sum((self.root / name).stat().st_size for name in names)
+
+                def bounded(root, paths):
+                    budget = records.WalkBudget()
+                    budget.remaining = size
+                    return records.inventory(root, paths, budget=budget)
+
+                with patch.object(planning, "inventory", side_effect=bounded):
+                    try:
+                        plan = self.image_plan()
+                    except ValueError as error:
+                        self.fail(f"Distinct fixture bytes fit the exact budget: {error}")
+                    self.assertEqual(plan["payload"]["inputs"], expected)
+                    self.assertFalse(plan["payload"]["executable"])
+                    self.assertEqual(plan["payload"]["effects"], [])
+                    size -= 1
+                    with self.assertRaisesRegex(ValueError, "aggregate byte bound"):
+                        self.image_plan()
+
+    def test_plan_deduplication_preserves_missing_declared_children(self):
+        self.supply_plan_remote()
+        planning = module("planning")
+        inventory = planning.inventory
+        for directory in (False, True):
+            for removal in ("before", "during", "after"):
+                with self.subTest(directory=directory, removal=removal):
+                    child = self.root / "helpers/declared-child"
+                    if directory:
+                        child.mkdir()
+                    else:
+                        child.write_text("declared public input")
+                    self.target["inputs"] = ["helpers", "helpers/declared-child"]
+                    self.save()
+
+                    def remove_child():
+                        child.rmdir() if directory else child.unlink()
+
+                    def changed(root, paths):
+                        if removal == "during":
+                            remove_child()
+                        result = inventory(root, paths)
+                        if removal == "after":
+                            remove_child()
+                        return result
+
+                    if removal == "before":
+                        remove_child()
+                    with patch.object(planning, "inventory", side_effect=changed):
+                        with self.assertRaisesRegex(ValueError, "missing bound input"):
+                            self.image_plan()
+
 
 if __name__ == "__main__":
     unittest.main()

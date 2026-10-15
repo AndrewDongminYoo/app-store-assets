@@ -136,7 +136,7 @@ def make_plan(root, profile_path, target_name, operation):
             paths.extend(build["adapter"]["inputs"])
     listing = None
     assets = None
-    asset_directory = None
+    snapshot_directories = []
     notes = {}
     if operation in ("metadata", "images"):
         if not target.get("metadata"):
@@ -150,6 +150,11 @@ def make_plan(root, profile_path, target_name, operation):
         listing = resolve_changelogs(root, listing, identity, captures)
         notes = selected_notes(listing)
         if operation == "images":
+            if "source_snapshot" in listing:
+                source = safe_path(root, listing["source_snapshot"])
+                directory = source.parent.relative_to(root).as_posix()
+                snapshot_directories.append(directory)
+                paths.append(directory)
             policy = target.get("replacement")
             exact_keys(
                 policy,
@@ -198,6 +203,7 @@ def make_plan(root, profile_path, target_name, operation):
                 assets, asset_directory = bind_asset_manifest(
                     root, target, listing, validated, captures
                 )
+                snapshot_directories.append(asset_directory)
                 paths.append(asset_directory)
     remote = None
     if target.get("remote"):
@@ -239,12 +245,34 @@ def make_plan(root, profile_path, target_name, operation):
                 raise ValueError("release-notes limit exceeded")
             paths.append(path)
     paths.extend(path.relative_to(root).as_posix() for path in captures)
-    inputs = inventory(root, paths)
+    inventory_paths = paths
+    requested_files, requested_directories = set(), set()
+    if operation == "images":
+        requested = set(paths)
+        for name in requested:
+            path = safe_path(root, name)
+            if path.is_file():
+                requested_files.add(name)
+            elif path.is_dir():
+                requested_directories.add(name)
+            else:
+                raise ValueError("missing bound input or unsupported input type")
+        inventory_paths = [
+            name for name in sorted(requested)
+            if not any(parent.as_posix() in requested for parent in Path(name).parents)
+        ]
+    inputs = inventory(root, inventory_paths)
+    if not requested_files.issubset(inputs) or any(
+        not safe_path(root, name).is_file() for name in requested_files
+    ):
+        raise ValueError("missing bound input after inventory")
+    if any(not safe_path(root, name).is_dir() for name in requested_directories):
+        raise ValueError("missing bound input directory after inventory")
     for path, digest in captures.items():
         if inputs.get(path.relative_to(root).as_posix()) != digest:
             raise ValueError("parsed/validated input changed before plan inventory")
-    if asset_directory is not None:
-        check_asset_inventory(root, asset_directory, inputs, captures)
+    for directory in snapshot_directories:
+        check_asset_inventory(root, directory, inputs, captures)
     if build and profile["mode"] == "live":
         source_inputs = {
             name: digest
