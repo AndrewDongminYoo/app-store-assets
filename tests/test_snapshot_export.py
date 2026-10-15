@@ -560,13 +560,17 @@ class SnapshotExportTests(unittest.TestCase):
     def test_record_that_fails_the_validators_is_never_written(self):
         cases = [('marketing_url', 'https://user:secret@example.com/'),
                  ('promotional_text', 'x' * 171),
-                 ('support_url', 'https://example.com/?token=abc')]
+                 ('support_url', 'https://example.com/?token=abc'),
+                 ('support_url', 'https://example.com/privacy/#rights'),
+                 ('description', 'private-value\x00')]
         for key, value in cases:
             with self.subTest(key=key):
                 data = scenario()
                 version_of(data)['localizations'][0][key] = value
                 result, calls = self.run_export(data)
                 self.assertRefused(result, 'fails the public metadata validators')
+                self.assertIn('fields.en-US.' + key, result.stderr)
+                self.assertNotIn(str(value), result.stderr)
                 self.assertNotIn('secret', result.stderr)
                 self.assertReadOnly(calls)
 
