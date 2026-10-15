@@ -21,7 +21,7 @@ from test_snapshot_export import FAKE, LIB, READS, scenario, shot, version_of
 HARNESS = ROOT / "tests/transfer_readback_harness.rb"
 
 
-class TransferReadbackTests(unittest.TestCase):
+class TransferFixture:
     def setUp(self):
         self.exporter = snapshot_test.SnapshotExportTests()
         self.exporter.setUp()
@@ -47,9 +47,12 @@ class TransferReadbackTests(unittest.TestCase):
         })
         self.remote, _, _ = self.exporter.export(self.data, identity=self.identity)
         images = {"en-US/01.png": png(), "ko/01.png": png(2048, 2732)}
+        if getattr(self, "multiple_images", False):
+            images = {"en-US/01.png": png(), "en-US/02.png": png(2688, 1242), "ko/01.png": png(2048, 2732)}
         entries = [
             {"file": name, "sha256": hashlib.sha256(data).hexdigest(), "locale": locale, "slot": slot}
-            for (name, data), locale, slot in zip(images.items(), ("en-US", "ko"), ("APP_IPHONE_65", "APP_IPAD_PRO_3GEN_129"))
+            for name, data in images.items()
+            for locale, slot in [("en-US", "APP_IPHONE_65") if name.startswith("en-US/") else ("ko", "APP_IPAD_PRO_3GEN_129")]
         ]
         record = {"schema_version": 1, "type": "asset-manifest", "target": self.identity,
                   "assets": entries, "provenance": {"status": "unverified-import"}}
@@ -59,9 +62,9 @@ class TransferReadbackTests(unittest.TestCase):
         for entry in entries:
             source = directory / entry["file"]
             self.sources.append(source)
-            listing["images"].setdefault(entry["locale"], {})[entry["slot"]] = [{
+            listing["images"].setdefault(entry["locale"], {}).setdefault(entry["slot"], []).append({
                 "file": str(source.relative_to(self.root)), "sha256": entry["sha256"],
-            }]
+            })
         self.target["assets"] = {"manifest": str(directory.relative_to(self.root) / "manifest.json")}
         self.target["replacement"] = {"locales": ["en-US", "ko"], "slots": ["APP_IPHONE_65", "APP_IPAD_PRO_3GEN_129"], "allow_delete": False}
         write_json(self.root / "metadata/listing.json", listing)
@@ -76,7 +79,7 @@ class TransferReadbackTests(unittest.TestCase):
         write_json(self.root / "plan.json", self.plan)
         write_json(self.root / "approval.json", self.approval)
 
-    def run_readback(self, data=None, identity=None, options=None, extra_env=None):
+    def run_readback(self, data=None, identity=None, options=None, extra_env=None, allow_writes=False):
         write_json(self.tmp / "scenario.json", self.data if data is None else data)
         log = self.tmp / "readback-calls.json"
         log.unlink(missing_ok=True)
@@ -88,7 +91,8 @@ class TransferReadbackTests(unittest.TestCase):
             json.dumps(self.identity if identity is None else identity), json.dumps(options or {}),
         ], capture_output=True, text=True, env=env, timeout=30)
         calls = json.loads(log.read_text()) if log.exists() else []
-        self.assertEqual([c for c in calls if c["call"] not in READS], [], calls)
+        if not allow_writes:
+            self.assertEqual([c for c in calls if c["call"] not in READS], [], calls)
         return result, calls
 
     def assert_clean(self):
@@ -101,6 +105,8 @@ class TransferReadbackTests(unittest.TestCase):
         self.assertIn(text, result.stderr)
         self.assert_clean()
 
+
+class TransferReadbackTests(TransferFixture, unittest.TestCase):
     def test_invariants_3_and_8_readback_has_only_declared_pairs_and_preserved_sets(self):
         before = set(self.root.rglob("*"))
         result, calls = self.run_readback()
@@ -352,9 +358,9 @@ class TransferReadbackTests(unittest.TestCase):
         self.assert_refused(result, "provider")
         self.assertNotIn("private-key-path-must-not-escape", result.stderr)
 
-    def test_invariant_4_transfer_mode_remains_unavailable(self):
-        result, calls = self.run_readback(options={"mode": "transfer"})
-        self.assert_refused(result, "read-only")
+    def test_invariant_4_unknown_mode_remains_unavailable(self):
+        result, calls = self.run_readback(options={"mode": "unknown"})
+        self.assert_refused(result, "mode")
         self.assertEqual(calls, [])
 
 

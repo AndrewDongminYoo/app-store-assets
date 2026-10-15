@@ -121,12 +121,15 @@ module AppStoreAssets
     runpy.run_module("app_store_assets_local.transfer", run_name="__main__")
   PYTHON
 
-  # U3 only: verifies authority and live state; no upload, delete, or reorder.
+  # Authority and live state are verified before either read-only or transfer mode.
   def self.transfer_screenshots(root:, target:, plan:, approval:, mode: "read-only",
                                deadline: SNAPSHOT_DEFAULT_DEADLINE,
-                               verification_deadline: SNAPSHOT_DEFAULT_DEADLINE)
-    raise transfer_error("only read-only mode is available") unless mode.to_s.tr("_", "-") == "read-only"
-    [deadline, verification_deadline].each do |limit|
+                               verification_deadline: SNAPSHOT_DEFAULT_DEADLINE,
+                               group_deadline: 600, poll_interval: 5, request_timeout: 60)
+    changed = []
+    mode = mode.to_s.tr("_", "-")
+    raise transfer_error("unknown transfer mode") unless %w[read-only transfer].include?(mode)
+    [deadline, verification_deadline, group_deadline, poll_interval, request_timeout].each do |limit|
       unless limit.is_a?(Numeric) && limit.positive? && limit <= SNAPSHOT_MAX_DEADLINE
         raise transfer_error("deadline must be more than 0 and at most #{SNAPSHOT_MAX_DEADLINE} seconds")
       end
@@ -150,10 +153,11 @@ module AppStoreAssets
         check_lock.call
         labels = intent.fetch("groups").map { |group| "#{group.fetch('locale')}/#{group.fetch('slot')}" }.join(", ")
         labels = "target" if labels.empty?
+        context = {}
         live = transfer_provider_output do
           transfer_call("load Spaceship", deadline) { require "spaceship" }
           begin
-            snapshot_record(identity, deadline, reader: lambda { |label, limit, &operation|
+            snapshot_record(identity, deadline, context: context, reader: lambda { |label, limit, &operation|
               transfer_call("#{labels}: #{label}", limit, &operation)
             })
           rescue TransferRefusal
@@ -165,6 +169,14 @@ module AppStoreAssets
         transfer_python(["-I", "-B", "-c", SNAPSHOT_VALIDATOR, snapshot_checkout], JSON.generate(live), verification_deadline)
         result = transfer_compare(intent, live, labels)
         check_lock.call
+        if mode == "transfer"
+          require_relative "fastlane_transfer"
+          result = transfer_provider_output do
+            transfer_execute(intent, live, context, directory, changed, check_lock,
+                             deadline, group_deadline, poll_interval, request_timeout)
+          end
+        end
+        check_lock.call
       end
     end
     output = JSON.generate(result) + "\n"
@@ -173,10 +185,13 @@ module AppStoreAssets
     $stdout.write(output)
     $stdout.flush
     result
-  rescue TransferRefusal
+  rescue TransferRefusal => error
+    raise transfer_error("#{error.message}; possibly changed: #{changed.join(", ")}") unless changed.empty?
+
     raise
   rescue StandardError
-    raise transfer_error("local verification or cleanup failed")
+    suffix = changed.empty? ? "" : "; possibly changed: #{changed.join(", ")}"
+    raise transfer_error("local verification or cleanup failed#{suffix}")
   end
 
   def self.transfer_error(message)
@@ -466,7 +481,7 @@ module AppStoreAssets
     items
   end
 
-  def self.snapshot_record(identity, deadline, reader: method(:snapshot_call))
+  def self.snapshot_record(identity, deadline, reader: method(:snapshot_call), context: nil)
     api = Spaceship::ConnectAPI
     bundle_id = identity["app_id"]
     name = identity["version"]["name"]
@@ -510,11 +525,14 @@ module AppStoreAssets
     end
 
     images = {}
+    context&.merge!(localizations: {}, sets: {}, version_state: state, build_id: build&.id)
     localizations = reader.call("version localizations", deadline) do
       version.get_app_store_version_localizations(limit: SNAPSHOT_PAGE_LIMIT)
     end
     snapshot_page("version localizations", localizations).each do |localization|
       locale = localization.locale
+      context[:localizations][locale] = localization if context
+      context[:sets][locale] = {} if context
       raise snapshot_error("duplicate version locale #{locale}") if images.key?(locale)
 
       # validate_apple_localizations needs every version field, even an empty one.
@@ -535,6 +553,7 @@ module AppStoreAssets
         display = set.screenshot_display_type
         raise snapshot_error("duplicate screenshot set #{locale}/#{display}") if images[locale].key?(display)
 
+        context[:sets][locale][display] = set if context
         images[locale][display] = Array(set.app_screenshots).map { |shot| snapshot_image(shot) }
       end
     end

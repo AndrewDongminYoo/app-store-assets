@@ -2,6 +2,15 @@
 require ARGV.fetch(0)
 require "spaceship" if ENV["FAKE_ASC_PRELOAD"]
 
+if ENV["FAKE_TRANSFER_CLEANUP_ERROR"]
+  AppStoreAssets.singleton_class.prepend(Module.new do
+    def transfer_remove_owned(path, owned, label)
+      super
+      raise transfer_error("injected cleanup error") if label == "staging directory"
+    end
+  end)
+end
+
 if ENV["FAKE_TRANSFER_SWAP_STAGE"]
   AppStoreAssets.singleton_class.prepend(Module.new do
     def transfer_python(arguments, *rest)
