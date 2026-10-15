@@ -95,7 +95,7 @@ def remote_observation(record):
     return result
 
 
-def normalize_fields(fields):
+def normalize_fields(fields, *, diagnostic_path="fields.{locale}.{field}"):
     if not isinstance(fields, dict):
         raise ValueError("unsupported public metadata mapping")
     result = {}
@@ -110,7 +110,8 @@ def normalize_fields(fields):
                     public_url(value)
             except ValueError as error:
                 # Only validated locale and field names enter diagnostics, never values.
-                raise ValueError(f"fields.{name}.{key}: {error}") from None
+                location = diagnostic_path.format(locale=name, field=key)
+                raise ValueError(f"{location}: {error}") from None
             clean[key] = value
         result[name] = clean
     return result
@@ -307,7 +308,7 @@ def validate_public_metadata(record, target):
     if "releases" in clean:
         if identity["store"] != "google" or not isinstance(clean["releases"], list):
             raise ValueError("unsupported public track releases")
-        for release in clean["releases"]:
+        for index, release in enumerate(clean["releases"]):
             exact_keys(
                 release, {"name", "status", "version_codes", "notes"}, {"version_codes"}
             )
@@ -324,19 +325,27 @@ def validate_public_metadata(record, target):
             if not isinstance(notes, dict):
                 raise ValueError("invalid public release-notes mapping")
             for name, note in notes.items():
-                normalize_fields({name: {"release_notes": note}})
+                normalize_fields(
+                    {name: {"release_notes": note}},
+                    diagnostic_path=f"releases[{index}].notes.{{locale}}",
+                )
                 if len(note) > 500:
-                    raise ValueError("release-notes limit exceeded")
+                    raise ValueError(
+                        f"releases[{index}].notes.{name}: release-notes limit exceeded"
+                    )
     for name, note in clean.get("release_notes", {}).items():
-        normalize_fields({name: {"release_notes": note}})
+        normalize_fields(
+            {name: {"release_notes": note}}, diagnostic_path="release_notes.{locale}"
+        )
         if identity["store"] == "apple":
             validate_fields(
                 {name: {"release_notes": note}},
                 "apple",
                 proposed=clean["type"] != "metadata-snapshot",
+                diagnostic_path="release_notes.{locale}",
             )
         if identity["store"] == "google" and len(note) > 500:
-            raise ValueError("release-notes limit exceeded")
+            raise ValueError(f"release_notes.{name}: release-notes limit exceeded")
     _selected_notes(clean)
     return clean
 

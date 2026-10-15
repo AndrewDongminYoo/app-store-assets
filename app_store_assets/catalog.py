@@ -249,10 +249,12 @@ def validate_images(root, entries, store, platform):
     return result
 
 
-def validate_fields(fields, store, proposed=True):
+def validate_fields(
+    fields, store, proposed=True, *, diagnostic_path="fields.{locale}.{field}"
+):
     if store not in ("apple", "google"):
         raise ValueError("unsupported metadata store")
-    clean = normalize_fields(fields)
+    clean = normalize_fields(fields, diagnostic_path=diagnostic_path)
     if store == "google":
         for name, values in clean.items():
             if "description" in values:
@@ -260,9 +262,8 @@ def validate_fields(fields, store, proposed=True):
                     "full_description" in values
                     and values["full_description"] != values["description"]
                 ):
-                    raise ValueError(
-                        f"fields.{name}.description: conflicting Google description alias"
-                    )
+                    location = diagnostic_path.format(locale=name, field="description")
+                    raise ValueError(f"{location}: conflicting Google description alias")
                 values["full_description"] = values.pop("description")
     store_rules = rules()["stores"].get(store, {})
     limits = store_rules.get("text_limits", {})
@@ -271,8 +272,10 @@ def validate_fields(fields, store, proposed=True):
             store_rules["supported_fields"]
         ):
             key = sorted(set(values) - set(store_rules["supported_fields"]))[0]
-            raise ValueError(f"fields.{name}.{key}: unsupported {store} metadata field")
+            location = diagnostic_path.format(locale=name, field=key)
+            raise ValueError(f"{location}: unsupported {store} metadata field")
         for key, value in values.items():
+            location = diagnostic_path.format(locale=name, field=key)
             if (
                 proposed
                 and store == "apple"
@@ -280,7 +283,7 @@ def validate_fields(fields, store, proposed=True):
                 and not value
             ):
                 raise ValueError(
-                    f"fields.{name}.{key}: required Apple URL cannot be cleared"
+                    f"{location}: required Apple URL cannot be cleared"
                 )
             if key in limits:
                 limit, unit = limits[key]
@@ -291,11 +294,11 @@ def validate_fields(fields, store, proposed=True):
                     key, 0
                 ):
                     raise ValueError(
-                        f"fields.{name}.{key}: metadata field minimum not met: {key}"
+                        f"{location}: metadata field minimum not met: {key}"
                     )
                 if length > limit:
                     raise ValueError(
-                        f"fields.{name}.{key}: metadata field limit exceeded: {key}"
+                        f"{location}: metadata field limit exceeded: {key}"
                     )
     return clean
 
