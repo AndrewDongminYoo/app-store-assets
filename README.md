@@ -9,7 +9,7 @@ The first adoption covers Mirae, Ttush Push, and Kkomkkomi Fastlane uploads, plu
 Python 3.9 or newer, ImageMagick 7 (`magick`), and Ruby for the Fastlane bridge.
 No new Python package or Ruby gem is required.
 Keep this checkout beside the personal app repositories or set `APP_STORE_ASSETS_ROOT` to its absolute path.
-The [shared repository](https://github.com/AndrewDongminYoo/app-store-assets) is private.
+The [shared repository](https://github.com/AndrewDongminYoo/app-store-assets) is public.
 Use a reviewed runtime commit for reproducible installation.
 Missing tooling stops screenshot uploads with an explicit error.
 
@@ -83,7 +83,8 @@ Local preparation rejects hidden screenshots, mixed-case extensions such as `.Pn
 Screenshot transfer requires a separately reviewed plan, exact target and complete local/remote placement policy.
 The existing external Fastlane replacement behavior can affect remote display classes absent from a local tree.
 Consumers that call Fastlane directly need their own guarded integration; this bridge cannot block those calls.
-The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases pass with external actions stubbed; `docs/notes/2026-10-14-mirae-direct-lanes-integration.md` records the consumer commits and results.
+The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases passed with external actions stubbed at the consumer revisions recorded in [the 2026-10-14 integration evidence](docs/notes/2026-10-14-mirae-direct-lanes-integration.md).
+The current Mirae Fastfile requires a local helper that the fixture does not copy; the resulting six Mirae subcase errors are tracked in [issue #41](https://github.com/AndrewDongminYoo/app-store-assets/issues/41).
 
 The Python commands remain offline; the Ruby transfer entrypoint uses an already-authenticated Spaceship session and can upload approved screenshots.
 No entrypoint logs in or submits review.
@@ -127,9 +128,8 @@ Snapshots validate the complete supported record as well as their address and
 exact file inventory. Python validators are authoritative; the JSON schema files
 are structural summaries and do not replace runtime validation.
 
-The `app_store_assets` reader package contains no import/export/staging/publisher
-implementation or writer import. This dependent local branch adds those functions
-only in `app_store_assets_local`; read plans retain no execution authority.
+The `app_store_assets` reader package contains no import/export/staging/publisher implementation or writer import.
+Those functions live in `app_store_assets_local`; read plans retain no execution authority.
 Native identity, signing, provider account and remote freshness remain unverified.
 
 Catalog rules are frozen to `catalog.CATALOG_SHA256`: each read validates the

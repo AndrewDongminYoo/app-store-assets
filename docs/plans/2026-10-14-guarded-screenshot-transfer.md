@@ -2,11 +2,13 @@
 
 Operator-approved plan, 2026-10-14, for [issue #28](https://github.com/AndrewDongminYoo/app-store-assets/issues/28).
 [The specification](../specs/2026-10-14-guarded-screenshot-transfer.md) owns the contract as numbered invariants; this plan owns the order of work, the provider details, and the acceptance tests that hold each unit to those invariants.
+As of 2026-10-15, U2 ([PR #38](https://github.com/AndrewDongminYoo/app-store-assets/pull/38)), U3 ([PR #39](https://github.com/AndrewDongminYoo/app-store-assets/pull/39)) and U4 ([PR #42](https://github.com/AndrewDongminYoo/app-store-assets/pull/42)) are merged.
+U5 remains an unperformed, separately authorized smoke run; the implementation sections below describe the shipped entrypoints and helpers.
 
 ## Decisions
 
 - Scope of the first pull request: the specification and this plan only, with no code.
-- Transport: Ruby Spaceship from fastlane 2.240.1, inside `lib/fastlane_assets.rb`.
+- Transport: Ruby Spaceship from fastlane 2.240.1, with entrypoints in `lib/fastlane_assets.rb` and transfer helpers in `lib/fastlane_transfer.rb`.
 - First target app for offline-profile v1: kkomkkomi.
 - After the first draft (pull request #30) reached the review-loop round limit, the specification keeps only invariants, and step order and provider behavior live here as tests (operator decision, 2026-10-14).
 
@@ -14,6 +16,7 @@ Operator-approved plan, 2026-10-14, for [issue #28](https://github.com/AndrewDon
 
 - Each unit is a separate pull request, in the order below, and starts only after the previous unit has merged.
 - `python3 -m unittest discover -s tests -v` and `ruby -c lib/fastlane_assets.rb` pass at every unit; the default suite needs no fastlane gem, no network and no credentials.
+  From U4, also run `ruby -c lib/fastlane_transfer.rb` for the separate transfer helpers.
 - No unit except U5 makes a real App Store Connect call; tests use the fake App Store Connect that [the specification's verification section](../specs/2026-10-14-guarded-screenshot-transfer.md#verification) requires.
 - Each new guard has a test that fails when the guard is removed, and each test names the specification invariant it holds.
 - No unit adds a service, a database, a capture abstraction or a Python dependency.
@@ -169,7 +172,7 @@ Acceptance (fake states, each with the outcome the specification's invariants re
 - A non-empty, different group with `allow_delete: false` refuses before the first write, also when an earlier group would only upload.
 - A matching group with an errored screenshot refuses before the first write; a matching group that is still processing passes only after its bounded poll, before the first write.
 - A declared group with no remote set passes after exactly one `create_app_screenshot_set` call on its localization with its slot, then the upload into the new set.
-- A processing state or checksum that is late but correct within the bound passes; one that errors, stays incomplete or stays empty fails at the bound.
+- During upload readback, a processing state or checksum that is late but correct within the bound passes; processing errors fail immediately, and incomplete processing or missing checksums fail at the bound.
 - A checksum that differs from the planned MD5 fails; an order that differs only after upload passes after exactly one `reorder_screenshots` call and fails if it still differs.
 - A placeholder creation that keeps failing, and a successful creation followed by upload requests that time out, each end within the configured bounds and restore both environment variables.
 - A preserved set, a declared group after its own readback, or the attached build or version state that changes during the run fails the final read.
