@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Screenshot transfer approval v1 (structural summary)",
+  "description": "The Python validator and current-plan verification are authoritative.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "type", "plan_digest", "target", "operation"],
+  "properties": {
+    "schema_version": {"const": 1, "type": "integer"},
+    "type": {"const": "transfer-approval"},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "operation": {"const": "images"},
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["store", "platform", "account", "app_id", "flavor", "stage", "version"],
+      "properties": {
+        "store": {"const": "apple"},
+        "platform": {"const": "ios"},
+        "account": {"type": "string", "minLength": 1},
+        "account_id": {"type": "string", "minLength": 1},
+        "app_id": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "flavor": {"type": "string", "minLength": 1},
+        "stage": {"type": "string", "minLength": 1},
+        "version": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "build"],
+          "properties": {
+            "name": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){0,3}$"},
+            "build": {"type": "string", "pattern": "^[0-9]+$"}
+          }
+        }
+      }
+    }
+  }
+}

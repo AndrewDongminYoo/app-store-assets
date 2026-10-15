@@ -72,6 +72,24 @@ Acceptance:
 - Each staged file equals the bytes that were hashed, and a source replaced after staging does not change what the intent points at.
 - The plan payload type, `executable: false` and `effects: []` are unchanged, and the reader package still constructs no provider.
 
+### U2 command and owned paths
+
+`python3 -B -m app_store_assets_local.transfer --root PROJECT --plan PLAN --approval APPROVAL --staging-dir DIRECTORY` owns approval validation and byte staging.
+The implementation stays in the existing local-write extension so importing the read-only package does not import a writer.
+`schemas/transfer-approval-v1.json` is the structural summary, and `tests/test_transfer_approval.py` exercises the command and guards with synthetic plans and images.
+The README documents caller ownership of the staging directory.
+
+The caller supplies an existing empty private directory outside the project and runtime, using an absolute path without symlinks or parent traversal.
+The verifier checks the plan and approval before staging, opens the directory without following symlinks, and writes new private files through its descriptor.
+It hashes each captured image before writing those bytes, checks the plan and approval captures again before returning, and refuses a replaced directory or changed staged file.
+The stdout byte bound includes the exact JSON encoding and final newline.
+Failed verification removes only files created by that run.
+U3 owns directory lifetime and the target lock, and must keep both through the final read.
+
+The JSON intent preserves the digest, target, mode, supplied remote observation, replacement policy and `unverified-import` provenance.
+Its `groups` array contains only actual listing pairs, with each image's `staged_path`, `sha256` and `md5`.
+The intent sets `remote_verified: false`; U3 still performs the live comparisons.
+
 ## U3: Read-only live readback
 
 Repository: app-store-assets (Ruby entrypoint, tests driven from Python as `tests/test_bridge.py` does).

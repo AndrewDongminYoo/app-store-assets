@@ -154,3 +154,29 @@ A version that is not editable or has an active review is recorded with `editabl
 A screenshot set that exists with no screenshots is an empty list, and a set that does not exist has no key.
 Standard output carries one JSON result with the output path, the record's SHA-256 and counts; provider output goes to standard error.
 The record is an observation at one point in time; [the guarded screenshot transfer specification](docs/specs/2026-10-14-guarded-screenshot-transfer.md) defines how a later run compares it with the live state.
+
+## Verify transfer approval and stage bytes
+
+The U2 command in `app_store_assets_local.transfer` re-derives an Apple iOS images plan, checks an operator-written [transfer approval](docs/specs/2026-10-14-guarded-screenshot-transfer.md#approval-record), and stages every planned image from SHA-256-checked bytes.
+The approval must name the plan digest and its whole target, including `account_id` when present.
+The plan keeps `executable: false` and `effects: []`.
+This command makes no network call and grants no implicit authorization to upload or delete placements.
+
+```bash
+stage_dir="$(python3 -c 'import pathlib, tempfile; print(pathlib.Path(tempfile.mkdtemp(prefix="store-transfer-")).resolve())')"
+python3 -B -m app_store_assets_local.transfer \
+  --root /absolute/path/to/personal/app \
+  --plan reviewed-plan.json \
+  --approval transfer-approval.json \
+  --staging-dir "$stage_dir"
+```
+
+Plan and approval paths are public paths relative to `--root`; the approval is not a plan input.
+The staging directory must already exist, be empty, be private to the current user, and have an absolute path outside the app and runtime checkouts, with no symlink or parent traversal.
+The caller owns the directory and removes it after use.
+On failure the command removes only files it created; it never replaces existing files.
+
+Standard output contains one `verified-transfer-intent` JSON document with the plan digest, target, mode, supplied remote observation, replacement policy, unchanged provenance, and the listing's actual locale/slot pairs.
+Each image has a private `staged_path`, SHA-256 and MD5 derived from the same captured bytes.
+MD5 is only a provider comparison value; SHA-256 binds the approved bytes.
+Live readback, locking and transport remain U3 and U4, and real uploads still require the specification's explicit operator authorization and writer window.
