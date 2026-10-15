@@ -84,7 +84,7 @@ Screenshot transfer requires a separately reviewed plan, exact target and comple
 The existing external Fastlane replacement behavior can affect remote display classes absent from a local tree.
 Consumers that call Fastlane directly need their own guarded integration; this bridge cannot block those calls.
 The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases passed with external actions stubbed at the consumer revisions recorded in [the 2026-10-14 integration evidence](docs/notes/2026-10-14-mirae-direct-lanes-integration.md).
-The current Mirae Fastfile requires a local helper that the fixture does not copy; the resulting six Mirae subcase errors are tracked in [issue #41](https://github.com/AndrewDongminYoo/app-store-assets/issues/41).
+The fixture copies Mirae's required local helper and checks its current plan/digest requirement, including metadata-only calls; the [fixture contract](docs/specs/2026-10-16-fastlane-integration-fixture.md) records the correction for issue #41.
 
 The Python commands remain offline; the Ruby transfer entrypoint uses an already-authenticated Spaceship session and can upload approved screenshots.
 No entrypoint logs in or submits review.
