@@ -67,11 +67,25 @@ def bind_asset_manifest(root, target, listing, entries, captures):
     if "source_snapshot" in listing:
         source_path = safe_path(root, listing["source_snapshot"])
         sources.append(validate_snapshot(source_path.parent, captures)["record"])
-    for source in sources:
-        for key in ("inputs", "source_export"):
-            if key in source and source[key] != assets.get(key):
-                raise ValueError("asset manifest import provenance differs from listing")
+    for key in ("inputs", "source_export"):
+        values = [source[key] for source in sources if key in source]
+        if bool(values) != (key in assets) or any(value != assets.get(key) for value in values):
+            raise ValueError("asset manifest import provenance differs from listing")
     return assets, prefix.as_posix()
+
+
+def check_asset_inventory(root, directory, inputs, captures):
+    def belongs(name):
+        return directory == "." or name.startswith(directory + "/")
+
+    expected = {
+        path.relative_to(root).as_posix(): sha
+        for path, sha in captures.items()
+        if belongs(path.relative_to(root).as_posix())
+    }
+    actual = {name: sha for name, sha in inputs.items() if belongs(name)}
+    if actual != expected:
+        raise ValueError("asset snapshot inventory changed after validation")
 
 
 def doctor_assets(root, target, captures):
@@ -118,6 +132,7 @@ def make_plan(root, profile_path, target_name, operation):
             paths.extend(build["adapter"]["inputs"])
     listing = None
     assets = None
+    asset_directory = None
     notes = {}
     if operation in ("metadata", "images"):
         if not target.get("metadata"):
@@ -176,10 +191,10 @@ def make_plan(root, profile_path, target_name, operation):
             if profile["mode"] == "live" and (not descriptor):
                 raise ValueError("live image intent requires immutable asset snapshot")
             if descriptor:
-                assets, directory = bind_asset_manifest(
+                assets, asset_directory = bind_asset_manifest(
                     root, target, listing, validated, captures
                 )
-                paths.append(directory)
+                paths.append(asset_directory)
     remote = None
     if target.get("remote"):
         paths.append(target["remote"])
@@ -224,6 +239,8 @@ def make_plan(root, profile_path, target_name, operation):
     for path, digest in captures.items():
         if inputs.get(path.relative_to(root).as_posix()) != digest:
             raise ValueError("parsed/validated input changed before plan inventory")
+    if asset_directory is not None:
+        check_asset_inventory(root, asset_directory, inputs, captures)
     if build and profile["mode"] == "live":
         source_inputs = {
             name: digest

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .metadata import metadata_diff, resolve_changelogs
-from .planning import doctor_assets, local_context, make_plan
+from .planning import check_asset_inventory, doctor_assets, local_context, make_plan
 from .profiles import target_identity
 from .records import inventory, read_json, safe_path
 from .snapshots import validate_snapshot
@@ -64,10 +64,12 @@ def main(argv=None):
         identity = target_identity(target)
         if args.command == "doctor":
             paths = [args.profile, *target["inputs"]]
+            asset_directory = None
             if "version_source" in target:
                 paths.append(target["version_source"]["file"])
             if target.get("assets"):
-                paths.append(doctor_assets(root, target, captures))
+                asset_directory = doctor_assets(root, target, captures)
+                paths.append(asset_directory)
                 paths.extend(path.relative_to(root).as_posix() for path in captures)
             result = {
                 "runtime": runtime,
@@ -83,6 +85,8 @@ def main(argv=None):
                     raise ValueError(
                         "doctor inventory differs from parsed input capture"
                     )
+            if asset_directory is not None:
+                check_asset_inventory(root, asset_directory, result["inputs"], captures)
         elif args.command == "plan":
             result = make_plan(root, args.profile, args.target, args.operation)
         else:

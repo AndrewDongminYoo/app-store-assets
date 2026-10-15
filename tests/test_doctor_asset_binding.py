@@ -123,6 +123,25 @@ class DoctorAssetBindingTests(unittest.TestCase):
         self.save()
         self.assert_refused("listing")
 
+    def test_import_provenance_cannot_be_bypassed_by_omitting_keys(self):
+        for key in ("inputs", "source_export"):
+            with self.subTest(key=key):
+                history = {name: value for name, value in self.history.items() if name != key}
+                directory = snapshot_fixture(self.root / "state/metadata", history)
+                self.listing["source_snapshot"] = str(directory.relative_to(self.root) / "manifest.json")
+                self.save()
+                self.assert_refused("asset manifest.*provenance")
+
+    def test_added_snapshot_file_before_final_inventory_is_refused(self):
+        inventory = module("cli").inventory
+
+        def changed(root, paths):
+            (self.asset_dir / "added.txt").write_text("outside manifest")
+            return inventory(root, paths)
+
+        with patch.object(module("cli"), "inventory", side_effect=changed):
+            self.assert_refused("snapshot inventory")
+
     def test_plan_keeps_the_same_asset_binding_and_remote_requirement(self):
         planning = module("planning")
         with self.assertRaisesRegex(ValueError, "missing input"):
@@ -138,6 +157,15 @@ class DoctorAssetBindingTests(unittest.TestCase):
         self.assertEqual(result["payload"]["assets"], self.asset_record)
         self.assertFalse(result["payload"]["executable"])
         self.assertEqual(result["payload"]["effects"], [])
+        inventory = planning.inventory
+
+        def added(root, paths):
+            (self.asset_dir / "added.txt").write_text("outside manifest")
+            return inventory(root, paths)
+
+        with patch.object(planning, "inventory", side_effect=added):
+            with self.assertRaisesRegex(ValueError, "snapshot inventory"):
+                planning.make_plan(self.root, "store-upload.json", "production", "images")
 
     def test_doctor_detects_image_change_before_final_inventory(self):
         inventory = module("cli").inventory
