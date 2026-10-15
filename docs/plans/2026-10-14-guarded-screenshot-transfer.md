@@ -112,6 +112,45 @@ Acceptance (fake states):
 - A provider call that keeps returning HTTP 429 fails the run at the adapter's per-call deadline.
 - `AppStoreAssets.prepare` stays blocked.
 
+### U3 live mappings and entrypoint
+
+`AppStoreAssets.transfer_screenshots(root:, target:, plan:, approval:, mode: "read-only", deadline: 120, verification_deadline: 120)` is the U3 entrypoint.
+Its target must equal the whole U2-verified target before any provider read.
+It reuses the U0 snapshot reader with a bounded provider-call wrapper; the default U0 reader and public export entrypoint retain their existing behavior.
+The fastlane 2.240.1 source links in the provider table were rechecked for build reads, screenshot attributes, localization methods, and retry behavior during U3 implementation.
+
+| Supplied observation | Live mapping |
+| --- | --- |
+| `schema_version`, `type` | The U0 reader's fixed public record envelope. |
+| `target` | The U2-verified identity, bound to the bundle lookup, iOS version name, and attached build number; account, flavor and stage remain declarations. |
+| `version_id` | `AppStoreVersion.id`. |
+| `editable`, `review_active` | The U0 editable-state allowlist and the live in-progress review submission. |
+| `binary` | Attached build number and processing state, with the approved app/platform/version identity. |
+| `build_exists` | Whether the live version has an attached build. |
+| `app_info_id`, `fields` | The U0 app-info and version-localization mappings. |
+| `release_notes` | Each version localization's `whats_new` value. |
+| Declared screenshot ID, order, processing state, width and height | The ordered set's `AppScreenshot.id`, `asset_delivery_state.state`, and `image_asset` dimensions. |
+
+Every supplied non-image field is compared, and an absent live key is a refusal rather than an ignored observation.
+Each declared image group must agree on set presence, screenshot count, IDs and order, and every supplied image annotation.
+Screenshot IDs are required for a non-empty declared snapshot group.
+An absent set and an existing empty set are distinct.
+Other sets of the declared locales are retained as the preserved-set baseline.
+Unmapped annotations such as `revision` or `binary.source_sha256` refuse the run.
+
+The lock name uses SHA-256 of the bundle ID under the canonical `/tmp` directory, so another `TMPDIR` or project path cannot create a second lock namespace.
+Create-new semantics refuse an existing lock before U2 or any provider read.
+The run checks the lock inode before and after live reads.
+Cleanup checks the owned inode, atomically renames the entry into a private sibling quarantine, and checks the captured inode before deletion.
+A mismatch before rename leaves the entry in place; a mismatch after rename retains the quarantine and reports its path without restoring it over a possible new lock.
+The private U2 staging directory is removed on success or failure unless external replacement prevents safe cleanup, in which case the run refuses and retains the entry for operator recovery.
+This handles ordinary pathname replacement races; deliberate same-UID mutation inside the private quarantine after its final check is outside the guarantee because portable Ruby/POSIX has no atomic compare-and-unlink operation.
+
+Each provider call and each Python verification has its own positive deadline capped at 600 seconds.
+The Python bridge drains both pipes, limits each stream to 8 MiB, and kills its process group on failure or timeout.
+The read-only result uses `action: "verify"` and `readback.snapshot_matches: true`; it makes no upload/replace decision and no processing-completion claim.
+`tests/test_transfer_readback.py` exercises these rules through the real U2 process and the existing fake Spaceship, without a gem, credentials, or network.
+
 ## U4: Transfer mode
 
 Repository: app-store-assets (Ruby entrypoint, fake-tested).

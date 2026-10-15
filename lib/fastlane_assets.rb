@@ -3,6 +3,8 @@ require "open3"
 require "digest"
 require "securerandom"
 require "timeout"
+require "tmpdir"
+require "fileutils"
 
 module AppStoreAssets
   # A prepared path is not authorization to replace remote screenshots.
@@ -111,6 +113,279 @@ module AppStoreAssets
     RuntimeError.new("App Store snapshot export refused: #{message}")
   end
 
+  class TransferRefusal < StandardError; end
+  TRANSFER_JSON_LIMIT = 8 * 1024 * 1024
+  TRANSFER_VERIFIER = <<~PYTHON.freeze
+    import runpy, sys
+    sys.path.insert(0, sys.argv.pop(1))
+    runpy.run_module("app_store_assets_local.transfer", run_name="__main__")
+  PYTHON
+
+  # U3 only: verifies authority and live state; no upload, delete, or reorder.
+  def self.transfer_screenshots(root:, target:, plan:, approval:, mode: "read-only",
+                               deadline: SNAPSHOT_DEFAULT_DEADLINE,
+                               verification_deadline: SNAPSHOT_DEFAULT_DEADLINE)
+    raise transfer_error("only read-only mode is available") unless mode.to_s.tr("_", "-") == "read-only"
+    [deadline, verification_deadline].each do |limit|
+      unless limit.is_a?(Numeric) && limit.positive? && limit <= SNAPSHOT_MAX_DEADLINE
+        raise transfer_error("deadline must be more than 0 and at most #{SNAPSHOT_MAX_DEADLINE} seconds")
+      end
+    end
+    begin
+      identity = snapshot_target(target)
+    rescue StandardError
+      raise transfer_error("invalid target")
+    end
+
+    result = nil
+    transfer_lock(identity) do |check_lock|
+      transfer_staging do |directory|
+        command = ["-I", "-B", "-c", TRANSFER_VERIFIER, snapshot_checkout,
+                   "--root", root, "--plan", plan, "--approval", approval,
+                   "--staging-dir", File.realpath(directory)]
+        intent = JSON.parse(transfer_python(command, "", verification_deadline))
+        unless intent["type"] == "verified-transfer-intent" && intent["target"] == identity && intent["operation"] == "images"
+          raise transfer_error("verified intent target or operation differs")
+        end
+        check_lock.call
+        labels = intent.fetch("groups").map { |group| "#{group.fetch('locale')}/#{group.fetch('slot')}" }.join(", ")
+        labels = "target" if labels.empty?
+        live = transfer_provider_output do
+          transfer_call("load Spaceship", deadline) { require "spaceship" }
+          begin
+            snapshot_record(identity, deadline, reader: lambda { |label, limit, &operation|
+              transfer_call("#{labels}: #{label}", limit, &operation)
+            })
+          rescue TransferRefusal
+            raise
+          rescue StandardError
+            raise transfer_error("#{labels}: live snapshot could not be read")
+          end
+        end
+        transfer_python(["-I", "-B", "-c", SNAPSHOT_VALIDATOR, snapshot_checkout], JSON.generate(live), verification_deadline)
+        result = transfer_compare(intent, live, labels)
+        check_lock.call
+      end
+    end
+    output = JSON.generate(result) + "\n"
+    raise transfer_error("result exceeds JSON byte bound") if output.bytesize > TRANSFER_JSON_LIMIT
+
+    $stdout.write(output)
+    $stdout.flush
+    result
+  rescue TransferRefusal
+    raise
+  rescue StandardError
+    raise transfer_error("local verification or cleanup failed")
+  end
+
+  def self.transfer_error(message)
+    TransferRefusal.new("App Store screenshot transfer refused: #{message}")
+  end
+
+  def self.transfer_lock(identity)
+    # A fixed machine-wide path prevents TMPDIR or project changes from splitting the lock.
+    name = "app-store-assets-transfer-#{Digest::SHA256.hexdigest(identity.fetch('app_id'))}.lock"
+    path = File.join(File.realpath("/tmp"), name)
+    begin
+      lock = File.open(path, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o600)
+    rescue Errno::EEXIST
+      raise transfer_error("target lock exists; only the operator may remove an existing lock")
+    end
+    owned = lock.stat
+    same_lock = lambda do
+      observed = File.lstat(path)
+      observed.file? && [observed.dev, observed.ino] == [owned.dev, owned.ino]
+    rescue Errno::ENOENT
+      false
+    end
+    begin
+      lock.write("#{Process.pid}\n")
+      lock.flush
+      yield lambda { raise transfer_error("target lock changed") unless same_lock.call }
+    ensure
+      lock.close
+      transfer_remove_owned(path, owned, "target lock")
+    end
+  end
+
+  def self.transfer_staging
+    directory = File.realpath(Dir.mktmpdir("app-store-assets-transfer-"))
+    owned = File.lstat(directory)
+    begin
+      yield directory
+    ensure
+      transfer_remove_owned(directory, owned, "staging directory")
+    end
+  end
+
+  # Isolate the entry before deletion, then check what the rename actually moved.
+  # A raced replacement is retained for operator recovery, never restored over a new lock.
+  def self.transfer_remove_owned(path, owned, label)
+    same_entry = lambda do |candidate|
+      observed = File.lstat(candidate)
+      [observed.dev, observed.ino, observed.ftype] == [owned.dev, owned.ino, owned.ftype]
+    rescue Errno::ENOENT
+      false
+    end
+    raise transfer_error("#{label} changed; retained at #{path}") unless same_entry.call(path)
+
+    quarantine = Dir.mktmpdir(".app-store-assets-cleanup-", File.dirname(path))
+    captured = File.join(quarantine, "entry")
+    File.rename(path, captured)
+    unless same_entry.call(captured)
+      raise transfer_error("#{label} changed during cleanup; retained at #{captured}")
+    end
+    FileUtils.remove_entry(captured)
+  ensure
+    if quarantine
+      begin
+        Dir.rmdir(quarantine)
+      rescue Errno::ENOTEMPTY
+        nil
+      end
+    end
+  end
+
+  # No block form of popen3: its implicit wait can outlive a Timeout exception.
+  # Drain both pipes and feed stdin under one deadline, then reap or kill the process group.
+  def self.transfer_python(arguments, input, deadline)
+    raise transfer_error("verification input exceeds JSON byte bound") if input.bytesize > TRANSFER_JSON_LIMIT
+
+    input = input.b
+    stdin, stdout, stderr, process = Open3.popen3(ENV.fetch("PYTHON", "python3"), *arguments, pgroup: true)
+    expires = Process.clock_gettime(Process::CLOCK_MONOTONIC) + deadline
+    buffers = { stdout => +"".b, stderr => +"".b }
+    readers = buffers.keys
+    offset = 0
+    stdin.close if input.empty?
+    until readers.empty? && stdin.closed?
+      remaining = expires - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      raise transfer_error("local verification exceeded its deadline") unless remaining.positive?
+
+      ready = IO.select(readers, stdin.closed? ? [] : [stdin], nil, remaining)
+      raise transfer_error("local verification exceeded its deadline") if ready.nil?
+
+      ready[0].each do |stream|
+        chunk = stream.read_nonblock(65_536, exception: false)
+        if chunk.nil?
+          readers.delete(stream)
+          stream.close
+        elsif chunk != :wait_readable
+          buffers[stream] << chunk
+          raise transfer_error("verification output exceeds JSON byte bound") if buffers[stream].bytesize > TRANSFER_JSON_LIMIT
+        end
+      end
+      ready[1].each do |stream|
+        written = stream.write_nonblock(input.byteslice(offset, 65_536), exception: false)
+        next if written == :wait_writable
+
+        offset += written
+        stream.close if offset == input.bytesize
+      end
+    end
+    remaining = expires - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    unless remaining.positive? && process.join(remaining)
+      raise transfer_error("local verification exceeded its deadline")
+    end
+    raise transfer_error("local verification refused") unless process.value.success?
+
+    buffers.fetch(stdout)
+  ensure
+    [stdin, stdout, stderr].compact.each { |stream| stream.close unless stream.closed? }
+    # A reaped parent can leave descendants holding the pipes open.
+    if process
+      begin
+        Process.kill("KILL", -process.pid)
+      rescue Errno::ESRCH
+        nil
+      end
+      process.join(1)
+    end
+  end
+
+  def self.transfer_provider_output
+    original_stdout = $stdout
+    saved_stdout = STDOUT.dup
+    begin
+      STDOUT.flush
+      STDOUT.reopen(STDERR)
+      $stdout = $stderr
+      yield
+    ensure
+      STDOUT.flush
+      STDOUT.reopen(saved_stdout)
+      saved_stdout.close
+      $stdout = original_stdout
+    end
+  end
+
+  def self.transfer_call(label, deadline, &operation)
+    Timeout.timeout(deadline, &operation)
+  rescue Timeout::Error
+    raise transfer_error("provider call exceeded its deadline: #{label}")
+  rescue LoadError
+    raise transfer_error("Spaceship is unavailable; use an authenticated Fastlane lane")
+  rescue StandardError
+    raise transfer_error("provider call failed: #{label}")
+  end
+
+  def self.transfer_compare(intent, live, labels)
+    supplied = intent.fetch("remote")
+    unless supplied["version_id"].is_a?(String) && !supplied["version_id"].empty? &&
+           supplied["editable"] == true && supplied["review_active"] == false &&
+           live["editable"] == true && live["review_active"] == false && live["binary"]
+      raise transfer_error("#{labels}: version, review state or approved attached build is not ready")
+    end
+    mapped = live.merge("build_exists" => !live["binary"].nil?, "release_notes" => live.fetch("fields").to_h { |locale, fields| [locale, fields["release_notes"]] })
+    transfer_match(supplied.reject { |key, _| key == "images" }, mapped, "snapshot", labels)
+    declared = intent.fetch("groups")
+    groups = declared.map do |group|
+      locale, slot = group.fetch("locale"), group.fetch("slot")
+      label = "#{locale}/#{slot}"
+      expected = supplied.fetch("images", {}).fetch(locale, {})
+      observed = live.fetch("images").fetch(locale, {})
+      unless expected.key?(slot) == observed.key?(slot)
+        raise transfer_error("#{label}: screenshot set presence differs from the snapshot")
+      end
+      if expected.key?(slot)
+        unless expected.fetch(slot).all? { |image| image["id"].is_a?(String) && !image["id"].empty? }
+          raise transfer_error("#{label}: snapshot screenshot IDs are required")
+        end
+        transfer_match(expected.fetch(slot), observed.fetch(slot), "images", label)
+      end
+      images = observed.fetch(slot, [])
+      {
+        locale: locale, slot: slot, action: "verify",
+        readback: { snapshot_matches: true, screenshot_count: images.size },
+        remote_screenshot_ids: images.map { |image| image.fetch("id") }
+      }
+    end
+    preserved = declared.map { |group| group.fetch("locale") }.uniq.to_h do |locale|
+      slots = declared.select { |group| group["locale"] == locale }.map { |group| group.fetch("slot") }
+      [locale, live.fetch("images").fetch(locale, {}).reject { |slot, _| slots.include?(slot) }]
+    end
+    {
+      plan_digest: intent.fetch("plan_digest"), target: intent.fetch("target"), mode: "read-only",
+      remote_verified: true, provenance: intent.fetch("provenance"), groups: groups, preserved_sets: preserved
+    }
+  end
+
+  # Compare every supplied observation; absent live keys are not silently skipped.
+  def self.transfer_match(expected, observed, path, label)
+    if expected.is_a?(Hash) && observed.is_a?(Hash)
+      expected.each do |key, value|
+        raise transfer_error("#{label}: no live mapping for #{path}.#{key}") unless observed.key?(key)
+
+        transfer_match(value, observed.fetch(key), "#{path}.#{key}", label)
+      end
+    elsif expected.is_a?(Array) && observed.is_a?(Array) && expected.size == observed.size
+      expected.zip(observed).each_with_index { |(left, right), index| transfer_match(left, right, "#{path}[#{index}]", label) }
+    elsif expected != observed
+      raise transfer_error("#{label}: snapshot differs at #{path}")
+    end
+  end
+
   def self.snapshot_strings(value)
     case value
     when Hash then value.to_h { |key, item| [key.to_s, snapshot_strings(item)] }
@@ -191,15 +466,15 @@ module AppStoreAssets
     items
   end
 
-  def self.snapshot_record(identity, deadline)
+  def self.snapshot_record(identity, deadline, reader: method(:snapshot_call))
     api = Spaceship::ConnectAPI
     bundle_id = identity["app_id"]
     name = identity["version"]["name"]
 
-    app = snapshot_call("app", deadline) { api::App.find(bundle_id) }
+    app = reader.call("app", deadline) { api::App.find(bundle_id) }
     raise snapshot_error("no App Store Connect app for #{bundle_id}") if app.nil?
 
-    versions = snapshot_call("app store versions", deadline) do
+    versions = reader.call("app store versions", deadline) do
       app.get_app_store_versions(filter: { versionString: name, platform: "IOS" })
     end
     matches = Array(versions).select { |item| item.version_string == name && item.platform == "IOS" }
@@ -210,17 +485,17 @@ module AppStoreAssets
     raise snapshot_error("App Store version #{name} has no ID") unless version.id.is_a?(String) && !version.id.empty?
 
     state = version.app_version_state || version.app_store_state
-    submission = snapshot_call("review submission", deadline) do
+    submission = reader.call("review submission", deadline) do
       app.get_in_progress_review_submission(platform: "IOS")
     end
-    build = snapshot_call("attached build", deadline) { snapshot_attached_build(version) }
-    app_info = snapshot_call("app info", deadline) { app.fetch_edit_app_info }
+    build = reader.call("attached build", deadline) { snapshot_attached_build(version) }
+    app_info = reader.call("app info", deadline) { app.fetch_edit_app_info }
     # fetch_edit_app_info also returns an app info in WAITING_FOR_REVIEW, which accepts no edit.
     app_info = nil unless app_info.nil? || SNAPSHOT_APP_INFO_EDITABLE_STATES.include?(app_info.state)
 
     fields = {}
     if app_info
-      infos = snapshot_call("app info localizations", deadline) do
+      infos = reader.call("app info localizations", deadline) do
         app_info.get_app_info_localizations(limit: SNAPSHOT_PAGE_LIMIT)
       end
       snapshot_page("app info localizations", infos).each do |info|
@@ -235,7 +510,7 @@ module AppStoreAssets
     end
 
     images = {}
-    localizations = snapshot_call("version localizations", deadline) do
+    localizations = reader.call("version localizations", deadline) do
       version.get_app_store_version_localizations(limit: SNAPSHOT_PAGE_LIMIT)
     end
     snapshot_page("version localizations", localizations).each do |localization|
@@ -251,7 +526,7 @@ module AppStoreAssets
         "support_url" => localization.support_url.to_s,
         "marketing_url" => localization.marketing_url.to_s
       )
-      sets = snapshot_call("screenshot sets #{locale}", deadline) do
+      sets = reader.call("screenshot sets #{locale}", deadline) do
         localization.get_app_screenshot_sets(limit: SNAPSHOT_PAGE_LIMIT)
       end
       # An existing empty set is an empty list; a set that does not exist has no key.

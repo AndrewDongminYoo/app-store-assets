@@ -179,4 +179,38 @@ On failure the command removes only files it created; it never replaces existing
 Standard output contains one `verified-transfer-intent` JSON document with the plan digest, target, mode, supplied remote observation, replacement policy, unchanged provenance, and the listing's actual locale/slot pairs.
 Each image has a private `staged_path`, SHA-256 and MD5 derived from the same captured bytes.
 MD5 is only a provider comparison value; SHA-256 binds the approved bytes.
-Live readback, locking and transport remain U3 and U4, and real uploads still require the specification's explicit operator authorization and writer window.
+Transport remains U4, and real uploads still require the specification's explicit operator authorization and writer window.
+
+## Verify the live screenshot state
+
+U3 adds `AppStoreAssets.transfer_screenshots` with `mode: "read-only"` only.
+Call it from an authenticated Fastlane lane with the same whole target used by the reviewed plan and approval:
+
+```ruby
+AppStoreAssets.transfer_screenshots(
+  root: "/absolute/path/to/personal/app",
+  target: approved_target,
+  plan: "reviewed-plan.json",
+  approval: "transfer-approval.json",
+  mode: "read-only",
+  deadline: 120,
+  verification_deadline: 120
+)
+```
+
+Plan and approval paths remain relative to `root`.
+The entrypoint takes a bundle-ID lock before calling U2, owns its private staging directory, compares the supplied observation with live Spaceship reads, and removes its staging directory and its own lock on exit.
+The lock is `/tmp/app-store-assets-transfer-<SHA-256 of bundle ID>.lock`, independent of `TMPDIR` and the app checkout.
+An existing lock refuses the run; only the operator may remove a stale lock after checking that no run owns it.
+Cleanup isolates each owned entry in a private sibling directory and rechecks its inode before deletion.
+A detected replacement refuses the run and is retained at the path reported on standard error for operator recovery.
+
+Every provider call has the configured `deadline`, and each local Python verification has `verification_deadline`; both must be positive and at most 600 seconds.
+Python input and output are bounded to 8 MiB per stream, and a timed-out verifier process group is killed.
+Provider output goes to standard error, including an already-created STDOUT logger.
+Standard output contains one JSON result with the plan digest, target, actual declared groups, snapshot comparison results, remote screenshot IDs, and preserved sets of the declared locales.
+
+The read-only mode verifies snapshot freshness and the approved attached build.
+It does not choose upload or replacement actions or certify screenshot processing completion; those checks belong to U4.
+The mode rejects snapshot fields that have no live mapping, and keeps provenance as `unverified-import`.
+The exact mappings and fake-provider acceptance cases are in the [U3 plan](docs/plans/2026-10-14-guarded-screenshot-transfer.md#u3-live-mappings-and-entrypoint).
