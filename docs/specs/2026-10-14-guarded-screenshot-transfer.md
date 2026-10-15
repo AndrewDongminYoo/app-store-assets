@@ -25,7 +25,7 @@ The adapter adds no service, database or capture abstraction, and it does not ch
 
 The transport is Ruby Spaceship from fastlane 2.240.1, in a new entrypoint of `lib/fastlane_assets.rb`.
 Python's standard library has no ES256 signing, so the App Store Connect token cannot be made in the Python package without a new dependency.
-Python (`app_store_assets`) keeps the offline contract: it re-derives the plan, validates the approval record and returns the verified intent, and it makes no network call.
+The read-only `app_store_assets` package re-derives the plan; `app_store_assets_local.transfer` validates the approval record, stages checked bytes and returns the verified intent without a network call.
 The legacy `AppStoreAssets.prepare` stays blocked, and loading `lib/fastlane_assets.rb` keeps working without the fastlane gem.
 
 ## Approval record
@@ -94,7 +94,8 @@ Two runs for the same target on one machine must not overlap; the plan defines t
 
 All automated verification uses a fake App Store Connect in place of the Spaceship objects, and the default test command needs no fastlane gem, network access or credentials.
 Each invariant has at least one test that fails when its guard is removed, and the plan lists the fake states for each unit.
-A real upload, placement deletion or review submission happens only in the plan's final authorized smoke run.
+A real upload or placement deletion happens only in the plan's final authorized smoke run.
+Review submission remains out of scope, including that smoke run.
 
 ## Sources
 
