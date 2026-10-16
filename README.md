@@ -1,250 +1,483 @@
 # App Store Assets
 
-Shared image-bundle preparation for personal App Store projects.
-Existing project capture and artwork generators remain the source of images.
-The first adoption covers Mirae, Ttush Push, and Kkomkkomi Fastlane uploads, plus the App Store copyright fix in Chef al Mando's composer.
+Prepare, validate, review, and transfer App Store screenshots from your app's existing image pipeline.
+The tool preserves source images, binds a reviewable plan to the exact image bytes and app version, and checks App Store Connect after a transfer.
+Your app keeps ownership of capture, composition, authentication, and release lanes.
+
+| Capability | Support |
+| --- | --- |
+| Prepare and validate local screenshot bundles | Python CLI; no account or network required |
+| Inspect inputs and plan changes | Offline `doctor`, `plan`, and `diff` commands |
+| Publish immutable local metadata and image snapshots | Python local APIs and import/export commands |
+| Read and transfer App Store screenshots | Ruby bridge using an authenticated Fastlane Spaceship session; Apple iOS only |
+| Capture screens, build/sign apps, upload binaries, or submit review | Outside the transfer adapter's scope |
+| Transfer Google Play images, macOS screenshots, or App Previews | Not implemented |
 
 ## Requirements
 
-Python 3.9 or newer, ImageMagick 7 (`magick`), and Ruby for the Fastlane bridge.
-No new Python package or Ruby gem is required.
-Keep this checkout beside the personal app repositories or set `APP_STORE_ASSETS_ROOT` to its absolute path.
-The [shared repository](https://github.com/AndrewDongminYoo/app-store-assets) is public.
-Use a reviewed runtime commit for reproducible installation.
-Missing tooling stops screenshot uploads with an explicit error.
-
-## Runtime Checkout
-
-The stage-1 runtime pin `e0d3691b455ec2c27606fbda5b22f09f5a9d3483`, also included in `d9682e6`, has reader-compatibility and cache-publication defects.
-Do not use those revisions for store uploads.
-The historical replacement candidate `7597d47f3ce36cac3462155b0c8a489a441e62a8` still has the legacy transfer-enabling `prepare` behavior.
-Do not deploy that revision, or the older pins above, as a runtime providing the legacy transfer block described below.
-This extraction approves no replacement deployment pin and supplies no deployment checkout command.
-Before installing the updated bridge, separately review and approve a merged runtime revision containing the block and explicit `prepare_local` entrypoint.
-
-Project lane adoption remains in each owning app repository; those app changes are not included in this repository's publication.
-
-## Prepare without uploading
+Use macOS or Linux with Git, Python 3.9 or newer, and ImageMagick 7 (`magick`) on `PATH`.
+The Python code uses the standard library; there is no `pip install` step.
+Remote reads and transfers additionally require Ruby and Fastlane in your app's environment.
+The transfer implementation was checked against Fastlane 2.240.1 and 2.241.0; other versions need compatibility verification.
+Use your app's `Gemfile.lock` to keep its tested Fastlane version stable.
 
 ```bash
-python3 assets.py prepare-screenshots \
-  --source ../mirae/fastlane/metadata/ios \
-  --subdir images/iphone65 \
-  --out ../mirae/build/store-assets/ios-bundles \
-  --project mirae --bundle-id kr.mirae.app
+python3 --version
+magick -version
+ruby --version
+bundle exec fastlane --version
 ```
 
-The command returns JSON containing `bundle` and `screenshots_path`.
-Each locale is flattened to the direct image layout Fastlane reads.
-The bundle directory is named from the manifest hash and contains final hashes, original hashes, sizes, profiles, and the explicit `replace-localized-sets` policy.
-`validate` re-decodes images and compares final hashes and inventory.
-Preparation additionally compares a reused bundle's manifest with the manifest freshly computed from the source.
-Concurrent preparations validate and reuse the atomically published winner.
+The walkthrough below uses an app with `fastlane/Fastfile` at its root and an existing Fastlane installation.
+For another layout, adjust the `APP_ROOT` calculation in the Ruby example and its path in the preparation script.
+All example app identifiers, versions, images, and account labels must be replaced with your own.
+
+## Install a version
+
+Install the `v1.0.0` source checkout inside your app.
+Use a real directory, not a symlink or a downloaded source archive: the current runtime verifier reads Git identity as well as file contents.
+This is a source distribution, not a Python package or Fastlane plugin.
 
 ```bash
-python3 assets.py validate /absolute/path/to/bundle
-python3 -m unittest discover -s tests -v
-ruby -c lib/fastlane_assets.rb
+export APP_ROOT="/absolute/path/to/your-app"
+export APP_ROOT="$(cd "$APP_ROOT" && pwd -P)"
+export APP_STORE_ASSETS_ROOT="$APP_ROOT/tools/app-store-assets"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHON="$(command -v python3)"
+mkdir -p "$APP_ROOT/tools" "$APP_ROOT/scripts" "$APP_ROOT/fastlane" "$APP_ROOT/store-assets"
+git clone --branch v1.0.0 --depth 1 \
+  https://github.com/AndrewDongminYoo/app-store-assets.git \
+  "$APP_STORE_ASSETS_ROOT"
 ```
 
-The default suite runs the standalone CLI tests and explicitly skips consumer integration tests.
-GitHub Actions runs the unoptioned default test command and Ruby syntax checks on pull requests targeting `main` or the stacked `split/offline-read-boundaries` branch, and pushes to `main`.
-The single Ubuntu 24.04 job installs ImageMagick 7 through the runner's existing Homebrew and uses Python 3.12 with read-only repository permissions.
-Consumer integration and the optional Fastlane reader checks remain local because they require additional checkouts or reader dependencies.
-To verify actual adopted Fastfiles, set `APP_STORE_ASSETS_PERSONAL_ROOT` to the folder containing the personal `mirae`, `ttush_push`, and `kkomkkomi` checkouts with the stage-1 lane changes.
+Keep this nested checkout out of the app's tracked files, for example with `/tools/app-store-assets/` in the app's `.gitignore`.
+Keep generated bundles in `/build/` as well.
+Do not place app configuration, images, or credentials inside the runtime checkout: it must stay clean.
+The preparation example below records the resolved version and runtime file hashes automatically in `store-upload.json`.
+You do not need to copy a commit SHA from this README.
+
+A release tag selects a version; the recorded source identity and hashes detect a changed installation.
+Reproducibility also depends on your source images, ImageMagick version, Python/Ruby environment, and Fastlane lockfile.
+Record those tool versions in your CI environment or build image rather than assuming a Git revision describes the entire pipeline.
+
+## Integrate an iOS screenshot pipeline
+
+The sequence is **prepare local images → read store state → plan → approve → verify live state → transfer**.
+Only the final step writes to App Store Connect.
+An offline plan is always non-executable; a separate approval binds it to one app/version and operation.
+
+### 1. Describe the target and image order
+
+Create `store-assets/target.json` in your app:
+
+```json
+{
+  "store": "apple",
+  "platform": "ios",
+  "account": "app-store-team",
+  "app_id": "com.example.myapp",
+  "flavor": "production",
+  "stage": "production",
+  "version": { "name": "1.0.0", "build": "1" }
+}
+```
+
+`app_id` is the bundle identifier, not Apple's numeric app ID.
+`account` is your public account label; it does not authenticate or verify a team.
+An optional public `account_id` must then appear unchanged in every target record, including the approval.
+Set `version` to the App Store version and attached build you intend to edit.
+The version must be editable, have no active review, and already have the required localizations and build selected.
+This tool does not create the version, attach a build, or create localizations.
+
+Create `store-assets/selection.json`:
+
+```json
+{
+  "remote": "store-assets/remote.json",
+  "allow_delete": false,
+  "images": {
+    "en-US": {
+      "APP_IPHONE_67": [
+        "store-assets/source/en-US/01.png",
+        "store-assets/source/en-US/02.png"
+      ]
+    }
+  }
+}
+```
+
+Put your final composed screenshots at those paths.
+Array order is the intended store order; add other locales or slots explicitly.
+For this example, use opaque PNG or JPEG images at a supported `APP_IPHONE_67` size, such as 1290 × 2796 pixels.
+Use lowercase `.png`, `.jpg`, or `.jpeg` extensions that match the encoded format.
+The [supported slot catalog](catalog/store-rules-v1.json) lists the sizes and limits this version validates; it is not a complete device catalog or a guarantee of store acceptance.
+
+Start with `allow_delete: false`: an absent or empty screenshot set can be populated, and an identical set can be kept.
+A different non-empty set is refused.
+To replace an existing set, explicitly change this to `true` before preparing and reviewing a new plan.
+That permits deleting screenshots within the declared locale/slot pairs, not unrelated sets.
+Review visual quality and localization separately; byte validation cannot do that.
+
+### 2. Prepare immutable image inputs
+
+Save the following app-owned helper as `scripts/prepare-store-assets.py`.
+It uses the existing local snapshot API because the standalone bundle command does not create the live planner's asset manifest and profile.
+It captures final bytes, publishes an immutable snapshot, and writes the listing and profile used in the remaining steps.
+
+```python
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+runtime = root / "tools/app-store-assets"
+sys.path.insert(0, str(runtime))
+
+from app_store_assets.contracts import target_identity
+from app_store_assets.identity import runtime_identity, runtime_inventory
+from app_store_assets.records import capture_bytes, read_json, safe_path
+from app_store_assets_local.publisher import publish_snapshot
+
+
+def write_json(name, value):
+    destination = root / name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def git(*args):
+    return subprocess.check_output(
+        ["git", "-C", str(runtime), *args], text=True
+    ).strip()
+
+
+target = target_identity(read_json(safe_path(root, "store-assets/target.json")))
+selection = read_json(safe_path(root, "store-assets/selection.json"))
+pin = {
+    "path": "tools/app-store-assets",
+    "url": git("remote", "get-url", "origin"),
+    "commit": git("rev-parse", "HEAD"),
+    "files": runtime_inventory(runtime),
+}
+runtime_identity(runtime, pin)
+entries, files = [], {}
+for locale, groups in selection["images"].items():
+    for slot, sources in groups.items():
+        for index, source in enumerate(sources, 1):
+            original = safe_path(root, source)
+            data = capture_bytes(original, limit=64 * 1024 * 1024)
+            name = f"{locale}/{slot}/{index:02d}{original.suffix}"
+            files[name] = data
+            entries.append({
+                "file": name, "locale": locale, "slot": slot,
+                "sha256": hashlib.sha256(data).hexdigest(),
+            })
+record = {
+    "schema_version": 1, "type": "asset-manifest", "target": target,
+    "assets": entries, "provenance": {"status": "unverified-import"},
+}
+snapshot = publish_snapshot(root / "build/store-assets/assets", record, files)
+images = {}
+for entry in entries:
+    images.setdefault(entry["locale"], {}).setdefault(entry["slot"], []).append({
+        "file": (snapshot / entry["file"]).relative_to(root).as_posix(),
+        "sha256": entry["sha256"],
+    })
+write_json("store-assets/listing.json", {
+    "schema_version": 1, "type": "metadata", "target": target, "images": images,
+})
+write_json("store-upload.json", {
+    "schema_version": 1, "type": "offline-profile", "project": "my-app",
+    "mode": "live", "runtime": pin,
+    "targets": {"ios-production": {
+        **target,
+        "inputs": ["store-assets/target.json", "store-assets/selection.json",
+                   "scripts/prepare-store-assets.py", "fastlane/Fastfile"],
+        "metadata": "store-assets/listing.json",
+        "assets": {"manifest": (snapshot / "manifest.json").relative_to(root).as_posix()},
+        "remote": selection["remote"],
+        "replacement": {
+            "locales": list(images),
+            "slots": sorted({entry["slot"] for entry in entries}),
+            "allow_delete": selection["allow_delete"],
+        },
+    }},
+})
+print(snapshot)
+```
+
+Run it after your capture/composition step:
 
 ```bash
-APP_STORE_ASSETS_PERSONAL_ROOT=/absolute/personal/root python3 -m unittest discover -s tests -v
+python3 -B "$APP_ROOT/scripts/prepare-store-assets.py"
 ```
 
-To compare the manifest with the actual Fastlane 2.240.1 loader, point to its unpacked source and a Ruby interpreter with its existing reader dependencies.
-This check reads temporary files and makes no store calls.
+This helper replaces `store-assets/listing.json` and `store-upload.json` when rerun; it preserves original images and prior content-addressed snapshots.
+Keep the generated profile and all referenced snapshot bytes together for review and execution.
+The provenance remains `unverified-import`: selecting a build number does not prove that build rendered the screenshots.
 
-```bash
-APP_STORE_ASSETS_FASTLANE_SOURCE=/absolute/path/to/fastlane-2.240.1 \
-APP_STORE_ASSETS_READER_RUBY=/absolute/path/to/ruby \
-python3 -m unittest discover -s tests -v
-```
+### 3. Connect the Ruby bridge to Fastlane
 
-`--normalize-alpha` removes an unused alpha channel from an entirely opaque PNG in the prepared copy.
-It rejects actual transparent pixels, which require an explicit background in the owning composer.
-Original inputs remain unchanged.
-PNG encoding excludes date and time chunks while retaining color metadata, so identical input bytes produce identical output within the same ImageMagick runtime.
-Explicit local preparation can enable this option for opaque alpha inputs.
-
-## Upload behavior
-
-The legacy Ruby `AppStoreAssets.prepare` entrypoint is blocked before it starts a local process or returns options that a lane can use for screenshot transfer.
-Consumers can explicitly call `AppStoreAssets.prepare_local` to prepare validated local bundles.
-It returns `screenshots_path` without `overwrite_screenshots`; that path is local output and does not authorize an upload.
-The guarded transfer entrypoint below is separate from this legacy boundary.
-
-Local preparation rejects hidden screenshots, mixed-case extensions such as `.Png`, and mismatched file formats.
-Screenshot transfer requires a separately reviewed plan, exact target and complete local/remote placement policy.
-The existing external Fastlane replacement behavior can affect remote display classes absent from a local tree.
-Consumers that call Fastlane directly need their own guarded integration; this bridge cannot block those calls.
-The Mirae, Ttush, and Kkom negative and metadata-only opt-in cases passed with external actions stubbed at the consumer revisions recorded in [the 2026-10-14 integration evidence](docs/notes/2026-10-14-mirae-direct-lanes-integration.md).
-The fixture copies Mirae's required local helper and checks its current plan/digest requirement, including metadata-only calls; the [fixture contract](docs/specs/2026-10-16-fastlane-integration-fixture.md) records the correction for issue #41.
-
-The Python commands remain offline; the Ruby transfer entrypoint uses an already-authenticated Spaceship session and can upload approved screenshots.
-No entrypoint logs in or submits review.
-Fastlane lane execution remains an external action requiring authorization.
-The [guarded screenshot transfer specification](docs/specs/2026-10-14-guarded-screenshot-transfer.md) defines the readback and transfer contract.
-
-## Evidence limits
-
-The initial manifest labels existing inputs `unverified-import`.
-It records file provenance, not the build that originally rendered the image.
-It does not assert required-slot completeness, text readability, visual quality, safe-area compliance, or App Store acceptance.
-The current dimension allowlist covers the adopted iPhone and iPad pipelines; it is not a complete Apple device catalog.
-Duo and Creative Assets require the next reference-data and provenance contract rather than aliases for existing phone screenshots.
-
-See [the rollout](docs/plans/2026-10-07-rollout.md) and [the first-stage contract](docs/specs/screenshot-bundles.md).
-
-## Offline read commands
-
-`python3 -B -m app_store_assets COMMAND --root PROJECT --target NAME`, where
-`COMMAND` is one of `doctor`, `plan` or `diff`,
-uses an explicitly pinned local runtime and supplied public records. `plan` is
-an intent record with `executable: false`; no command constructs a provider or
-writes project state. `diff` additionally takes `--before` and `--after`.
-`--dry-run` keeps the same read-only behavior. Image validation may create
-private temporary decoder files which are removed on completion.
-
-When a target declares `assets.manifest`, `doctor` validates the local listing and asset snapshot without reading `remote`.
-It binds the ordered locale/slot paths and image hashes, checks the snapshot's files against their bytes, and compares recorded import inputs and source export with the listing's provenance.
-Its input inventory includes the checked listing, snapshots and images; `plan --operation images` remains the selected-version and replacement-policy check.
-
-The profile lists a public runtime URL, exact Git commit, complete runtime hash
-inventory and each app/platform/account/flavor/stage/version/track identity.
-Unknown keys and malformed nested values fail closed in every target, including
-unselected targets. Public metadata URL queries accept only `lang`, `hl` or
-`locale` with a locale value; credential queries and fragments are rejected.
-All file reads reject symlinks in any component. Private name patterns are
-rejected in every component of a raw path, and in every component below the
-trusted root of a `safe_path` result; that root's trusted absolute ancestors are
-not re-checked. Reads capture bounded bytes and bind parsed bytes to final hashes.
-Snapshots validate the complete supported record as well as their address and
-exact file inventory. Python validators are authoritative; the JSON schema files
-are structural summaries and do not replace runtime validation.
-
-The `app_store_assets` reader package contains no import/export/staging/publisher implementation or writer import.
-Those functions live in `app_store_assets_local`; read plans retain no execution authority.
-Native identity, signing, provider account and remote freshness remain unverified.
-
-Catalog rules are frozen to `catalog.CATALOG_SHA256`: each read validates the
-captured digest and the complete structure before use. Changing frozen rules
-requires updating their version and this explicit digest together. Image width,
-height and size annotations must agree with decoded captured bytes, including
-immutable asset snapshots.
-
-The separate local extension publishes only metadata and asset records. It
-rejects build publication; binary read plans still bind explicitly supplied
-APK/AAB/IPA files through B1. Import rejects listing files that overlap reserved
-history directories or predicted snapshot addresses, including in dry-run mode.
-Local copy operations charge supplied bytes before reading paths and bound each
-capture by the remaining 1 GiB total budget (64 MiB per image, 8 MiB per text).
-Snapshot manifests, export manifests and final listings must serialize within
-the public reader's 8 MiB limit before any durable output is created.
-
-## Read-only snapshot export
-
-`AppStoreAssets.export_snapshot(target:, output:)` in `lib/fastlane_assets.rb` writes the `metadata-snapshot` record that a plan target supplies as its remote state.
-Call it from a consumer Fastlane lane after the lane has authenticated Spaceship; this repository has no such lane, and loading the library still needs no fastlane gem.
-It supports one Apple iOS target, makes read calls only, and ends each provider call at `deadline:` seconds (`SNAPSHOT_DEFAULT_DEADLINE`, at most `SNAPSHOT_MAX_DEADLINE`).
-It refuses an existing output path, an output directory inside this checkout, and a record that the Python validators reject; it never replaces a file.
-It also refuses, and writes nothing, for a missing app, a missing or ambiguous version, an attached build other than the target's, a duplicate locale or screenshot set, or a full provider page.
-A version that is not editable or has an active review is recorded with `editable` or `review_active` set, and the planner refuses it later; a version with no attached build has no `binary` key.
-`app_info_id` and the app-info fields come only from an editable app info, never from one that is waiting for review; without one, `app_info_id` is `null`.
-A screenshot set that exists with no screenshots is an empty list, and a set that does not exist has no key.
-Standard output carries one JSON result with the output path, the record's SHA-256 and counts; provider output goes to standard error.
-The record is an observation at one point in time; [the guarded screenshot transfer specification](docs/specs/2026-10-14-guarded-screenshot-transfer.md) defines how a later run compares it with the live state.
-
-## Verify transfer approval and stage bytes
-
-The U2 command in `app_store_assets_local.transfer` re-derives an Apple iOS images plan, checks an operator-written [transfer approval](docs/specs/2026-10-14-guarded-screenshot-transfer.md#approval-record), and stages every planned image from SHA-256-checked bytes.
-The approval must name the plan digest and its whole target, including `account_id` when present.
-The plan keeps `executable: false` and `effects: []`.
-This command makes no network call and grants no implicit authorization to upload or delete placements.
-
-```bash
-stage_dir="$(python3 -c 'import pathlib, tempfile; print(pathlib.Path(tempfile.mkdtemp(prefix="store-transfer-")).resolve())')"
-python3 -B -m app_store_assets_local.transfer \
-  --root /absolute/path/to/personal/app \
-  --plan reviewed-plan.json \
-  --approval transfer-approval.json \
-  --staging-dir "$stage_dir"
-```
-
-Plan and approval paths are public paths relative to `--root`; the approval is not a plan input.
-The staging directory must already exist, be empty, be private to the current user, and have an absolute path outside the app and runtime checkouts, with no symlink or parent traversal.
-The caller owns the directory and removes it after use.
-On failure the command removes only files it created; it never replaces existing files.
-
-Standard output contains one `verified-transfer-intent` JSON document with the plan digest, target, mode, supplied remote observation, replacement policy, unchanged provenance, and the listing's actual locale/slot pairs.
-Each image has a private `staged_path`, SHA-256 and MD5 derived from the same captured bytes.
-MD5 is only a provider comparison value; SHA-256 binds the approved bytes.
-Real uploads require the specification's explicit operator authorization and writer window.
-
-## Verify the live screenshot state
-
-`AppStoreAssets.transfer_screenshots` defaults to `mode: "read-only"`.
-Call it from an authenticated Fastlane lane with the same whole target used by the reviewed plan and approval:
+Add these lanes to your app's `fastlane/Fastfile`, adjusting names to avoid conflicts.
+The example uses a team API key supplied outside the repository through your local environment or CI secret manager.
+`ASC_KEY_ID`, `ASC_ISSUER_ID`, and `ASC_KEY_FILE` are environment names used by this example, not fields in a public profile.
+`ASC_KEY_FILE` must point to the private `.p8` file outside the app and runtime directories.
+Fastlane's [API key action](https://docs.fastlane.tools/actions/app_store_connect_api_key/) sets the Spaceship token; an existing authenticated Apple ID session can be used instead.
+Configure and verify the intended App Store Connect account in your own lane.
 
 ```ruby
-AppStoreAssets.transfer_screenshots(
-  root: "/absolute/path/to/personal/app",
-  target: approved_target,
-  plan: "reviewed-plan.json",
-  approval: "transfer-approval.json",
-  mode: "read-only",
-  deadline: 120,
-  verification_deadline: 120
+require "json"
+
+APP_ROOT = File.realpath(File.join(__dir__, ".."))
+require File.join(APP_ROOT, "tools/app-store-assets/lib/fastlane_assets.rb")
+
+def store_assets_target
+  JSON.parse(File.read(File.join(APP_ROOT, "store-assets/target.json")))
+end
+
+platform :ios do
+  private_lane :store_assets_auth do
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_FILE"),
+      set_spaceship_token: true
+    )
+  end
+
+  lane :store_assets_snapshot do |options|
+    store_assets_auth
+    AppStoreAssets.export_snapshot(
+      target: store_assets_target,
+      output: File.join(APP_ROOT, options.fetch(:output, "store-assets/remote.json"))
+    )
+  end
+
+  lane :store_assets_verify do |options|
+    store_assets_auth
+    AppStoreAssets.transfer_screenshots(
+      root: APP_ROOT, target: store_assets_target,
+      plan: options.fetch(:plan, "store-assets/plan.json"),
+      approval: options.fetch(:approval, "store-assets/approval.json"),
+      mode: "read-only"
+    )
+  end
+
+  lane :store_assets_transfer do |options|
+    store_assets_auth
+    AppStoreAssets.transfer_screenshots(
+      root: APP_ROOT, target: store_assets_target,
+      plan: options.fetch(:plan, "store-assets/plan.json"),
+      approval: options.fetch(:approval, "store-assets/approval.json"),
+      mode: "transfer"
+    )
+  end
+end
+```
+
+Do not call the legacy `AppStoreAssets.prepare`; it intentionally raises an error.
+Do not pass prepared paths to an unrestricted `deliver` screenshot replacement alongside these lanes.
+Other binary or metadata lanes should skip screenshot upload so there is one controlled screenshot writer.
+The bridge cannot intercept independent Fastlane calls or App Store Connect web edits.
+
+### 4. Export current store state and create a plan
+
+With authentication configured, export a snapshot.
+This reads App Store Connect and creates a new local file; it makes no remote write and refuses to overwrite an existing output.
+
+```bash
+(cd "$APP_ROOT" && bundle exec fastlane ios store_assets_snapshot)
+```
+
+Then run the offline checks from the runtime checkout:
+
+```bash
+cd "$APP_STORE_ASSETS_ROOT"
+python3 -B -m app_store_assets doctor \
+  --root "$APP_ROOT" --target ios-production
+(
+  set -o noclobber
+  python3 -B -m app_store_assets plan \
+    --root "$APP_ROOT" --target ios-production --operation images \
+    > "$APP_ROOT/store-assets/plan.json"
 )
 ```
 
-Plan and approval paths remain relative to `root`.
-The entrypoint takes a bundle-ID lock before calling U2, owns its private staging directory, compares the supplied observation with live Spaceship reads, and removes its staging directory and its own lock on exit.
-The lock is `/tmp/app-store-assets-transfer-<SHA-256 of bundle ID>.lock`, independent of `TMPDIR` and the app checkout.
-An existing lock refuses the run; only the operator may remove a stale lock after checking that no run owns it.
-Cleanup isolates each owned entry in a private sibling directory and rechecks its inode before deletion.
-A detected replacement refuses the run and is retained at the path reported on standard error for operator recovery.
+Stop if any command exits non-zero.
+The plan command refuses to overwrite an existing file; use a new filename for another attempt, including after a failed command leaves an empty output.
+`doctor` checks the runtime and bound local assets; it does not authenticate or verify remote freshness.
+`plan` validates the supplied store snapshot and emits `{"payload": ..., "digest": ...}`.
+It still reports `executable: false`, `effects: []`, and `remote_verified: false`.
+Only the subsequent Ruby live check compares that observation with App Store Connect.
 
-Every provider call has the configured `deadline`, and each local Python verification has `verification_deadline`; both must be positive and at most 600 seconds.
-Python input and output are bounded to 8 MiB per stream, and a timed-out verifier process group is killed.
-Provider output goes to standard error, including an already-created STDOUT logger.
-Standard output contains one JSON result with the plan digest, target, actual declared groups, snapshot comparison results, remote screenshot IDs, and preserved sets of the declared locales.
+Profile paths and input paths are relative to the app root.
+Keep inputs explicit: do not list the whole `store-assets` directory in `inputs`, because a later plan or approval file there would change its own input inventory.
+Do not change the profile, Fastfile, helper, selected images, or other bound inputs between planning and transfer.
 
-The read-only mode verifies snapshot freshness and the approved attached build.
-It does not choose upload or replacement actions or certify screenshot processing completion.
-The mode rejects snapshot fields that have no live mapping, and keeps provenance as `unverified-import`.
-The exact mappings and fake-provider acceptance cases are in the [U3 plan](docs/plans/2026-10-14-guarded-screenshot-transfer.md#u3-live-mappings-and-entrypoint).
+### 5. Review and approve the exact plan
 
-## Transfer approved screenshots
+Review the target, version/build, ordered image paths and hashes, locales/slots, supplied remote state, and deletion policy in `store-assets/plan.json`.
+The plan contains no visual preview.
+Open each file named by `payload.listing.images` in an image viewer, resolving its `file` path relative to the app root, and check the screenshots in array order.
+These are the immutable snapshot images that will be transferred; check their content and localization, and confirm which remote sets must remain untouched.
+An operator must authorize the target and upload operation, plus deletion if `allow_delete` is true.
+After that review, create `store-assets/approval.json` by copying the plan's `digest` and complete `payload.target` into this structure:
 
-After the operator authorizes the target and operations and establishes the [writer window](docs/specs/2026-10-14-guarded-screenshot-transfer.md#operator-preconditions), use the same entrypoint with `mode: "transfer"`.
-The approval record, reviewed plan and fresh supplied snapshot are still required.
-The legacy `prepare` entrypoint remains blocked.
+```json
+{
+  "schema_version": 1,
+  "type": "transfer-approval",
+  "plan_digest": "COPY_THE_PLAN_DIGEST",
+  "target": {
+    "store": "apple",
+    "platform": "ios",
+    "account": "app-store-team",
+    "app_id": "com.example.myapp",
+    "flavor": "production",
+    "stage": "production",
+    "version": { "name": "1.0.0", "build": "1" }
+  },
+  "operation": "images"
+}
+```
 
-The adapter checks every staged image, selects every declared group's action, and waits for every unchanged group to finish processing before its first remote write.
-All declared localization and existing set IDs must be valid before that first write.
-Missing remote checksums are polled before action selection; they cannot by themselves trigger replacement, and screenshot IDs must stay unchanged during this preflight poll.
-With deletion authorized, a preflight-confirmed `AWAITING_UPLOAD` placeholder may be replaced without waiting for its missing checksum; a retry still needs a new snapshot, plan and approval, and the exclusive writer window.
-It creates absent sets, uploads empty groups, and replaces different non-empty groups only when the reviewed plan has `replacement.allow_delete: true`.
-Replacement deletes screenshots within the declared set; it does not delete preserved sets.
-Uploads use staged paths with explicit positions and `wait_for_processing: false`.
+The digest must be the actual 64-character value; the placeholder is intentionally invalid.
+Copy any `account_id` from the plan too.
+The approval is separate from the plan and its inputs.
+Do not automatically approve a freshly generated plan in CI: the JSON binds a decision but does not prove who made it.
 
-Optional bounds are `group_deadline: 600`, `poll_interval: 5`, and `request_timeout: 60`, all in seconds, positive and at most 600.
-Each group's writes and readback share its group deadline; each provider call also has the existing `deadline: 120` limit.
-The adapter temporarily sets `SPACESHIP_TIMEOUT` to the request timeout rounded up to whole seconds and `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT` to the group limit rounded up to whole minutes, at least one minute, and restores both variables on exit.
-The adapter deadline still bounds provider retries when their internal timeout is longer.
+### 6. Verify live state, then transfer
 
-The transfer result reports `upload`, `replace`, or `unchanged` for each declared pair, its readback completion and checksum match, and the remote screenshot IDs.
-Success requires the planned count and MD5 order, completed processing, unchanged preserved sets, and the approved build and editable version without active review in the final read.
-One corrective reorder is allowed when only the uploaded group's order differs.
-A failure reports groups that may have changed, including calls whose response timed out; it does not roll back remote writes.
-After a partial failure, obtain a new snapshot, plan and approval record before retrying.
-Provenance remains `unverified-import`.
+First run the read-only lane with the reviewed files:
 
-The separately authorized [kkomkkomi U5 smoke run](docs/notes/2026-10-16-kkomkkomi-u5-smoke.md) completed on 2026-10-16 for `1.1.1 (5)`.
-It replaced four screenshots in each of `en-US/APP_IPHONE_67` and `ko/APP_IPHONE_67`; final live reads verified their ordered checksums and completed processing without a review submission.
+```bash
+(cd "$APP_ROOT" && bundle exec fastlane ios store_assets_verify)
+```
+
+A successful read-only result means the supplied observation matches live state and the expected build is attached.
+It does not upload images or certify their processing completion.
+Before transfer, establish an exclusive writer window: no other machine, lane, or App Store Connect user may change screenshots, the selected build, or the version/review state until final verification finishes.
+The local lock only prevents concurrent runs on the same machine.
+
+Run the following only after the operator has authorized the reviewed transfer:
+
+```bash
+(cd "$APP_ROOT" && bundle exec fastlane ios store_assets_transfer)
+```
+
+The adapter re-verifies the plan and approval, stages hash-checked bytes, and compares the remote state before writing.
+It populates absent/empty groups, keeps identical groups, and replaces different non-empty groups only with deletion authorized.
+It preserves other screenshot sets in declared locales and does not write undeclared locales.
+Success requires the planned screenshot count, ordered MD5 checksums, completed processing, unchanged preserved sets, and the expected build and editable version in the final read.
+MD5 is the provider's comparison value; SHA-256 binds the local approved bytes.
+
+The bridge returns a Ruby result hash and emits one JSON result; provider output goes to standard error.
+Fastlane itself adds its own console output, so a complete `bundle exec fastlane` log is not a JSON document.
+Retain the plan, approval, local snapshots, remote observation, and result as release evidence in your app's pipeline.
+The tool never submits the app for review.
+
+### 7. Retry, upgrade, and run in CI
+
+A transfer failure can leave remote changes in place; there is no automatic rollback.
+Check the reported possibly changed groups before proceeding.
+For a retry, preserve the previous records, choose a new `remote` filename in `selection.json`, prepare again, and export to that path with `store_assets_snapshot output:store-assets/remote-next.json`.
+Create a new plan and approval, then pass their relative paths using the lanes' `plan:` and `approval:` options.
+Do not reuse an old approval after remote state or a bound input changes.
+
+In CI, separate preparation/review from the explicitly approved transfer job.
+Restore the exact runtime and image snapshots named by the profile, use the same locked toolchain, and inject credentials only into jobs that need store access.
+Use a protected manual approval step and serialize writers across machines.
+A plan is not a deployment credential or a substitute for that approval.
+
+To restore the recorded runtime on another machine, clone it to the same app-relative path and check out its recorded identity:
+
+```bash
+export APP_ROOT="/absolute/path/to/your-app"
+export APP_STORE_ASSETS_ROOT="$APP_ROOT/tools/app-store-assets"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHON="$(command -v python3)"
+runtime_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["runtime"]["commit"])' "$APP_ROOT/store-upload.json")"
+git clone https://github.com/AndrewDongminYoo/app-store-assets.git "$APP_STORE_ASSETS_ROOT"
+git -C "$APP_STORE_ASSETS_ROOT" checkout --detach "$runtime_revision"
+```
+
+To upgrade intentionally, check out a new reviewed release tag, rerun preparation and verification, and review the changed profile and toolchain locks.
+Regenerate plans and approvals after the upgrade.
+Do not run `git pull` inside the runtime as part of an approved transfer job.
+
+## Local bundles without store integration
+
+If you only need validated images for another tool, use the standalone CLI.
+It expects locale directories under `--source`; `--subdir` selects an optional directory below each locale.
+For example, `source/en-US/01.png` uses `--subdir .`, while `source/en-US/images/iphone67/01.png` uses `--subdir images/iphone67`.
+
+```bash
+python3 "$APP_STORE_ASSETS_ROOT/assets.py" prepare-screenshots \
+  --source "$APP_ROOT/store-assets/source" --subdir . \
+  --out "$APP_ROOT/build/store-assets/bundles" \
+  --project my-app --bundle-id com.example.myapp
+python3 "$APP_STORE_ASSETS_ROOT/assets.py" validate /absolute/path/to/returned/bundle
+```
+
+Preparation prints JSON with `bundle` and `screenshots_path`.
+The bundle manifest records original and final hashes, sizes, profiles, and inventory; `validate` decodes the images and checks those final bytes.
+Original inputs and earlier bundles remain intact.
+`--normalize-alpha` removes an unused alpha channel from an otherwise opaque PNG copy; actual transparent pixels require a background in your image composer.
+Output bytes are deterministic for identical input bytes within the same ImageMagick runtime.
+A bundle is not the immutable asset snapshot used by the live planner and does not authorize upload.
+
+Ruby callers can use `AppStoreAssets.prepare_local(repo_root:, project:, bundle_id:, source:, subdir: ".", normalize_alpha: false)`.
+It returns `screenshots_path` without `overwrite_screenshots`.
+
+## Troubleshooting
+
+| Refusal or symptom | What to check |
+| --- | --- |
+| Runtime commit, URL, inventory, or executing runtime differs | Restore the checkout recorded in the profile; invoke Python from that runtime, keep it clean, and use `-B` or `PYTHONDONTWRITEBYTECODE=1`. Existing caches from another Python version still cause refusal; use a fresh checkout without those caches. |
+| Image format, dimensions, alpha, or slot rejected | Check decoded bytes against the catalog; fix the owning composer or select the correct slot. |
+| Apple version locale unavailable | Create that localization on the selected version, then export a fresh snapshot and plan again. |
+| Version/build differs, active review, or version not editable | Select the intended build and an editable version before taking a new snapshot. |
+| Snapshot output already exists | Choose a new output filename and update the selection's `remote` path; preserve the old observation. |
+| Plan, approval, or live snapshot differs | Rebuild the plan from current inputs and obtain a new approval; do not edit a digest to bypass verification. |
+| A non-empty group differs and deletion is not allowed | Review whether replacement is intended; enable deletion only in a newly reviewed plan. |
+| Target lock exists | Check whether a run is still active; only an operator should remove a confirmed stale lock. |
+| Provider timeout or partially changed groups | Inspect the result, take a new snapshot, and replan; do not assume a timeout means no write occurred. |
+
+Provider and local-verifier calls default to 120 seconds each.
+Transfer groups default to a 600-second deadline with 5-second polling and a 60-second request timeout.
+The Ruby entrypoint accepts `deadline`, `verification_deadline`, `group_deadline`, `poll_interval`, and `request_timeout`, each positive and at most 600 seconds.
+The bundle-ID lock lives at `/tmp/app-store-assets-transfer-<SHA-256 of bundle ID>.lock`.
+Staging is private and cleaned by the adapter; detected replacements are retained at the reported path for recovery.
+
+## Development and reference
+
+Run the default checks from this repository:
+
+```bash
+python3 -m unittest discover -s tests -v
+ruby -c lib/fastlane_assets.rb
+ruby -c lib/fastlane_transfer.rb
+```
+
+The default suite uses temporary fixtures and fake store providers, with no live upload or credentials.
+Consumer-specific and Fastlane-reader integration checks are opt-in; a skipped check is not live store verification.
+Their setup is in [the integration tests](tests/test_fastlane.py) and [reader tests](tests/test_fastlane_reader.py).
+
+The offline CLI also supports `plan --operation metadata`, `plan --operation binary`, and `diff --before PATH --after PATH`; these remain read-only and do not implement those transfers.
+`python3 -B -m app_store_assets_local --help` describes local metadata import/export; it makes no store call.
+Use `--help` on each CLI for available arguments.
+
+- [Offline profile schema](schemas/offline-profile-v1.json) and [record schemas](schemas/records-v1.json).
+- [Transfer approval schema](schemas/transfer-approval-v1.json) and [transfer invariants](docs/specs/2026-10-14-guarded-screenshot-transfer.md).
+- [Local bundle contract](docs/specs/screenshot-bundles.md).
+
+Python validators are authoritative; JSON schemas summarize structure.
+Historical implementation plans and app-specific evidence remain under `docs/plans/` and `docs/notes/`; they are not installation instructions.
+
+## License
+
+[MIT](LICENSE), copyright Dongmin Yu.
+ImageMagick, Fastlane, Python, and Ruby are separately installed tools and retain their own licenses.
+See [ImageMagick's license](https://imagemagick.org/license/), [Fastlane's MIT license](https://github.com/fastlane/fastlane/blob/master/LICENSE), [Python's license](https://docs.python.org/3/license.html), and [Ruby's license](https://www.ruby-lang.org/en/about/license.txt).
