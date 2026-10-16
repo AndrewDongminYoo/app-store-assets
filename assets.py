@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare immutable App Store image bundles without changing capture inputs."""
+"""Prepare immutable iOS or Android screenshot bundles without changing inputs."""
 import argparse
 import collections
 import errno
@@ -55,10 +55,24 @@ def image_info(file):
     return width, height, alpha
 
 
-def screenshot_info(file):
+def screenshot_info(file, platform='ios'):
     width, height, alpha = image_info(file)
     if alpha:
         raise ValueError(f'alpha channel is not allowed: {file}')
+    if platform == 'android':
+        from app_store_assets.catalog import slot_rule
+
+        rule = slot_rule('google', 'phoneScreenshots')
+        if min(width, height) < rule['min_dimension'] or max(width, height) > rule['max_dimension']:
+            raise ValueError(f'Android screenshot dimensions exceed slot limits: {width}x{height}: {file}')
+        if max(width, height) > min(width, height) * rule['max_aspect']:
+            raise ValueError(f'Android screenshot aspect ratio exceeds slot limit: {width}x{height}: {file}')
+        header = file.read_bytes()[:26]
+        if header.startswith(b'\x89PNG\r\n\x1a\n') and header[24:26] != bytes([8, 2]):
+            raise ValueError(f'Android screenshots require 24-bit RGB PNG or JPEG: {file}')
+        return [width, height], 'phoneScreenshots'
+    if platform != 'ios':
+        raise ValueError(f'unsupported screenshot platform: {platform}')
     profile = SCREENSHOT_SIZES.get((min(width, height), max(width, height)))
     if not profile:
         raise ValueError(f'unsupported screenshot size {width}x{height}: {file}')
@@ -75,8 +89,12 @@ def inside(root, relative):
 def validate(folder):
     folder = Path(folder).resolve()
     manifest = json.loads((folder / 'manifest.json').read_text())
-    if manifest.get('schema_version') != 1 or manifest.get('account') != 'personal':
+    if manifest.get('account') != 'personal':
         raise ValueError('unsupported manifest schema or account')
+    schema = manifest.get('schema_version')
+    platform = manifest.get('platform', 'ios')
+    if type(schema) is not int or (schema, platform) not in ((1, 'ios'), (2, 'android')):
+        raise ValueError('unsupported manifest schema/platform')
     assets = manifest['assets']
     if not assets:
         raise ValueError('empty asset bundle')
@@ -88,12 +106,17 @@ def validate(folder):
         file = inside(folder, item['file'])
         if digest(file) != item['sha256']:
             raise ValueError(f'final hash differs: {file}')
-        size, profile = screenshot_info(file)
+        size, profile = screenshot_info(file, platform)
         if size != item['size'] or profile != item['profile']:
             raise ValueError(f'final image specification differs: {file}')
         counts[item['locale'], profile] += 1
-    if any(count > 10 for count in counts.values()):
-        raise ValueError('more than 10 screenshots in one locale/display class')
+    maximum = 10
+    if platform == 'android':
+        from app_store_assets.catalog import slot_rule
+
+        maximum = slot_rule('google', 'phoneScreenshots')['max_count']
+    if any(count > maximum for count in counts.values()):
+        raise ValueError(f'more than {maximum} screenshots in one locale/display class')
     actual = {str(p.relative_to(folder)) for p in (folder / 'screenshots').rglob('*') if p.is_file()}
     if actual != set(files):
         raise ValueError('screenshot inventory differs from manifest')
@@ -101,6 +124,9 @@ def validate(folder):
 
 
 def prepare(args):
+    platform = getattr(args, 'platform', 'ios')
+    if platform not in ('ios', 'android'):
+        raise ValueError(f'unsupported screenshot platform: {platform}')
     source = Path(args.source).resolve()
     if not source.is_dir():
         raise ValueError(f'screenshot source is missing: {source}')
@@ -121,7 +147,7 @@ def prepare(args):
                     raise ValueError(f'image is outside source tree: {file}')
                 locale_files.append(file)
                 inputs.append((locale.name, file))
-        if any(file.stem.lower().endswith('_framed') for file in locale_files):
+        if platform == 'ios' and any(file.stem.lower().endswith('_framed') for file in locale_files):
             if any('framed' not in file.name.lower() and 'watch' not in file.name.lower() for file in locale_files):
                 raise ValueError(f'mixed framed filenames would make Fastlane skip images: {locale.name}')
     if not inputs:
@@ -148,9 +174,11 @@ def prepare(args):
                     raise ValueError(f'normalization failed: {file}')
             else:
                 shutil.copyfile(file, final)
-            size, profile = screenshot_info(final)
+            size, profile = screenshot_info(final, platform)
             assets.append(dict(file=str(relative), locale=locale, kind='screenshot', profile=profile, size=size, sha256=digest(final), source_sha256=source_hash, source_file=str(file)))
         manifest = dict(schema_version=1, project=args.project, account='personal', bundle_id=args.bundle_id, provenance={'status': 'unverified-import'}, replacement_policy='replace-localized-sets', assets=assets)
+        if platform == 'android':
+            manifest.update(schema_version=2, platform='android')
         encoded = json.dumps(manifest, sort_keys=True, indent=2) + '\n'
         (folder / 'manifest.json').write_text(encoded)
         validate(folder)
@@ -177,6 +205,7 @@ def main():
     command.add_argument('--project', required=True)
     command.add_argument('--bundle-id', required=True)
     command.add_argument('--subdir', default='.')
+    command.add_argument('--platform', choices=('ios', 'android'), default='ios')
     command.add_argument('--normalize-alpha', action='store_true')
     command = commands.add_parser('validate')
     command.add_argument('bundle')

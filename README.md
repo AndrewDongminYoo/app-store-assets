@@ -6,7 +6,7 @@ Your app keeps ownership of capture, composition, authentication, and release la
 
 | Capability | Support |
 | --- | --- |
-| Prepare and validate local screenshot bundles | Python CLI; no account or network required |
+| Prepare and validate local iOS and Android phone screenshot bundles | Python CLI; no account or network required |
 | Inspect inputs and plan changes | Offline `doctor`, `plan`, and `diff` commands |
 | Publish immutable local metadata and image snapshots | Python local APIs and import/export commands |
 | Read and transfer App Store screenshots | Ruby bridge using an authenticated Fastlane Spaceship session; Apple iOS only |
@@ -427,6 +427,33 @@ Original inputs and earlier bundles remain intact.
 `--normalize-alpha` removes an unused alpha channel from an otherwise opaque PNG copy; actual transparent pixels require a background in your image composer.
 Output bytes are deterministic for identical input bytes within the same ImageMagick runtime.
 A bundle is not the immutable asset snapshot used by the live planner and does not authorize upload.
+
+### Android phone screenshots
+
+Use `--platform android` to validate phone screenshots against the existing Google slot catalog.
+Omitting the option, or selecting `--platform ios`, preserves the existing iPhone/iPad behavior and bundle format.
+Android local bundles require a checkout containing this extension; the published `v1.0.0` release does not include it.
+
+```bash
+python3 "$APP_STORE_ASSETS_ROOT/assets.py" prepare-screenshots \
+  --platform android \
+  --source "$APP_ROOT/fastlane/metadata/android" --subdir images/phoneScreenshots \
+  --out "$APP_ROOT/build/store-assets/android-bundles" \
+  --project my-app --bundle-id com.example.myapp
+python3 "$APP_STORE_ASSETS_ROOT/assets.py" validate /absolute/path/to/returned/android-bundle
+```
+
+For Android, `--bundle-id` carries the app's Android package name.
+Each locale may contain up to eight JPEG or 24-bit RGB PNG phone screenshots, with no alpha channel.
+Each dimension must be between 320 and 3840 pixels, and the longest edge cannot exceed twice the shortest.
+The validator accepts portrait and landscape images and excludes sibling icons and feature graphics through the selected subdirectory.
+It checks local file rules; it does not establish the store's publication minimum across device types, promotional eligibility or listing completeness.
+See the [Google Play preview asset requirements](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en).
+
+Android manifests use `schema_version: 2`, `platform: android` and profile `phoneScreenshots`; validation reads the platform from the manifest.
+Existing iOS manifests stay at version 1, including their original bundle identities.
+Earlier validators reject the Android schema rather than treating it as an iOS bundle.
+The Ruby `prepare_local` helper and live transfer bridge remain iOS-only; Android support adds no Google Play reads or writes.
 
 Ruby callers can use `AppStoreAssets.prepare_local(repo_root:, project:, bundle_id:, source:, subdir: ".", normalize_alpha: false)`.
 It returns `screenshots_path` without `overwrite_screenshots`.
