@@ -3,6 +3,9 @@
 This is extraction A from the non-convergent shared pipeline PR3, based on the existing screenshot-bundle main branch.
 It introduces no `app_store_assets` package, pipeline command dispatch, schemas, authentication, native build or store transport.
 
+This document records the extraction's original scope and verification state, not the current repository's complete capabilities.
+The [PR3 source disposition](../notes/2026-10-16-pr3-source-disposition.md) maps the later implementations and identifies historical code that will not be restored.
+
 ## Contract
 
 `AppStoreAssets.prepare` must fail before spawning any local preparation process or returning options to a transfer lane.
@@ -27,6 +30,7 @@ The replacement of old positive-upload assertions with legacy-block assertions f
 
 This unit carries PR3's existing shared legacy bridge safety fix, not its six unresolved source fixes.
 PR3 and its branch/evidence remain preserved, with nine cumulative hosted rounds and no hosted requests for this local extraction.
-Current unresolved source work belongs to later offline validation, immutable generation and guarded transport units.
+At this extraction's boundary, unresolved source work was deferred to later offline validation, immutable generation and guarded transport units.
+That deferral is superseded by the source disposition above; it is not a requirement to restore PR3's generation, build or provider executors.
 One local implementation pass, one independent read-only review and at most two necessary local repair passes bound this unit.
 Any cross-domain blocker returns to the parent; publication and PR3 closure/replacement remain separately authorized.
