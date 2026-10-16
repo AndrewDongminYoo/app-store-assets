@@ -95,6 +95,150 @@ class PrepareTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('10', result.stderr)
 
+    def test_android_bundle_uses_phone_rules_and_preserves_source_on_repeat(self):
+        self.image.write_bytes(png(1080, 1920))
+        original = self.image.read_bytes()
+        first = self.prepare('--platform', 'android')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        bundle = Path(json.loads(first.stdout)['bundle'])
+        manifest_bytes = (bundle / 'manifest.json').read_bytes()
+        manifest = json.loads(manifest_bytes)
+        self.assertEqual(manifest['schema_version'], 2)
+        self.assertEqual(manifest['platform'], 'android')
+        self.assertEqual(manifest['provenance']['status'], 'unverified-import')
+        self.assertEqual(manifest['assets'][0]['profile'], 'phoneScreenshots')
+        self.assertEqual(manifest['assets'][0]['size'], [1080, 1920])
+        self.assertEqual(manifest['assets'][0]['sha256'], hashlib.sha256(original).hexdigest())
+        self.assertEqual(manifest['assets'][0]['source_sha256'], hashlib.sha256(original).hexdigest())
+        self.assertEqual((bundle / 'screenshots/en-US/01.png').read_bytes(), original)
+        self.assertEqual(self.run_cli('validate', str(bundle)).returncode, 0)
+        second = self.prepare('--platform', 'android')
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(json.loads(second.stdout)['bundle'], str(bundle))
+        self.assertEqual((bundle / 'manifest.json').read_bytes(), manifest_bytes)
+        self.assertEqual(self.image.read_bytes(), original)
+
+    def test_explicit_ios_keeps_the_legacy_manifest_and_bundle_identity(self):
+        legacy = self.prepare()
+        self.assertEqual(legacy.returncode, 0, legacy.stderr)
+        explicit = self.prepare('--platform', 'ios')
+        self.assertEqual(explicit.returncode, 0, explicit.stderr)
+        self.assertEqual(json.loads(explicit.stdout), json.loads(legacy.stdout))
+        bundle = Path(json.loads(legacy.stdout)['bundle'])
+        manifest = json.loads((bundle / 'manifest.json').read_text())
+        self.assertEqual(manifest['schema_version'], 1)
+        self.assertNotIn('platform', manifest)
+
+    def test_android_dimension_boundaries_and_landscape_are_supported(self):
+        for width, height in [(320, 320), (3840, 1920), (1920, 1080)]:
+            with self.subTest(size=(width, height)):
+                self.image.write_bytes(png(width, height))
+                result = self.prepare('--platform', 'android')
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_android_dimensions_and_aspect_are_rejected_before_publication(self):
+        for width, height, message in [(319, 400, 'dimensions'), (1921, 3841, 'dimensions'), (320, 641, 'aspect')]:
+            with self.subTest(size=(width, height)):
+                self.image.write_bytes(png(width, height))
+                result = self.prepare('--platform', 'android')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(message, result.stderr)
+                self.assertFalse(list((self.root / 'bundles').glob('*/manifest.json')))
+
+    def test_android_eight_images_are_accepted_but_nine_are_rejected(self):
+        self.image.write_bytes(png(320, 480))
+        for index in range(2, 9):
+            (self.source / f'en-US/{index:02}.png').write_bytes(self.image.read_bytes())
+        eight = self.prepare('--platform', 'android')
+        self.assertEqual(eight.returncode, 0, eight.stderr)
+        bundle = Path(json.loads(eight.stdout)['bundle'])
+        before = (bundle / 'manifest.json').read_bytes()
+        (self.source / 'en-US/09.png').write_bytes(self.image.read_bytes())
+        nine = self.prepare('--platform', 'android')
+        self.assertNotEqual(nine.returncode, 0)
+        self.assertIn('8', nine.stderr)
+        self.assertEqual((bundle / 'manifest.json').read_bytes(), before)
+        self.assertEqual([file.resolve() for file in (self.root / 'bundles').glob('*/manifest.json')], [bundle / 'manifest.json'])
+
+    def test_android_does_not_apply_apple_framed_filename_filter(self):
+        self.image.write_bytes(png(320, 480))
+        (self.source / 'en-US/02_framed.png').write_bytes(self.image.read_bytes())
+        result = self.prepare('--platform', 'android')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['assets'], 2)
+
+    def test_android_nested_phone_images_exclude_other_play_artwork(self):
+        nested = self.source / 'en-US/images/phoneScreenshots'
+        nested.mkdir(parents=True)
+        self.image.write_bytes(png(1080, 1920))
+        self.image.rename(nested / '01.png')
+        (nested.parent / 'icon.png').write_bytes(png(512, 512, alpha=True))
+        (nested.parent / 'featureGraphic.png').write_bytes(png(1024, 500))
+        result = self.prepare('--platform', 'android', '--subdir', 'images/phoneScreenshots')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['assets'], 1)
+
+    def test_android_opaque_alpha_normalization_and_transparency_rejection(self):
+        self.image.write_bytes(png(320, 480, alpha=True))
+        original = self.image.read_bytes()
+        rejected = self.prepare('--platform', 'android')
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn('alpha', rejected.stderr)
+        normalized = self.prepare('--platform', 'android', '--normalize-alpha')
+        self.assertEqual(normalized.returncode, 0, normalized.stderr)
+        bundle = Path(json.loads(normalized.stdout)['bundle'])
+        self.assertEqual((bundle / 'screenshots/en-US/01.png').read_bytes()[24:26], bytes([8, 2]))
+        self.assertEqual(self.image.read_bytes(), original)
+        self.image.write_bytes(png(320, 480, alpha=True, opacity=128))
+        transparent = self.prepare('--platform', 'android', '--normalize-alpha')
+        self.assertNotEqual(transparent.returncode, 0)
+        self.assertIn('transparent pixels', transparent.stderr)
+
+    def test_android_requires_rgb24_png_but_accepts_jpeg(self):
+        self.image.write_bytes(png(320, 480))
+        palette = self.image.with_name('palette.png')
+        subprocess.run(['magick', str(self.image), 'PNG8:' + str(palette)], check=True, capture_output=True)
+        self.image.unlink()
+        rejected = self.prepare('--platform', 'android')
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn('24-bit RGB', rejected.stderr)
+        jpeg = self.image.with_suffix('.jpg')
+        subprocess.run(['magick', str(palette), str(jpeg)], check=True, capture_output=True)
+        palette.unlink()
+        accepted = self.prepare('--platform', 'android')
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+    def test_android_manifest_platform_cannot_be_downgraded_or_switched(self):
+        self.image.write_bytes(png(320, 480))
+        result = self.prepare('--platform', 'android')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        bundle = Path(json.loads(result.stdout)['bundle'])
+        manifest_file = bundle / 'manifest.json'
+        manifest = json.loads(manifest_file.read_text())
+        for schema, platform in [(1, 'android'), (2, 'ios'), (2, None), (3, 'android')]:
+            with self.subTest(schema=schema, platform=platform):
+                changed = dict(manifest, schema_version=schema, platform=platform)
+                manifest_file.write_text(json.dumps(changed))
+                checked = self.run_cli('validate', str(bundle))
+                self.assertNotEqual(checked.returncode, 0)
+                self.assertIn('schema/platform', checked.stderr)
+
+    def test_android_validator_rechecks_dimensions_after_manifest_hash_changes(self):
+        self.image.write_bytes(png(320, 480))
+        result = self.prepare('--platform', 'android')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        bundle = Path(json.loads(result.stdout)['bundle'])
+        image = bundle / 'screenshots/en-US/01.png'
+        image.write_bytes(png(320, 641))
+        manifest_file = bundle / 'manifest.json'
+        manifest = json.loads(manifest_file.read_text())
+        manifest['assets'][0]['sha256'] = hashlib.sha256(image.read_bytes()).hexdigest()
+        manifest['assets'][0]['size'] = [320, 641]
+        manifest_file.write_text(json.dumps(manifest))
+        checked = self.run_cli('validate', str(bundle))
+        self.assertNotEqual(checked.returncode, 0)
+        self.assertIn('aspect', checked.stderr)
+
     def test_legacy_nested_artwork_is_flattened_without_metadata_icons(self):
         nested = self.source / 'en-US/images/iphone65'
         nested.mkdir(parents=True)
