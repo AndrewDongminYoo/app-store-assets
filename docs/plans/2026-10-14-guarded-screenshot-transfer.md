@@ -9,7 +9,7 @@ The implementation sections below describe the shipped entrypoints and helpers.
 ## Decisions
 
 - Scope of the first pull request: the specification and this plan only, with no code.
-- Transport: Ruby Spaceship from fastlane 2.240.1, with entrypoints in `lib/fastlane_assets.rb` and transfer helpers in `lib/fastlane_transfer.rb`.
+- Transport: Ruby Spaceship from fastlane 2.240.1 as the implementation baseline, with 2.241.0 verified for U5, with entrypoints in `lib/fastlane_assets.rb` and transfer helpers in `lib/fastlane_transfer.rb`.
 - First target app for offline-profile v1: kkomkkomi.
 - After the first draft (pull request #30) reached the review-loop round limit, the specification keeps only invariants, and step order and provider behavior live here as tests (operator decision, 2026-10-14).
 
@@ -24,15 +24,16 @@ The implementation sections below describe the shipped entrypoints and helpers.
 
 ## Provider behaviors
 
-These fastlane 2.240.1 behaviors were read from the installed gem source on 2026-10-14.
-Each row names the invariant it affects and what U3 or U4 must do about it; the implementation re-checks each against the pinned source before relying on it.
+These behaviors were checked against fastlane 2.240.1 for implementation and against the installed 2.241.0 used by U5.
+The [2026-10-16 provider verification](../notes/2026-10-16-kkomkkomi-u5-smoke.md#provider-version-verification) records byte equality for 12 relevant files at both upstream commits and the installed 2.241.0 gem, plus eight method-signature checks.
+Each row names the invariant it affects and the adapter handling; the source comparison is scoped to these files, not the entire dependency graph.
 
-| Behavior in 2.240.1 | Invariant | Required handling |
+| Behavior in 2.240.1 and 2.241.0 | Invariant | Required handling |
 | --- | --- | --- |
 | `AppScreenshot` reports `source_file_checksum` as `Digest::MD5.hexdigest` of the uploaded bytes ([`app_screenshot.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_screenshot.rb)). | 2, 7 | Compute the planned MD5 from the SHA-256-checked bytes and compare readback against it. |
 | `AppScreenshotSet#upload_screenshot(path:, wait_for_processing: true, position: nil)` waits for processing every 2 seconds with no deadline by default, and repositions with an `Array#insert` on the set's current IDs ([`app_screenshot_set.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_screenshot_set.rb)). | 6, 7 | Pass `wait_for_processing: false`, give each image an explicit position, and let the adapter's own bounded poll (default 5 seconds apart, 600 seconds per group) gate processing. |
 | When placeholder creation raises, `AppScreenshot.create` retries every 30 seconds until `SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT` minutes pass (default 20, uncapped from the environment), printing a line with `puts` on each retry. | 6, 8 | Set that variable to the group limit in whole minutes (at least 1) while provider calls run and restore it afterwards; send provider output to standard error. |
-| `FileUploader.upload` sends each upload operation with a `SPACESHIP_TIMEOUT` request timeout (default 300 seconds) and up to 5 tries, 3 seconds apart ([`file_uploader.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/file_uploader.rb)). | 6 | Set `SPACESHIP_TIMEOUT` to a bounded value (default 60 seconds) while provider calls run and restore it afterwards. |
+| `FileUploader.upload` uses a memoized client whose request timeout reads `SPACESHIP_TIMEOUT` at creation (default 300 seconds); `with_retry` defaults to 5 tries but decrements only after a response, so raised request errors can retry indefinitely, and its retry message says 3 seconds without an actual sleep ([`file_uploader.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/file_uploader.rb)). | 6 | Set `SPACESHIP_TIMEOUT` to a bounded value (default 60 seconds) while provider calls run and restore it afterwards; the adapter-level deadline also bounds retries and an already-created client. |
 | A screenshot set that does not exist must be created with `AppStoreVersionLocalization#create_app_screenshot_set(client: nil, attributes:)` before `upload_screenshot` can be called, as deliver's [`app_screenshot_iterator.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/deliver/lib/deliver/app_screenshot_iterator.rb) does ([`app_store_version_localization.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_store_version_localization.rb)). | 4 | Create a set only for a declared group with no remote set, on that locale's live localization, with `screenshotDisplayType` set to the declared slot. |
 | Selecting another build for a version keeps the version's ID and name; `AppStoreVersion#get_build` returns the attached build, whose `version` is the build number ([`app_store_version.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/app_store_version.rb), [`build.rb`](https://github.com/fastlane/fastlane/blob/2.240.1/spaceship/lib/spaceship/connect_api/models/build.rb)). | 3, 7 | Read the attached build in the live read and in the final read, and compare its number with `target.version.build`. |
 | `AppScreenshot` exposes `complete?`, `error?`, `error_messages` and `asset_delivery_state`, and processing state can lag right after an upload. | 3, 5, 7 | Treat a group as unchanged only when every screenshot is complete, polling within the bound first; an errored screenshot refuses the run. |

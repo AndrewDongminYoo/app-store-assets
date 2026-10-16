@@ -23,7 +23,8 @@ The adapter adds no service, database or capture abstraction, and it does not ch
 
 ## Architecture
 
-The transport is Ruby Spaceship from fastlane 2.240.1, in a new entrypoint of `lib/fastlane_assets.rb`.
+The transport is Ruby Spaceship, with fastlane 2.240.1 as the implementation baseline and 2.241.0 verified for the U5 live run, in the entrypoint of `lib/fastlane_assets.rb`.
+The [U5 provider verification](../notes/2026-10-16-kkomkkomi-u5-smoke.md#provider-version-verification) records the exact upstream commits, installed-source comparison and method signatures; it does not assert compatibility with other versions.
 Python's standard library has no ES256 signing, so the App Store Connect token cannot be made in the Python package without a new dependency.
 The read-only `app_store_assets` package re-derives the plan; `app_store_assets_local.transfer` validates the approval record, stages checked bytes and returns the verified intent without a network call.
 The legacy `AppStoreAssets.prepare` stays blocked, and loading `lib/fastlane_assets.rb` keeps working without the fastlane gem.
@@ -100,6 +101,6 @@ Review submission remains out of scope, including that smoke run.
 ## Sources
 
 - Current contracts: `app_store_assets/planning.py` (`make_plan`, `verify_plan`), `app_store_assets/contracts.py` (`exact_keys`, `target_identity`), `app_store_assets/metadata.py` (`remote_observation`, `validate_public_metadata`), `app_store_assets/catalog.py` (`validate_apple_localizations`), `app_store_assets/records.py` (`safe_path`, credential input rejection).
-- The fastlane 2.240.1 provider behaviors that the invariants account for, with their source links, are listed in [the plan](../plans/2026-10-14-guarded-screenshot-transfer.md#provider-behaviors).
+- The fastlane 2.240.1 provider behaviors, also checked against the U5 runtime 2.241.0, are listed with source links in [the plan](../plans/2026-10-14-guarded-screenshot-transfer.md#provider-behaviors).
 - QuestKeeper store-asset precedent, as [the first-stage contract](screenshot-bundles.md#sources) cites it: deliver's deduplication keyed on a checksum that was not ready produced 10 − N duplicates and a vacuous "Successfully uploaded" line, which is why invariant 7 trusts only a readback.
 - The first draft and its six review rounds: pull request #30 and `docs/notes/2026-10-14-pr-loop-guarded-screenshot-transfer-spec.md`.

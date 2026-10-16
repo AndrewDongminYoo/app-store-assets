@@ -72,6 +72,24 @@ The candidate source and the four actual consumer input files had identical hash
 The default suite uses fake provider actions; opt-in integration evaluates the personal consumers' actual Fastfiles while replacing external actions.
 Those suites do not establish the live App Store result above.
 
+## Provider version verification
+
+The live run used fastlane `2.241.0`, while U3/U4 were implemented against `2.240.1`.
+On 2026-10-16, the provider contract was rechecked after the live run without another store operation.
+Official Git tags resolved to `1b9d750f2605380c3928647d97ddcaae77b06531` (2.240.1) and `4f4e8ce5b29272487f9c78a2aa63789cfe2ceb32` (2.241.0).
+All 12 files listed with SHA-256 values in the companion JSON were byte-identical between those pinned upstream commits and the installed 2.241.0 gem used for U5.
+This covers the screenshot models, localization/version/build reads, app/review models, base model, API client, uploader, Tunes endpoints and deliver's screenshot iterator; it is not a comparison of every dependency.
+
+The inspected 2.241.0 sources retain the relied-on [checksum, placeholder recovery and processing behavior](https://github.com/fastlane/fastlane/blob/4f4e8ce5b29272487f9c78a2aa63789cfe2ceb32/spaceship/lib/spaceship/connect_api/models/app_screenshot.rb#L82-L187), [upload positioning and reorder behavior](https://github.com/fastlane/fastlane/blob/4f4e8ce5b29272487f9c78a2aa63789cfe2ceb32/spaceship/lib/spaceship/connect_api/models/app_screenshot_set.rb#L151-L179), and [HTTP retry behavior](https://github.com/fastlane/fastlane/blob/4f4e8ce5b29272487f9c78a2aa63789cfe2ceb32/spaceship/lib/spaceship/connect_api/api_client.rb#L166-L207).
+The [file uploader](https://github.com/fastlane/fastlane/blob/4f4e8ce5b29272487f9c78a2aa63789cfe2ceb32/spaceship/lib/spaceship/connect_api/file_uploader.rb#L48-L79) also confirms why the adapter's outer deadline is necessary: raised request errors do not decrement its retry counter, its client is memoized, and the retry log's claimed three-second delay has no sleep call.
+The provider table now states those details accurately for both versions.
+
+An offline Ruby reflection check loaded the installed 2.241.0 gem and verified all keyword parameters for eight methods used to upload, delete, create, reorder and read screenshot groups or the attached build.
+The companion JSON records the exact signatures.
+A changed-source negative control and a wrong-keyword negative control both failed before the actual comparisons passed.
+These checks made no provider calls and changed no installed dependencies or application code.
+The source and signature checks support the version-specific contract; the separate live readback remains the evidence of successful remote transfer.
+
 ## Contract and limits
 
 This completes [U5 of the approved plan](../plans/2026-10-14-guarded-screenshot-transfer.md#u5-authorized-smoke-upload-for-kkomkkomi) under the [transfer specification](../specs/2026-10-14-guarded-screenshot-transfer.md).
