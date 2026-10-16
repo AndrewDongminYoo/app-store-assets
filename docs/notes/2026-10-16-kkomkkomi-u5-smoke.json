@@ -1,0 +1,212 @@
+{
+  "execution": {
+    "plan_digest": "1b8729c7a297963baf757edd2c13fa5717ed772cb67eaeca61135aab3c841256",
+    "target": {
+      "account": "personal",
+      "app_id": "kr.donminzzi.kkomkkomi",
+      "flavor": "production",
+      "platform": "ios",
+      "stage": "production",
+      "store": "apple",
+      "version": {
+        "build": "5",
+        "name": "1.1.1"
+      }
+    },
+    "mode": "transfer",
+    "remote_verified": true,
+    "provenance": {
+      "status": "unverified-import"
+    },
+    "groups": [
+      {
+        "locale": "en-US",
+        "slot": "APP_IPHONE_67",
+        "action": "replace",
+        "readback": {
+          "complete": true,
+          "checksums_match": true,
+          "screenshot_count": 4
+        },
+        "remote_screenshot_ids": [
+          "39400019-6709-81e4-8005-b5a992fa8414",
+          "87000019-6709-81e4-8022-d0c0da21550a",
+          "c8000019-6709-81e4-8018-b2321bbe9eff",
+          "25800019-6709-81e4-803d-7bbfcfdb18ef"
+        ]
+      },
+      {
+        "locale": "ko",
+        "slot": "APP_IPHONE_67",
+        "action": "replace",
+        "readback": {
+          "complete": true,
+          "checksums_match": true,
+          "screenshot_count": 4
+        },
+        "remote_screenshot_ids": [
+          "4f800019-6709-81e4-8000-deda8b653bfb",
+          "3b400019-6709-81e4-8037-59a94a549e18",
+          "31800019-6709-81e4-802c-02cb6b35efee",
+          "73400019-6709-81e4-8034-88f2bf4ef15e"
+        ]
+      }
+    ]
+  },
+  "independent_final_read": {
+    "non_image_state_unchanged": true,
+    "preserved_sets_unchanged": true,
+    "preserved_sets": {
+      "ko": {},
+      "en-US": {}
+    },
+    "review_active": false,
+    "binary": {
+      "app_id": "kr.donminzzi.kkomkkomi",
+      "platform": "ios",
+      "version": {
+        "name": "1.1.1",
+        "build": "5"
+      },
+      "processing_state": "VALID"
+    },
+    "groups": [
+      {
+        "locale": "en-US",
+        "slot": "APP_IPHONE_67",
+        "set_id": "9ae768e4-5c40-4412-9baf-9b8dcabcbd5f",
+        "screenshots": [
+          {
+            "id": "39400019-6709-81e4-8005-b5a992fa8414",
+            "md5": "1ecb1cdf476ae6158579e3e79428345f",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "87000019-6709-81e4-8022-d0c0da21550a",
+            "md5": "dc0f942aa4991b2afe4eb3e8f74863a4",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "c8000019-6709-81e4-8018-b2321bbe9eff",
+            "md5": "c8d00bcede8ab0f49562e96ff0507c18",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "25800019-6709-81e4-803d-7bbfcfdb18ef",
+            "md5": "938e5ae2cd59341a759b206dcd3d9058",
+            "processing_state": "COMPLETE"
+          }
+        ]
+      },
+      {
+        "locale": "ko",
+        "slot": "APP_IPHONE_67",
+        "set_id": "86efd544-249b-4ec2-9cea-b679b7743c5e",
+        "screenshots": [
+          {
+            "id": "4f800019-6709-81e4-8000-deda8b653bfb",
+            "md5": "96d5f862ebd6c4dad1f71a5edf1596ef",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "3b400019-6709-81e4-8037-59a94a549e18",
+            "md5": "95f108b049028de4fcc70ffe5f97eb06",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "31800019-6709-81e4-802c-02cb6b35efee",
+            "md5": "d8f79810ace4ddf3e4af967a33d7dc8f",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "73400019-6709-81e4-8034-88f2bf4ef15e",
+            "md5": "7f0916f743925deed4179f92a001aaeb",
+            "processing_state": "COMPLETE"
+          }
+        ]
+      }
+    ]
+  },
+  "artifact_sha256": {
+    "plan.json": "f8e31e07d3c0a6b72e9e67e05e7f86bdd4037b2c9786d699423c88e07669db4f",
+    "execution-result.json": "0b26d1eba006527724c32012f394ce802525f50ec111c7b9525e2c52ee4aff00",
+    "final-remote.json": "fc1d65b41fd7af43b65258e9571fe4e3cb51649b809285389c179d687000f4c6",
+    "final-comparison.json": "9eb41f046acdf926da12bf1b5864f9d9bb1252476f7ac6495f54117a81f9d0db"
+  },
+  "provider_verification": {
+    "checked_on": "2026-10-16",
+    "source_repository": "https://github.com/fastlane/fastlane",
+    "tag_commits": {
+      "2.240.1": "1b9d750f2605380c3928647d97ddcaae77b06531",
+      "2.241.0": "4f4e8ce5b29272487f9c78a2aa63789cfe2ceb32"
+    },
+    "comparison": "Exact bytes of each pinned upstream file against both tags and the installed live-run gem",
+    "all_listed_files_identical": true,
+    "sha256_by_path": {
+      "spaceship/lib/spaceship/connect_api/models/app_screenshot.rb": "9f65501c55952de5ef19e3e5ee1525d67ef8abb1a65f935a0efe314c333fd862",
+      "spaceship/lib/spaceship/connect_api/models/app_screenshot_set.rb": "6aecd269d8807f01e4edcd9a47c3e372a72b6638ec38642d3f258b71298faf61",
+      "spaceship/lib/spaceship/connect_api/models/app_store_version_localization.rb": "bf1d171ce86d667d2c5c78e282d5e20f8f6fcbd78294e70f91ba8132ee0900e1",
+      "spaceship/lib/spaceship/connect_api/models/app_store_version.rb": "487ab8bc30c21ef8da5ec722d437f6eaf52ff4edbec36ba356cc6c42d37899cc",
+      "spaceship/lib/spaceship/connect_api/models/build.rb": "7b8442ef899b6b45c2b5dc019274736317780bc9b458c2becdb7e7c97796858b",
+      "spaceship/lib/spaceship/connect_api/models/app.rb": "8f7a99446199571f5bd632fc549239af22f7f31ee8a7f56f0e325f4233e55095",
+      "spaceship/lib/spaceship/connect_api/models/review_submission.rb": "9e55310708f9b8cf56cdf5f17a934d1e70dfea65e066568a1e6127c0300a1c1c",
+      "spaceship/lib/spaceship/connect_api/file_uploader.rb": "e2cdc21e988501ec0cb0fcf2ab2c14ad69b39df12df967cb7bd54e202a63b0c2",
+      "spaceship/lib/spaceship/connect_api/api_client.rb": "2c42e182c02c2a5ecb2cad99d5c77d0c5c663bb3b6a595c38718314d3cefeffa",
+      "spaceship/lib/spaceship/connect_api/tunes/tunes.rb": "ee49f5a8b96d1eecd309a8664c0587dff5dcf97ed0a91b557021a7b8f35cb07c",
+      "spaceship/lib/spaceship/connect_api/model.rb": "630dc033667ae3ebfc7a11db0a1430a35e4a93adb2c655476563497ba4a0c47c",
+      "deliver/lib/deliver/app_screenshot_iterator.rb": "a5275a44c0cd11761581e029bd02bd5023f3a24d9347c1adee37e79db5a1a36e"
+    },
+    "installed_version": "2.241.0",
+    "keyword_parameters_by_method": {
+      "Spaceship::ConnectAPI::AppScreenshotSet#upload_screenshot": [
+        "client",
+        "path",
+        "wait_for_processing",
+        "position"
+      ],
+      "Spaceship::ConnectAPI::AppScreenshotSet#reorder_screenshots": [
+        "client",
+        "app_screenshot_ids"
+      ],
+      "Spaceship::ConnectAPI::AppScreenshotSet.get": [
+        "client",
+        "app_screenshot_set_id",
+        "includes"
+      ],
+      "Spaceship::ConnectAPI::AppScreenshot#delete!": [
+        "client",
+        "filter",
+        "includes",
+        "limit",
+        "sort"
+      ],
+      "Spaceship::ConnectAPI::AppStoreVersionLocalization#create_app_screenshot_set": [
+        "client",
+        "attributes"
+      ],
+      "Spaceship::ConnectAPI::AppStoreVersionLocalization#get_app_screenshot_sets": [
+        "client",
+        "filter",
+        "includes",
+        "limit",
+        "sort"
+      ],
+      "Spaceship::ConnectAPI::AppStoreVersion#get_build": [
+        "client",
+        "build_id"
+      ],
+      "Spaceship::ConnectAPI::AppStoreVersion#get_app_store_version_localizations": [
+        "client",
+        "filter",
+        "includes",
+        "limit",
+        "sort"
+      ]
+    },
+    "negative_controls": [
+      "Changed bytes rejected with provider source mismatch",
+      "Wrong keyword rejected"
+    ],
+    "provider_calls": false
+  }
+}
