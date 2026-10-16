@@ -34,7 +34,7 @@ All example app identifiers, versions, images, and account labels must be replac
 
 ## Install a version
 
-Install the `v1.0.0` source checkout inside your app.
+Install the `v1.1.0` source checkout inside your app.
 Use a real directory, not a symlink or a downloaded source archive: the current runtime verifier reads Git identity as well as file contents.
 This is a source distribution, not a Python package or Fastlane plugin.
 
@@ -45,7 +45,7 @@ export APP_STORE_ASSETS_ROOT="$APP_ROOT/tools/app-store-assets"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHON="$(command -v python3)"
 mkdir -p "$APP_ROOT/tools" "$APP_ROOT/scripts" "$APP_ROOT/fastlane" "$APP_ROOT/store-assets"
-git clone --branch v1.0.0 --depth 1 \
+git clone --branch v1.1.0 --depth 1 \
   https://github.com/AndrewDongminYoo/app-store-assets.git \
   "$APP_STORE_ASSETS_ROOT"
 ```
@@ -432,7 +432,7 @@ A bundle is not the immutable asset snapshot used by the live planner and does n
 
 Use `--platform android` to validate phone screenshots against the existing Google slot catalog.
 Omitting the option, or selecting `--platform ios`, preserves the existing iPhone/iPad behavior and bundle format.
-Android local bundles require a checkout containing this extension; the published `v1.0.0` release does not include it.
+Android local bundles are available from `v1.1.0`; the earlier `v1.0.0` release supports only iOS local bundles.
 
 ```bash
 python3 "$APP_STORE_ASSETS_ROOT/assets.py" prepare-screenshots \
