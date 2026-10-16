@@ -245,3 +245,6 @@ One corrective reorder is allowed when only the uploaded group's order differs.
 A failure reports groups that may have changed, including calls whose response timed out; it does not roll back remote writes.
 After a partial failure, obtain a new snapshot, plan and approval record before retrying.
 Provenance remains `unverified-import`.
+
+The separately authorized [kkomkkomi U5 smoke run](docs/notes/2026-10-16-kkomkkomi-u5-smoke.md) completed on 2026-10-16 for `1.1.1 (5)`.
+It replaced four screenshots in each of `en-US/APP_IPHONE_67` and `ko/APP_IPHONE_67`; final live reads verified their ordered checksums and completed processing without a review submission.

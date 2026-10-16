@@ -1,0 +1,136 @@
+{
+  "execution": {
+    "plan_digest": "1b8729c7a297963baf757edd2c13fa5717ed772cb67eaeca61135aab3c841256",
+    "target": {
+      "account": "personal",
+      "app_id": "kr.donminzzi.kkomkkomi",
+      "flavor": "production",
+      "platform": "ios",
+      "stage": "production",
+      "store": "apple",
+      "version": {
+        "build": "5",
+        "name": "1.1.1"
+      }
+    },
+    "mode": "transfer",
+    "remote_verified": true,
+    "provenance": {
+      "status": "unverified-import"
+    },
+    "groups": [
+      {
+        "locale": "en-US",
+        "slot": "APP_IPHONE_67",
+        "action": "replace",
+        "readback": {
+          "complete": true,
+          "checksums_match": true,
+          "screenshot_count": 4
+        },
+        "remote_screenshot_ids": [
+          "39400019-6709-81e4-8005-b5a992fa8414",
+          "87000019-6709-81e4-8022-d0c0da21550a",
+          "c8000019-6709-81e4-8018-b2321bbe9eff",
+          "25800019-6709-81e4-803d-7bbfcfdb18ef"
+        ]
+      },
+      {
+        "locale": "ko",
+        "slot": "APP_IPHONE_67",
+        "action": "replace",
+        "readback": {
+          "complete": true,
+          "checksums_match": true,
+          "screenshot_count": 4
+        },
+        "remote_screenshot_ids": [
+          "4f800019-6709-81e4-8000-deda8b653bfb",
+          "3b400019-6709-81e4-8037-59a94a549e18",
+          "31800019-6709-81e4-802c-02cb6b35efee",
+          "73400019-6709-81e4-8034-88f2bf4ef15e"
+        ]
+      }
+    ]
+  },
+  "independent_final_read": {
+    "non_image_state_unchanged": true,
+    "preserved_sets_unchanged": true,
+    "preserved_sets": {
+      "ko": {},
+      "en-US": {}
+    },
+    "review_active": false,
+    "binary": {
+      "app_id": "kr.donminzzi.kkomkkomi",
+      "platform": "ios",
+      "version": {
+        "name": "1.1.1",
+        "build": "5"
+      },
+      "processing_state": "VALID"
+    },
+    "groups": [
+      {
+        "locale": "en-US",
+        "slot": "APP_IPHONE_67",
+        "set_id": "9ae768e4-5c40-4412-9baf-9b8dcabcbd5f",
+        "screenshots": [
+          {
+            "id": "39400019-6709-81e4-8005-b5a992fa8414",
+            "md5": "1ecb1cdf476ae6158579e3e79428345f",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "87000019-6709-81e4-8022-d0c0da21550a",
+            "md5": "dc0f942aa4991b2afe4eb3e8f74863a4",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "c8000019-6709-81e4-8018-b2321bbe9eff",
+            "md5": "c8d00bcede8ab0f49562e96ff0507c18",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "25800019-6709-81e4-803d-7bbfcfdb18ef",
+            "md5": "938e5ae2cd59341a759b206dcd3d9058",
+            "processing_state": "COMPLETE"
+          }
+        ]
+      },
+      {
+        "locale": "ko",
+        "slot": "APP_IPHONE_67",
+        "set_id": "86efd544-249b-4ec2-9cea-b679b7743c5e",
+        "screenshots": [
+          {
+            "id": "4f800019-6709-81e4-8000-deda8b653bfb",
+            "md5": "96d5f862ebd6c4dad1f71a5edf1596ef",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "3b400019-6709-81e4-8037-59a94a549e18",
+            "md5": "95f108b049028de4fcc70ffe5f97eb06",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "31800019-6709-81e4-802c-02cb6b35efee",
+            "md5": "d8f79810ace4ddf3e4af967a33d7dc8f",
+            "processing_state": "COMPLETE"
+          },
+          {
+            "id": "73400019-6709-81e4-8034-88f2bf4ef15e",
+            "md5": "7f0916f743925deed4179f92a001aaeb",
+            "processing_state": "COMPLETE"
+          }
+        ]
+      }
+    ]
+  },
+  "artifact_sha256": {
+    "plan.json": "f8e31e07d3c0a6b72e9e67e05e7f86bdd4037b2c9786d699423c88e07669db4f",
+    "execution-result.json": "0b26d1eba006527724c32012f394ce802525f50ec111c7b9525e2c52ee4aff00",
+    "final-remote.json": "fc1d65b41fd7af43b65258e9571fe4e3cb51649b809285389c179d687000f4c6",
+    "final-comparison.json": "9eb41f046acdf926da12bf1b5864f9d9bb1252476f7ac6495f54117a81f9d0db"
+  }
+}

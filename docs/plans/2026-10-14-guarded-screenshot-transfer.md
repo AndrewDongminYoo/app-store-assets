@@ -3,7 +3,8 @@
 Operator-approved plan, 2026-10-14, for [issue #28](https://github.com/AndrewDongminYoo/app-store-assets/issues/28).
 [The specification](../specs/2026-10-14-guarded-screenshot-transfer.md) owns the contract as numbered invariants; this plan owns the order of work, the provider details, and the acceptance tests that hold each unit to those invariants.
 As of 2026-10-15, U2 ([PR #38](https://github.com/AndrewDongminYoo/app-store-assets/pull/38)), U3 ([PR #39](https://github.com/AndrewDongminYoo/app-store-assets/pull/39)) and U4 ([PR #42](https://github.com/AndrewDongminYoo/app-store-assets/pull/42)) are merged.
-U5 remains an unperformed, separately authorized smoke run; the implementation sections below describe the shipped entrypoints and helpers.
+U5 completed on 2026-10-16 under separate operator authorization for kkomkkomi `1.1.1 (5)`; [the live evidence](../notes/2026-10-16-kkomkkomi-u5-smoke.md) records the exact plan, readback and limits.
+The implementation sections below describe the shipped entrypoints and helpers.
 
 ## Decisions
 
@@ -229,6 +230,14 @@ Acceptance:
 - The final read passes for every declared group, and the preserved sets are unchanged.
 - No review submission happens.
 - A failed readback is recorded as a failure, with no retry under the same approval record.
+
+### Completion evidence
+
+The [2026-10-16 smoke result](../notes/2026-10-16-kkomkkomi-u5-smoke.md) meets U5's acceptance criteria for the two declared groups.
+An upload-only attempt first refused without writes because the non-empty groups differed.
+After explicit deletion/replacement approval and a new read-only-verified plan, one replacement succeeded and a separate final live read confirmed all eight ordered checksums and processing states.
+The approved build and non-image version state remained unchanged, with no active review.
+There were no additional screenshot sets in either declared locale, so the live preservation check exercised only the empty preserved-set case.
 
 ## Reconciliation 2026-10-14: U0 and the U1 runtime pin
 
