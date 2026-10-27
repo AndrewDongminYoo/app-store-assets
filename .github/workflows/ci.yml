@@ -24,10 +24,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - name: Install ImageMagick 7
         env:
-          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
           /home/linuxbrew/.linuxbrew/bin/brew install imagemagick
           echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"

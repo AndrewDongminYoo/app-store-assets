@@ -3,12 +3,7 @@
   "title": "Content-addressed snapshot v1",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "type",
-    "record",
-    "files"
-  ],
+  "required": ["schema_version", "type", "record", "files"],
   "properties": {
     "schema_version": {
       "const": 1

@@ -16,97 +16,50 @@
       "slots": {
         "APP_IPHONE_65": {
           "sizes": [
-            [
-              1242,
-              2688
-            ],
-            [
-              1284,
-              2778
-            ]
+            [1242, 2688],
+            [1284, 2778]
           ],
           "rotate": true,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 10
         },
         "APP_IPHONE_67": {
           "sizes": [
-            [
-              1260,
-              2736
-            ],
-            [
-              1290,
-              2796
-            ],
-            [
-              1320,
-              2868
-            ]
+            [1260, 2736],
+            [1290, 2796],
+            [1320, 2868]
           ],
           "rotate": true,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 10
         },
         "APP_IPHONE_61": {
           "sizes": [
-            [
-              1179,
-              2556
-            ],
-            [
-              1206,
-              2622
-            ]
+            [1179, 2556],
+            [1206, 2622]
           ],
           "rotate": true,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 10
         },
         "APP_IPAD_PRO_129": {
-          "sizes": [
-            [
-              2048,
-              2732
-            ]
-          ],
+          "sizes": [[2048, 2732]],
           "rotate": true,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 10
         },
         "APP_IPAD_PRO_3GEN_129": {
           "sizes": [
-            [
-              2048,
-              2732
-            ],
-            [
-              2064,
-              2752
-            ]
+            [2048, 2732],
+            [2064, 2752]
           ],
           "rotate": true,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 10
         }
       },
@@ -122,30 +75,12 @@
         "marketing_url"
       ],
       "text_limits": {
-        "name": [
-          30,
-          "characters"
-        ],
-        "subtitle": [
-          30,
-          "characters"
-        ],
-        "description": [
-          4000,
-          "characters"
-        ],
-        "release_notes": [
-          4000,
-          "characters"
-        ],
-        "promotional_text": [
-          170,
-          "characters"
-        ],
-        "keywords": [
-          100,
-          "utf8-bytes"
-        ]
+        "name": [30, "characters"],
+        "subtitle": [30, "characters"],
+        "description": [4000, "characters"],
+        "release_notes": [4000, "characters"],
+        "promotional_text": [170, "characters"],
+        "keywords": [100, "utf8-bytes"]
       },
       "submission_required": {
         "iphone": "APP_IPHONE_61",
@@ -163,55 +98,29 @@
           "max_dimension": 3840,
           "max_aspect": 2,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 8
         },
         "featureGraphic": {
-          "sizes": [
-            [
-              1024,
-              500
-            ]
-          ],
+          "sizes": [[1024, 500]],
           "rotate": false,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 1
         },
         "icon": {
-          "sizes": [
-            [
-              512,
-              512
-            ]
-          ],
+          "sizes": [[512, 512]],
           "rotate": false,
           "alpha": "required-rgba32",
-          "formats": [
-            "PNG"
-          ],
+          "formats": ["PNG"],
           "max_bytes": 1048576,
           "max_count": 1
         },
         "tvBanner": {
-          "sizes": [
-            [
-              1280,
-              720
-            ]
-          ],
+          "sizes": [[1280, 720]],
           "rotate": false,
           "alpha": "forbidden",
-          "formats": [
-            "PNG",
-            "JPEG"
-          ],
+          "formats": ["PNG", "JPEG"],
           "max_count": 1
         }
       },
@@ -222,18 +131,9 @@
         "video"
       ],
       "text_limits": {
-        "title": [
-          30,
-          "characters"
-        ],
-        "short_description": [
-          80,
-          "characters"
-        ],
-        "full_description": [
-          4000,
-          "characters"
-        ]
+        "title": [30, "characters"],
+        "short_description": [80, "characters"],
+        "full_description": [4000, "characters"]
       },
       "submission_required": {
         "minimum_screenshots_across_devices": 2
