@@ -50,10 +50,9 @@ def bind_asset_manifest(root, target, listing, entries, captures):
     if manifest_path.name != "manifest.json":
         raise ValueError("asset snapshot requires manifest.json")
     assets = validate_snapshot(manifest_path.parent, captures)["record"]
-    if (
-        assets.get("type") != "asset-manifest"
-        or assets.get("target") != target_identity(target)
-    ):
+    if assets.get("type") != "asset-manifest" or assets.get(
+        "target"
+    ) != target_identity(target):
         raise ValueError("asset manifest target/version differs")
     prefix = manifest_path.parent.relative_to(root)
     intended = [
@@ -69,7 +68,9 @@ def bind_asset_manifest(root, target, listing, entries, captures):
         sources.append(validate_snapshot(source_path.parent, captures)["record"])
     for key in ("inputs", "source_export"):
         values = [source[key] for source in sources if key in source]
-        if (key in sources[-1]) != (key in assets) or any(value != assets.get(key) for value in values):
+        if (key in sources[-1]) != (key in assets) or any(
+            value != assets.get(key) for value in values
+        ):
             raise ValueError("asset manifest import provenance differs from listing")
     return assets, prefix.as_posix()
 
@@ -93,7 +94,10 @@ def doctor_assets(root, target, captures):
         raise ValueError("asset manifest requires a declared listing")
     identity = target_identity(target)
     listing = resolve_changelogs(
-        root, read_json(safe_path(root, target["metadata"]), captures), identity, captures
+        root,
+        read_json(safe_path(root, target["metadata"]), captures),
+        identity,
+        captures,
     )
     if listing["type"] != "metadata":
         raise ValueError("asset manifest requires a local metadata listing")
@@ -258,7 +262,8 @@ def make_plan(root, profile_path, target_name, operation):
             else:
                 raise ValueError("missing bound input or unsupported input type")
         inventory_paths = [
-            name for name in sorted(requested)
+            name
+            for name in sorted(requested)
             if not any(parent.as_posix() in requested for parent in Path(name).parents)
         ]
     inputs = inventory(root, inventory_paths)
@@ -292,9 +297,11 @@ def make_plan(root, profile_path, target_name, operation):
         "effects": [],
         "planned_changes": ["upload-" + operation],
         "remote_verified": False,
-        "remote_evidence": "supplied-snapshot-freshness-unverified"
-        if remote is not None
-        else "not-supplied",
+        "remote_evidence": (
+            "supplied-snapshot-freshness-unverified"
+            if remote is not None
+            else "not-supplied"
+        ),
         "profile": profile_path,
         "target_name": target_name,
         "mode": profile["mode"],
@@ -307,9 +314,9 @@ def make_plan(root, profile_path, target_name, operation):
         "catalog_sha256": file_digest(CATALOG_FILE),
         "artifact": target.get("artifact") if build else None,
         "build": build,
-        "artifact_verification": "container-and-supplied-record-only"
-        if build
-        else "not-applicable",
+        "artifact_verification": (
+            "container-and-supplied-record-only" if build else "not-applicable"
+        ),
         "listing": listing,
         "assets": assets,
         "remote": remote,
@@ -323,9 +330,11 @@ def make_plan(root, profile_path, target_name, operation):
         payload["planned_changes"].append(
             "shared-listing-across-tracks"
             if operation != "binary"
-            else "append-draft-track-release"
-            if target["release_status"] == "draft"
-            else "replace-track-releases"
+            else (
+                "append-draft-track-release"
+                if target["release_status"] == "draft"
+                else "replace-track-releases"
+            )
         )
     if notes and operation != "images":
         payload["planned_changes"].append("release-notes")

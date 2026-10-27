@@ -148,9 +148,11 @@ class PublicBoundaryTests(unittest.TestCase):
                 selected = (
                     record
                     if position == "record"
-                    else record["assets"][0]
-                    if position == "asset"
-                    else record["provenance"]
+                    else (
+                        record["assets"][0]
+                        if position == "asset"
+                        else record["provenance"]
+                    )
                 )
                 selected["api_token"] = "synthetic-only"
                 path = snapshot_fixture(
@@ -252,9 +254,9 @@ class PublicBoundaryTests(unittest.TestCase):
                         "api_token": "synthetic-only"
                     }
                 else:
-                    profile["runtime"]["url"] = (
-                        "https://example.invalid/runtime?api_key=x"
-                    )
+                    profile["runtime"][
+                        "url"
+                    ] = "https://example.invalid/runtime?api_key=x"
                 write_json(self.root / "store-upload.json", profile)
                 with self.assertRaises(ValueError):
                     module("profiles").load_profile(

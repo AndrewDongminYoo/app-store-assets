@@ -52,8 +52,12 @@ def validate_approval(plan, approval):
         or identity["platform"] != "ios"
     ):
         raise ValueError("transfer requires an Apple iOS images plan")
-    if (payload.get("assets") or {}).get("provenance") != {"status": "unverified-import"}:
-        raise ValueError("transfer requires an immutable unverified-import asset snapshot")
+    if (payload.get("assets") or {}).get("provenance") != {
+        "status": "unverified-import"
+    }:
+        raise ValueError(
+            "transfer requires an immutable unverified-import asset snapshot"
+        )
 
 
 def stage_transfer(root, plan_path, approval_path, staging_dir):
@@ -69,7 +73,9 @@ def stage_transfer(root, plan_path, approval_path, staging_dir):
     if not stage.is_absolute():
         raise ValueError("staging directory must be an absolute path")
     if ".." in stage.parts:
-        raise ValueError("staging directory must use a canonical path without parent traversal")
+        raise ValueError(
+            "staging directory must use a canonical path without parent traversal"
+        )
     runtime = Path(__file__).resolve().parents[1]
     if any(stage.is_relative_to(boundary) for boundary in (root, runtime)):
         raise ValueError("staging directory must be outside the project and runtime")
@@ -107,28 +113,36 @@ def stage_transfer(root, plan_path, approval_path, staging_dir):
                             raise ValueError(f"image SHA-256 differs: {locale}/{slot}")
                         name = f"{len(created):06d}{source.suffix}"
                         fd = os.open(
-                            name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                            0o600, dir_fd=directory,
+                            name,
+                            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                            0o600,
+                            dir_fd=directory,
                         )
                         observed = os.fstat(fd)
                         created.append((name, (observed.st_dev, observed.st_ino), sha))
                         with os.fdopen(fd, "wb") as output:
                             output.write(data)
-                        group["images"].append({
-                            "staged_path": str(stage / name),
-                            "sha256": sha,
-                            "md5": hashlib.md5(data).hexdigest(),
-                        })
+                        group["images"].append(
+                            {
+                                "staged_path": str(stage / name),
+                                "sha256": sha,
+                                "md5": hashlib.md5(data).hexdigest(),
+                            }
+                        )
                     result["groups"].append(group)
             check_captures(captures)
             for name, expected_inode, expected_sha in created:
-                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+                fd = os.open(
+                    name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+                )
                 with os.fdopen(fd, "rb") as staged:
                     observed = os.fstat(staged.fileno())
                     if (
-                        (observed.st_dev, observed.st_ino) != expected_inode
-                        or digest_stream(staged, IMAGE_LIMIT) != expected_sha
-                    ):
+                        observed.st_dev,
+                        observed.st_ino,
+                    ) != expected_inode or digest_stream(
+                        staged, IMAGE_LIMIT
+                    ) != expected_sha:
                         raise ValueError("staged file changed during verification")
             with open_directory(stage) as current:
                 now = os.fstat(current)
@@ -158,7 +172,14 @@ def main(argv=None):
         result = stage_transfer(args.root, args.plan, args.approval, args.staging_dir)
         print(canonical(result).decode("utf-8"))
         return 0
-    except (ValueError, OSError, KeyError, TypeError, RecursionError, subprocess.SubprocessError) as error:
+    except (
+        ValueError,
+        OSError,
+        KeyError,
+        TypeError,
+        RecursionError,
+        subprocess.SubprocessError,
+    ) as error:
         print(str(error), file=sys.stderr)
         return 2
 

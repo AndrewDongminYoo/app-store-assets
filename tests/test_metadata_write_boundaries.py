@@ -77,9 +77,9 @@ class MetadataWriteBoundaryTests(unittest.TestCase):
 
     def test_export_rejects_credential_url_before_new_destination(self):
         record = copy.deepcopy(self.record)
-        record["fields"]["en-US"]["marketing_url"] = (
-            "https://example.invalid/?api_key=synthetic"
-        )
+        record["fields"]["en-US"][
+            "marketing_url"
+        ] = "https://example.invalid/?api_key=synthetic"
         path = snapshot_fixture(self.root / "history", record)
         for dry in (True, False):
             with self.subTest(dry_run=dry), self.assertRaises(ValueError):

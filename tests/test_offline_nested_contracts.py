@@ -37,9 +37,9 @@ class NestedContractTests(unittest.TestCase):
                 elif position == "store":
                     bad["stores"]["apple"]["api_token"] = "synthetic"
                 elif position == "slot":
-                    bad["stores"]["apple"]["slots"]["APP_IPHONE_65"]["api_token"] = (
-                        "synthetic"
-                    )
+                    bad["stores"]["apple"]["slots"]["APP_IPHONE_65"][
+                        "api_token"
+                    ] = "synthetic"
                 elif position == "limits":
                     bad["stores"]["apple"]["text_limits"]["name"] = [True, "characters"]
                 elif position == "minimum":
@@ -123,9 +123,7 @@ class NestedContractTests(unittest.TestCase):
                 args = (
                     (runtime, self.profile["runtime"])
                     if name == "runtime_identity"
-                    else (runtime, "rev-parse", "HEAD")
-                    if name == "git"
-                    else (runtime,)
+                    else (runtime, "rev-parse", "HEAD") if name == "git" else (runtime,)
                 )
                 getattr(module("identity"), name)(*args)
 

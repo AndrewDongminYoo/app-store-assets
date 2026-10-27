@@ -18,10 +18,9 @@ from app_store_assets.contracts import (
     exact_keys,
     image_count,
     image_entry,
-    public_path,
-    target_identity,
 )
 from app_store_assets.contracts import locale as validate_locale
+from app_store_assets.contracts import public_path, target_identity
 from app_store_assets.decoding import IMAGE_LIMIT, image_info
 from app_store_assets.identity import runtime_inventory
 from app_store_assets.metadata import (
@@ -124,9 +123,7 @@ def validate_export(value, target):
             required = {"locale", "file"} | (
                 {"key"}
                 if group == "fields"
-                else {"slot"}
-                if group == "images"
-                else set()
+                else {"slot"} if group == "images" else set()
             )
             exact_keys(
                 entry, required | ({"remote"} if group == "images" else set()), required
@@ -436,9 +433,10 @@ def import_metadata(
                 item
             )
     note_files = {
-        locale + "/changelogs/" + target["version"]["build"] + ".txt": text.encode(
-            "utf-8"
-        )
+        locale
+        + "/changelogs/"
+        + target["version"]["build"]
+        + ".txt": text.encode("utf-8")
         for locale, text in notes.items()
     }
     history_record = validate_public_metadata(
@@ -528,9 +526,11 @@ def import_metadata(
     write_new_file(output, listing_bytes)
     return {
         "listing": output.relative_to(root).as_posix(),
-        "assets": assets_path.relative_to(root).as_posix() + "/manifest.json"
-        if assets_path
-        else None,
+        "assets": (
+            assets_path.relative_to(root).as_posix() + "/manifest.json"
+            if assets_path
+            else None
+        ),
         "snapshot": history.relative_to(root).as_posix(),
         "changelogs": changelogs,
     }

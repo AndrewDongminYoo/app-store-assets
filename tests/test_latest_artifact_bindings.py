@@ -62,9 +62,11 @@ class LatestReviewRegressions(unittest.TestCase):
                                 self.root, "store-upload.json", "production", "binary"
                             )
                 finally:
-                    path.write_bytes(
-                        original
-                    ) if original is not None else path.unlink()
+                    (
+                        path.write_bytes(original)
+                        if original is not None
+                        else path.unlink()
+                    )
 
     def test_artifact_classifies_existing_capture_without_second_copy(self):
         artifacts = module("artifacts")

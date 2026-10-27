@@ -7,10 +7,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from offline_support import fixture, module
+
 from app_store_assets import records
 from app_store_assets_local import staging
 from app_store_assets_local.budgets import bounded_inventory
-from offline_support import fixture, module
 
 ENTRY = "exceeds entry bound"
 DEPTH = "exceeds depth bound"

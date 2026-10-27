@@ -2,9 +2,9 @@
 
 import copy
 import hashlib
-import io
 import importlib
 import importlib.util
+import io
 import json
 import socket
 import subprocess
@@ -23,34 +23,58 @@ from test_offline_boundaries import snapshot_fixture
 class TransferApprovalTests(unittest.TestCase):
     def setUp(self):
         name = "app_store_assets_local.transfer"
-        self.assertIsNotNone(importlib.util.find_spec(name), "U2 transfer verifier is unavailable")
+        self.assertIsNotNone(
+            importlib.util.find_spec(name), "U2 transfer verifier is unavailable"
+        )
         self.transfer = importlib.import_module(name)
         self.root, self.profile = fixture(self)
         self.target = self.profile["targets"]["production"]
         identity = module("profiles").target_identity(self.target)
         self.images = {"en-US/01.png": png(), "ko/01.png": png(2048, 2732)}
         entries = [
-            {"file": name, "sha256": hashlib.sha256(data).hexdigest(),
-             "locale": locale, "slot": slot}
+            {
+                "file": name,
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "locale": locale,
+                "slot": slot,
+            }
             for (name, data), locale, slot in zip(
-                self.images.items(), ("en-US", "ko"),
-                ("APP_IPHONE_65", "APP_IPAD_PRO_3GEN_129")
+                self.images.items(),
+                ("en-US", "ko"),
+                ("APP_IPHONE_65", "APP_IPAD_PRO_3GEN_129"),
+                strict=False,
             )
         ]
-        assets = {"schema_version": 1, "type": "asset-manifest", "target": identity,
-                  "assets": entries, "provenance": {"status": "unverified-import"}}
+        assets = {
+            "schema_version": 1,
+            "type": "asset-manifest",
+            "target": identity,
+            "assets": entries,
+            "provenance": {"status": "unverified-import"},
+        }
         directory = snapshot_fixture(self.root / "state/assets", assets, self.images)
-        self.listing = {"schema_version": 1, "type": "metadata", "target": identity, "images": {}}
+        self.listing = {
+            "schema_version": 1,
+            "type": "metadata",
+            "target": identity,
+            "images": {},
+        }
         self.source_paths = []
         for entry in entries:
             source = directory / entry["file"]
             self.source_paths.append(source)
-            self.listing["images"].setdefault(entry["locale"], {})[entry["slot"]] = [{
-                "file": str(source.relative_to(self.root)), "sha256": entry["sha256"],
-            }]
-        self.target["assets"] = {"manifest": str(directory.relative_to(self.root) / "manifest.json")}
+            self.listing["images"].setdefault(entry["locale"], {})[entry["slot"]] = [
+                {
+                    "file": str(source.relative_to(self.root)),
+                    "sha256": entry["sha256"],
+                }
+            ]
+        self.target["assets"] = {
+            "manifest": str(directory.relative_to(self.root) / "manifest.json")
+        }
         self.target["replacement"] = {
-            "locales": ["en-US", "ko"], "slots": ["APP_IPHONE_65", "APP_IPAD_PRO_3GEN_129"],
+            "locales": ["en-US", "ko"],
+            "slots": ["APP_IPHONE_65", "APP_IPAD_PRO_3GEN_129"],
             "allow_delete": False,
         }
         write_json(self.root / "metadata/listing.json", self.listing)
@@ -58,9 +82,16 @@ class TransferApprovalTests(unittest.TestCase):
         remote = json.loads((self.root / "remote.json").read_text())
         remote["fields"]["ko"] = {"description": "Available locale"}
         write_json(self.root / "remote.json", remote)
-        self.plan = module("planning").make_plan(self.root, "store-upload.json", "production", "images")
-        self.approval = {"schema_version": 1, "type": "transfer-approval",
-                         "plan_digest": self.plan["digest"], "target": identity, "operation": "images"}
+        self.plan = module("planning").make_plan(
+            self.root, "store-upload.json", "production", "images"
+        )
+        self.approval = {
+            "schema_version": 1,
+            "type": "transfer-approval",
+            "plan_digest": self.plan["digest"],
+            "target": identity,
+            "operation": "images",
+        }
         write_json(self.root / "plan.json", self.plan)
         write_json(self.root / "approval.json", self.approval)
         temporary = tempfile.TemporaryDirectory(prefix="transfer-stage-")
@@ -68,9 +99,16 @@ class TransferApprovalTests(unittest.TestCase):
         self.stage = Path(temporary.name).resolve()
 
     def run_stage(self, **changes):
-        options = dict(root=self.root, plan_path="plan.json", approval_path="approval.json", staging_dir=self.stage)
+        options = dict(
+            root=self.root,
+            plan_path="plan.json",
+            approval_path="approval.json",
+            staging_dir=self.stage,
+        )
         options.update(changes)
-        with patch.object(socket.socket, "connect", side_effect=AssertionError("network forbidden")):
+        with patch.object(
+            socket.socket, "connect", side_effect=AssertionError("network forbidden")
+        ):
             return self.transfer.stage_transfer(**options)
 
     def test_invariants_1_and_2_stage_exact_bytes_and_actual_group_pairs(self):
@@ -78,9 +116,11 @@ class TransferApprovalTests(unittest.TestCase):
         result = self.run_stage()
         self.assertEqual(result["plan_digest"], self.plan["digest"])
         self.assertEqual(result["target"], self.approval["target"])
-        self.assertEqual([(g["locale"], g["slot"]) for g in result["groups"]],
-                         [("en-US", "APP_IPHONE_65"), ("ko", "APP_IPAD_PRO_3GEN_129")])
-        for group, data in zip(result["groups"], self.images.values()):
+        self.assertEqual(
+            [(g["locale"], g["slot"]) for g in result["groups"]],
+            [("en-US", "APP_IPHONE_65"), ("ko", "APP_IPAD_PRO_3GEN_129")],
+        )
+        for group, data in zip(result["groups"], self.images.values(), strict=False):
             image = group["images"][0]
             staged = Path(image["staged_path"])
             self.assertEqual(staged.parent, self.stage)
@@ -96,8 +136,23 @@ class TransferApprovalTests(unittest.TestCase):
     def test_invariant_1_rejects_every_approval_mismatch(self):
         cases = [
             (dict(self.approval, plan_digest="0" * 64), "approval plan digest"),
-            (dict(self.approval, target=dict(self.approval["target"], flavor="other")), "approval target"),
-            (dict(self.approval, target={k: v for k, v in self.approval["target"].items() if k != "account_id"}), "approval target"),
+            (
+                dict(
+                    self.approval, target=dict(self.approval["target"], flavor="other")
+                ),
+                "approval target",
+            ),
+            (
+                dict(
+                    self.approval,
+                    target={
+                        k: v
+                        for k, v in self.approval["target"].items()
+                        if k != "account_id"
+                    },
+                ),
+                "approval target",
+            ),
             (dict(self.approval, operation="metadata"), "approval operation"),
             (dict(self.approval, token="must-not-appear"), "approval.*keys"),
             (dict(self.approval, schema_version=True), "approval schema"),
@@ -127,7 +182,10 @@ class TransferApprovalTests(unittest.TestCase):
     def test_invariant_1_rejects_private_and_symlink_approval_paths(self):
         write_json(self.root / "credentials.json", self.approval)
         (self.root / "approval-link.json").symlink_to(self.root / "approval.json")
-        for name, message in (("credentials.json", "credential"), ("approval-link.json", "symlink")):
+        for name, message in (
+            ("credentials.json", "credential"),
+            ("approval-link.json", "symlink"),
+        ):
             with self.subTest(path=name), self.assertRaisesRegex(ValueError, message):
                 self.run_stage(approval_path=name)
         self.assertEqual(list(self.stage.iterdir()), [])
@@ -139,7 +197,9 @@ class TransferApprovalTests(unittest.TestCase):
             verify(*args)
             self.source_paths[-1].write_bytes(b"changed after planning")
 
-        with patch.object(self.transfer, "verify_plan", side_effect=change_after_verification):
+        with patch.object(
+            self.transfer, "verify_plan", side_effect=change_after_verification
+        ):
             with self.assertRaisesRegex(ValueError, "image SHA-256"):
                 self.run_stage()
         self.assertEqual(list(self.stage.iterdir()), [])
@@ -154,11 +214,17 @@ class TransferApprovalTests(unittest.TestCase):
             Path(path).write_bytes(b"replacement bytes")
             return data
 
-        with patch.object(self.transfer, "capture_bytes", side_effect=replace_after_capture):
+        with patch.object(
+            self.transfer, "capture_bytes", side_effect=replace_after_capture
+        ):
             result = self.run_stage()
         self.assertEqual(calls, self.source_paths)
-        for group, expected in zip(result["groups"], self.images.values()):
-            self.assertEqual(Path(group["images"][0]["staged_path"]).read_bytes(), expected)
+        for group, expected in zip(
+            result["groups"], self.images.values(), strict=False
+        ):
+            self.assertEqual(
+                Path(group["images"][0]["staged_path"]).read_bytes(), expected
+            )
 
     def test_staging_rejects_nonprivate_nonempty_or_project_directories(self):
         self.stage.chmod(0o755)
@@ -176,7 +242,9 @@ class TransferApprovalTests(unittest.TestCase):
         self.assertEqual(list(internal.iterdir()), [])
 
     def test_staging_total_bound_cleans_earlier_files(self):
-        with patch.object(self.transfer, "FILE_LIMIT", sum(map(len, self.images.values())) - 1):
+        with patch.object(
+            self.transfer, "FILE_LIMIT", sum(map(len, self.images.values())) - 1
+        ):
             with self.assertRaisesRegex(ValueError, "bound"):
                 self.run_stage()
         self.assertEqual(list(self.stage.iterdir()), [])
@@ -205,7 +273,9 @@ class TransferApprovalTests(unittest.TestCase):
 
         def change_approval(path, **kwargs):
             data = capture(path, **kwargs)
-            write_json(self.root / "approval.json", dict(self.approval, plan_digest="0" * 64))
+            write_json(
+                self.root / "approval.json", dict(self.approval, plan_digest="0" * 64)
+            )
             return data
 
         with patch.object(self.transfer, "capture_bytes", side_effect=change_approval):
@@ -281,10 +351,18 @@ class TransferApprovalTests(unittest.TestCase):
         size = len(self.transfer.canonical(result)) + 1
         output = io.StringIO()
         with patch.object(self.transfer, "TEXT_LIMIT", size), redirect_stdout(output):
-            code = self.transfer.main([
-                "--root", str(self.root), "--plan", "plan.json", "--approval", "approval.json",
-                "--staging-dir", str(self.stage),
-            ])
+            code = self.transfer.main(
+                [
+                    "--root",
+                    str(self.root),
+                    "--plan",
+                    "plan.json",
+                    "--approval",
+                    "approval.json",
+                    "--staging-dir",
+                    str(self.stage),
+                ]
+            )
         self.assertEqual(code, 0)
         self.assertEqual(len(output.getvalue().encode()), size)
         for image in self.stage.iterdir():
@@ -295,10 +373,26 @@ class TransferApprovalTests(unittest.TestCase):
         self.assertEqual(list(self.stage.iterdir()), [])
 
     def test_cli_outputs_one_json_intent(self):
-        result = subprocess.run([
-            sys.executable, "-B", "-m", "app_store_assets_local.transfer", "--root", str(self.root),
-            "--plan", "plan.json", "--approval", "approval.json", "--staging-dir", str(self.stage),
-        ], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "app_store_assets_local.transfer",
+                "--root",
+                str(self.root),
+                "--plan",
+                "plan.json",
+                "--approval",
+                "approval.json",
+                "--staging-dir",
+                str(self.stage),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["plan_digest"], self.plan["digest"])
         self.assertEqual(result.stderr, "")

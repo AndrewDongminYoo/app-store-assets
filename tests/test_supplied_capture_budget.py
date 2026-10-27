@@ -5,9 +5,10 @@ import itertools
 import unittest
 from unittest.mock import patch
 
-import app_store_assets_local.publisher as publisher
 import test_offline_image_binding as images
 from offline_support import fixture, module
+
+import app_store_assets_local.publisher as publisher
 
 
 class SuppliedCaptureBudget(unittest.TestCase):

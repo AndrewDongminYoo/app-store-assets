@@ -39,19 +39,38 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
 
     def run_transfer(self, environment=None, **options):
         env_log = self.tmp / "environment.json"
-        result, calls = self.run_readback(options={
-            "mode": "transfer", "deadline": 0.2, "group_deadline": 0.15, "poll_interval": 0.01, **options,
-        }, extra_env={"FAKE_ASC_ENV_LOG": str(env_log), "SPACESHIP_TIMEOUT": "777",
-                      "SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT": "888", **(environment or {})}, allow_writes=True)
+        result, calls = self.run_readback(
+            options={
+                "mode": "transfer",
+                "deadline": 0.2,
+                "group_deadline": 0.15,
+                "poll_interval": 0.01,
+                **options,
+            },
+            extra_env={
+                "FAKE_ASC_ENV_LOG": str(env_log),
+                "SPACESHIP_TIMEOUT": "777",
+                "SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT": "888",
+                **(environment or {}),
+            },
+            allow_writes=True,
+        )
         if env_log.exists():
-            self.assertEqual(json.loads(env_log.read_text()), {
-                "request": (environment or {}).get("SPACESHIP_TIMEOUT", "777"),
-                "upload": (environment or {}).get("SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT", "888"),
-            })
+            self.assertEqual(
+                json.loads(env_log.read_text()),
+                {
+                    "request": (environment or {}).get("SPACESHIP_TIMEOUT", "777"),
+                    "upload": (environment or {}).get(
+                        "SPACESHIP_SCREENSHOT_UPLOAD_TIMEOUT", "888"
+                    ),
+                },
+            )
         return result, calls
 
     def writes(self, calls):
-        return [c for c in calls if c["call"] in {"create", "upload", "delete", "reorder"}]
+        return [
+            c for c in calls if c["call"] in {"create", "upload", "delete", "reorder"}
+        ]
 
     def success(self, result):
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -59,33 +78,58 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.assertEqual(result.stdout.count("\n"), 1)
         self.assertEqual(report["mode"], "transfer")
         self.assertEqual(report["provenance"], {"status": "unverified-import"})
-        self.assertTrue(all(g["readback"]["complete"] and g["readback"]["checksums_match"] for g in report["groups"]))
+        self.assertTrue(
+            all(
+                g["readback"]["complete"] and g["readback"]["checksums_match"]
+                for g in report["groups"]
+            )
+        )
         self.assert_clean()
         return report
 
     def matching(self, index, state="COMPLETE"):
         locale = ("en-US", "ko")[index]
         self.declared[index]["screenshots"] = [
-            {"id": f"matching-{index}-{i}", "source_file_checksum": hashlib.md5(p.read_bytes()).hexdigest(),
-             "expected_md5": hashlib.md5(p.read_bytes()).hexdigest(),
-             "asset_delivery_state": {"state": state}, "image_asset": {"width": 1242, "height": 2688}}
+            {
+                "id": f"matching-{index}-{i}",
+                "source_file_checksum": hashlib.md5(p.read_bytes()).hexdigest(),
+                "expected_md5": hashlib.md5(p.read_bytes()).hexdigest(),
+                "asset_delivery_state": {"state": state},
+                "image_asset": {"width": 1242, "height": 2688},
+            }
             for i, p in enumerate(p for p in self.sources if p.parent.name == locale)
         ]
 
     def test_invariants_2_4_8_9_uploads_only_staged_declared_pairs(self):
         self.data["print"] = True
-        self.data["create_output"] = {"during": "App.find", "path": str(self.sources[0]), "content": "source replaced"}
+        self.data["create_output"] = {
+            "during": "App.find",
+            "path": str(self.sources[0]),
+            "content": "source replaced",
+        }
         report = self.success((run := self.run_transfer())[0])
         uploads = [c["arguments"] for c in self.writes(run[1])]
         self.assertEqual(len(uploads), 3)
         self.assertEqual({u["set"] for u in uploads}, {g["id"] for g in self.declared})
         self.assertEqual([u["position"] for u in uploads], [0, 1, 0])
         self.assertTrue(all(not u["wait_for_processing"] for u in uploads))
-        self.assertTrue(all(u["path"].startswith(str(self.stage_parent)) for u in uploads))
-        expected = {i["sha256"] for slots in self.plan["payload"]["listing"]["images"].values() for images in slots.values() for i in images}
+        self.assertTrue(
+            all(u["path"].startswith(str(self.stage_parent)) for u in uploads)
+        )
+        expected = {
+            i["sha256"]
+            for slots in self.plan["payload"]["listing"]["images"].values()
+            for images in slots.values()
+            for i in images
+        }
         self.assertEqual({u["sha256"] for u in uploads}, expected)
         self.assertTrue(all(g["action"] == "upload" for g in report["groups"]))
-        self.assertTrue(all(u["request_timeout"] == "60" and u["upload_timeout"] == "1" for u in uploads))
+        self.assertTrue(
+            all(
+                u["request_timeout"] == "60" and u["upload_timeout"] == "1"
+                for u in uploads
+            )
+        )
 
     def test_invariants_2_and_5_all_staged_files_checked_before_any_write(self):
         for during in ("App.find", "poll"):
@@ -105,7 +149,9 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.success(result)
         creates = [c["arguments"] for c in calls if c["call"] == "create"]
         self.assertEqual(len(creates), 1)
-        self.assertEqual((creates[0]["locale"], creates[0]["slot"]), ("en-US", "APP_IPHONE_65"))
+        self.assertEqual(
+            (creates[0]["locale"], creates[0]["slot"]), ("en-US", "APP_IPHONE_65")
+        )
 
     def test_invariants_4_and_5_later_replacement_refuses_before_any_write(self):
         self.matching(1)
@@ -116,7 +162,11 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.assertEqual(self.writes(calls), [])
 
     def test_invariants_4_and_5_invalid_later_resource_id_refuses_before_writes(self):
-        for resource, value in ((self.declared[1], None), (self.declared[1], ""), (self.locals[1], None)):
+        for resource, value in (
+            (self.declared[1], None),
+            (self.declared[1], ""),
+            (self.locals[1], None),
+        ):
             with self.subTest(resource=resource.get("locale", "set"), value=value):
                 original = resource["id"]
                 resource["id"] = value
@@ -135,7 +185,10 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         result, calls = self.run_transfer()
         report = self.success(result)
         self.assertEqual(report["groups"][0]["action"], "replace")
-        self.assertEqual([c["arguments"]["id"] for c in calls if c["call"] == "delete"], ["matching-0-0", "matching-0-1"])
+        self.assertEqual(
+            [c["arguments"]["id"] for c in calls if c["call"] == "delete"],
+            ["matching-0-0", "matching-0-1"],
+        )
 
     def test_invariant_5_matching_failed_group_refuses_before_any_write(self):
         self.matching(1, "FAILED")
@@ -152,7 +205,9 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         report = self.success(result)
         self.assertEqual(report["groups"][1]["action"], "unchanged")
         first_write = next(i for i, c in enumerate(calls) if c in self.writes(calls))
-        self.assertGreaterEqual(len([c for c in calls[:first_write] if c["call"] == "poll"]), 2)
+        self.assertGreaterEqual(
+            len([c for c in calls[:first_write] if c["call"] == "poll"]), 2
+        )
 
     def test_invariant_5_unchanged_processing_timeout_has_no_writes(self):
         self.matching(1, "PROCESSING")
@@ -173,9 +228,13 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
                 report = self.success(result)
                 self.assertEqual(report["groups"][0]["action"], "unchanged")
                 self.assertEqual([c["call"] for c in self.writes(calls)], ["upload"])
-                self.assertEqual(self.writes(calls)[0]["arguments"]["set"], self.declared[1]["id"])
+                self.assertEqual(
+                    self.writes(calls)[0]["arguments"]["set"], self.declared[1]["id"]
+                )
 
-    def test_invariants_5_and_6_existing_checksum_timeout_refuses_before_any_write(self):
+    def test_invariants_5_and_6_existing_checksum_timeout_refuses_before_any_write(
+        self,
+    ):
         self.matching(1)
         self.declared[1]["screenshots"][0]["source_file_checksum"] = ""
         self.refresh(allow_delete=True)
@@ -183,9 +242,13 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.assert_refused(result, "deadline")
         self.assertEqual(self.writes(calls), [])
 
-    def test_invariants_3_and_5_checksum_poll_refuses_changed_ids_before_replacement(self):
+    def test_invariants_3_and_5_checksum_poll_refuses_changed_ids_before_replacement(
+        self,
+    ):
         self.matching(1)
-        self.declared[1]["screenshots"][0].update(source_file_checksum="", expected_md5="0" * 32)
+        self.declared[1]["screenshots"][0].update(
+            source_file_checksum="", expected_md5="0" * 32
+        )
         self.data.update(settle_after=2, poll_change_id=True)
         self.refresh(allow_delete=True)
         result, calls = self.run_transfer()
@@ -210,7 +273,10 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
                 if allow_delete:
                     report = self.success(result)
                     self.assertEqual(report["groups"][1]["action"], "replace")
-                    self.assertEqual([c["arguments"]["id"] for c in calls if c["call"] == "delete"], ["matching-1-0"])
+                    self.assertEqual(
+                        [c["arguments"]["id"] for c in calls if c["call"] == "delete"],
+                        ["matching-1-0"],
+                    )
                 else:
                     self.assert_refused(result, "deadline")
                     self.assertEqual(self.writes(calls), [])
@@ -219,7 +285,9 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.matching(0, "AWAITING_UPLOAD")
         for image in self.declared[0]["screenshots"]:
             image["source_file_checksum"] = ""
-        self.declared[0]["screenshots"][1]["asset_delivery_state"] = {"state": "PROCESSING"}
+        self.declared[0]["screenshots"][1]["asset_delivery_state"] = {
+            "state": "PROCESSING"
+        }
         self.refresh(allow_delete=True)
         result, calls = self.run_transfer()
         self.assert_refused(result, "deadline")
@@ -249,9 +317,12 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.success(self.run_transfer()[0])
 
     def test_invariants_6_and_7_bad_processing_or_checksum_fails(self):
-        for values, error in [({"processing": "FAILED"}, "processing failed"),
-                              ({"processing": "PROCESSING"}, "deadline"),
-                              ({"checksum": ""}, "deadline"), ({"checksum": "0" * 32}, "checksum")]:
+        for values, error in [
+            ({"processing": "FAILED"}, "processing failed"),
+            ({"processing": "PROCESSING"}, "deadline"),
+            ({"checksum": ""}, "deadline"),
+            ({"checksum": "0" * 32}, "checksum"),
+        ]:
             with self.subTest(values=values):
                 self.data.pop("processing", None)
                 self.data.pop("checksum", None)
@@ -270,8 +341,18 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.assert_refused(result, "order")
         self.assertEqual(len([c for c in calls if c["call"] == "reorder"]), 1)
 
-    def test_invariant_7_final_read_detects_preserved_declared_build_and_state_changes(self):
-        for change in ("preserved", "declared", "build", "state", "set_id", "declared_id", "review"):
+    def test_invariant_7_final_read_detects_preserved_declared_build_and_state_changes(
+        self,
+    ):
+        for change in (
+            "preserved",
+            "declared",
+            "build",
+            "state",
+            "set_id",
+            "declared_id",
+            "review",
+        ):
             with self.subTest(change=change):
                 self.data["final_change"] = change
                 result, _ = self.run_transfer()
@@ -293,9 +374,13 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
         self.data["upload_delay"] = 0.07
         result, calls = self.run_transfer(group_deadline=0.1, deadline=0.3)
         self.assert_refused(result, "deadline")
-        self.assertEqual([c["arguments"]["set"] for c in calls if c["call"] == "upload"],
-                         [self.declared[0]["id"], self.declared[0]["id"]])
-        self.assertEqual([c["arguments"]["position"] for c in calls if c["call"] == "uploaded"], [0])
+        self.assertEqual(
+            [c["arguments"]["set"] for c in calls if c["call"] == "upload"],
+            [self.declared[0]["id"], self.declared[0]["id"]],
+        )
+        self.assertEqual(
+            [c["arguments"]["position"] for c in calls if c["call"] == "uploaded"], [0]
+        )
 
     def test_invariant_6_every_write_is_bounded_including_429_retries(self):
         for call in ("upload", "create", "delete", "reorder"):
@@ -305,7 +390,9 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
                 elif call == "delete":
                     self.locals[0]["sets"].insert(0, self.declared[0])
                     self.matching(0)
-                    self.declared[0]["screenshots"][0]["source_file_checksum"] = "0" * 32
+                    self.declared[0]["screenshots"][0]["source_file_checksum"] = (
+                        "0" * 32
+                    )
                 elif call == "reorder":
                     self.declared[0]["screenshots"] = []
                     self.data["reverse"] = True
@@ -325,7 +412,12 @@ class TransferExecutionTests(TransferFixture, unittest.TestCase):
                     self.assertEqual(calls, [])
 
     def test_invariant_7_cleanup_failure_keeps_all_possibly_changed_group_names(self):
-        result, calls = self.run_transfer(environment={"FAKE_TRANSFER_CLEANUP_ERROR": "1"})
+        result, calls = self.run_transfer(
+            environment={"FAKE_TRANSFER_CLEANUP_ERROR": "1"}
+        )
         self.assert_refused(result, "injected cleanup error")
-        self.assertIn("possibly changed: en-US/APP_IPHONE_65, ko/APP_IPAD_PRO_3GEN_129", result.stderr)
+        self.assertIn(
+            "possibly changed: en-US/APP_IPHONE_65, ko/APP_IPAD_PRO_3GEN_129",
+            result.stderr,
+        )
         self.assertEqual(len([c for c in calls if c["call"] == "uploaded"]), 3)

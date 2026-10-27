@@ -266,7 +266,9 @@ def validate_fields(
                     and values["full_description"] != values["description"]
                 ):
                     location = diagnostic_path.format(locale=name, field="description")
-                    raise ValueError(f"{location}: conflicting Google description alias")
+                    raise ValueError(
+                        f"{location}: conflicting Google description alias"
+                    )
                 values["full_description"] = values.pop("description")
     store_rules = rules()["stores"].get(store, {})
     limits = store_rules.get("text_limits", {})
@@ -290,9 +292,7 @@ def validate_fields(
                 and key in ("support_url", "privacy_url")
                 and not value
             ):
-                raise ValueError(
-                    f"{location}: required Apple URL cannot be cleared"
-                )
+                raise ValueError(f"{location}: required Apple URL cannot be cleared")
             if key in limits:
                 limit, unit = limits[key]
                 length = (

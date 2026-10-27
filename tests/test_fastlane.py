@@ -5,99 +5,148 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
 from test_assets import ROOT, png
 
-PERSONAL = Path(os.environ['APP_STORE_ASSETS_PERSONAL_ROOT']) if os.environ.get('APP_STORE_ASSETS_PERSONAL_ROOT') else None
+PERSONAL = (
+    Path(os.environ["APP_STORE_ASSETS_PERSONAL_ROOT"])
+    if os.environ.get("APP_STORE_ASSETS_PERSONAL_ROOT")
+    else None
+)
 
 
-@unittest.skipUnless(PERSONAL, 'set APP_STORE_ASSETS_PERSONAL_ROOT for actual personal Fastfile integration')
+@unittest.skipUnless(
+    PERSONAL,
+    "set APP_STORE_ASSETS_PERSONAL_ROOT for actual personal Fastfile integration",
+)
 class FastlaneIntegrationTests(unittest.TestCase):
-    def lane(self, project, image=None, filename='01.png', extra_images=None, **options):
+    def lane(
+        self, project, image=None, filename="01.png", extra_images=None, **options
+    ):
         with tempfile.TemporaryDirectory() as scratch:
             repo = Path(scratch) / project
-            location = 'fastlane/Fastfile' if project == 'kkomkkomi' else 'ios/fastlane/Fastfile'
+            location = (
+                "fastlane/Fastfile"
+                if project == "kkomkkomi"
+                else "ios/fastlane/Fastfile"
+            )
             fastfile = repo / location
             fastfile.parent.mkdir(parents=True)
             shutil.copyfile(PERSONAL / project / location, fastfile)
-            if project == 'mirae':
-                helper = Path('scripts/store_assets/fastlane.rb')
+            if project == "mirae":
+                helper = Path("scripts/store_assets/fastlane.rb")
                 (repo / helper).parent.mkdir(parents=True)
                 shutil.copyfile(PERSONAL / project / helper, repo / helper)
-            source = repo / ('fastlane/metadata/ios/en-US/images/iphone65' if project == 'mirae' else 'fastlane/screenshots/ios/en-US')
+            source = repo / (
+                "fastlane/metadata/ios/en-US/images/iphone65"
+                if project == "mirae"
+                else "fastlane/screenshots/ios/en-US"
+            )
             source.mkdir(parents=True)
             (source / filename).write_bytes(image if image is not None else png())
             for extra_name, data in (extra_images or {}).items():
                 (source / extra_name).write_bytes(data)
-            (repo / 'pubspec.yaml').write_text('version: 1.0.0+1\n')
-            env = {'PATH': os.environ['PATH'], 'APP_STORE_ASSETS_ROOT': str(ROOT),
-                   'LANG': 'C.UTF-8', 'HOME': str(Path(scratch) / 'empty-home')}
-            result = subprocess.run(['ruby', str(ROOT / 'tests/fastlane_harness.rb'), str(fastfile), json.dumps(options)], capture_output=True, text=True, env=env, timeout=30)
+            (repo / "pubspec.yaml").write_text("version: 1.0.0+1\n")
+            env = {
+                "PATH": os.environ["PATH"],
+                "APP_STORE_ASSETS_ROOT": str(ROOT),
+                "LANG": "C.UTF-8",
+                "HOME": str(Path(scratch) / "empty-home"),
+            }
+            result = subprocess.run(
+                [
+                    "ruby",
+                    str(ROOT / "tests/fastlane_harness.rb"),
+                    str(fastfile),
+                    json.dumps(options),
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=30,
+            )
             try:
                 report = json.loads(result.stdout)
             except json.JSONDecodeError:
-                self.fail(f'{project} Fastlane harness did not emit valid JSON (exit {result.returncode})\n'
-                          f'stdout:\n{result.stdout}\nstderr:\n{result.stderr}')
+                self.fail(
+                    f"{project} Fastlane harness did not emit valid JSON (exit {result.returncode})\n"
+                    f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+                )
             # Read the actual folder passed to the external upload action.
-            if report['uploads'] and report['uploads'][0].get('screenshots_path') and not report['uploads'][0].get('skip_screenshots'):
-                tree = Path(report['uploads'][0]['screenshots_path'])
-                report['uploaded_files'] = [str(p.relative_to(tree)) for p in tree.rglob('*') if p.is_file()]
-                data = (tree / 'en-US/01.png').read_bytes()
-                report['uploaded_png_color'] = data[25] if len(data) > 25 else None
+            if (
+                report["uploads"]
+                and report["uploads"][0].get("screenshots_path")
+                and not report["uploads"][0].get("skip_screenshots")
+            ):
+                tree = Path(report["uploads"][0]["screenshots_path"])
+                report["uploaded_files"] = [
+                    str(p.relative_to(tree)) for p in tree.rglob("*") if p.is_file()
+                ]
+                data = (tree / "en-US/01.png").read_bytes()
+                report["uploaded_png_color"] = data[25] if len(data) > 25 else None
             return result, report
 
     def test_legacy_metadata_lanes_are_blocked_before_replacement(self):
-        for project in ('mirae', 'ttush_push', 'kkomkkomi'):
+        for project in ("mirae", "ttush_push", "kkomkkomi"):
             with self.subTest(project=project):
                 result, report = self.lane(project)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(report['uploads'], [])
-                self.assertRegex(result.stderr, r'reviewed.*plan')
+                self.assertEqual(report["uploads"], [])
+                self.assertRegex(result.stderr, r"reviewed.*plan")
 
     def test_invalid_images_stop_before_upload_or_account_lookup(self):
-        for project in ('mirae', 'ttush_push', 'kkomkkomi'):
+        for project in ("mirae", "ttush_push", "kkomkkomi"):
             with self.subTest(project=project):
                 result, report = self.lane(project, image=png(500, 500))
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(report['uploads'], [])
-                self.assertEqual(report['review_reads'], 0)
-                self.assertRegex(result.stderr, r'reviewed.*plan')
+                self.assertEqual(report["uploads"], [])
+                self.assertEqual(report["review_reads"], 0)
+                self.assertRegex(result.stderr, r"reviewed.*plan")
 
     def test_legacy_alpha_inputs_do_not_authorize_replacement(self):
-        result, report = self.lane('ttush_push', image=png(alpha=True))
+        result, report = self.lane("ttush_push", image=png(alpha=True))
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(report['uploads'], [])
+        self.assertEqual(report["uploads"], [])
 
     def test_reader_incompatible_inputs_stop_before_external_calls(self):
         cases = [
-            ({'extra_images': {'.02.png': png(2048, 2732)}}, 'hidden screenshot'),
-            ({'filename': '01.jpg'}, 'format'),
-            ({'filename': '01.Png'}, 'extension'),
+            ({"extra_images": {".02.png": png(2048, 2732)}}, "hidden screenshot"),
+            ({"filename": "01.jpg"}, "format"),
+            ({"filename": "01.Png"}, "extension"),
         ]
-        for project in ('mirae', 'ttush_push', 'kkomkkomi'):
+        for project in ("mirae", "ttush_push", "kkomkkomi"):
             for inputs, message in cases:
                 with self.subTest(project=project, inputs=message):
                     result, report = self.lane(project, **inputs)
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(report['uploads'], [])
-                    self.assertEqual(report['review_reads'], 0)
-                    self.assertRegex(result.stderr, r'reviewed.*plan')
+                    self.assertEqual(report["uploads"], [])
+                    self.assertEqual(report["review_reads"], 0)
+                    self.assertRegex(result.stderr, r"reviewed.*plan")
 
     def test_legacy_metadata_only_option_does_not_require_a_screenshot_tool(self):
-        for project in ('ttush_push', 'kkomkkomi'):
+        for project in ("ttush_push", "kkomkkomi"):
             with self.subTest(project=project):
-                result, report = self.lane(project, image=b'broken', skip_screenshots=True)
+                result, report = self.lane(
+                    project, image=b"broken", skip_screenshots=True
+                )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue(report['uploads'][0]['skip_screenshots'])
+                self.assertTrue(report["uploads"][0]["skip_screenshots"])
 
     def test_mirae_metadata_only_still_requires_plan_and_digest(self):
-        for options in ({}, {'plan': 'reviewed-plan.json'}, {'expected_digest': 'a' * 64}):
+        for options in (
+            {},
+            {"plan": "reviewed-plan.json"},
+            {"expected_digest": "a" * 64},
+        ):
             with self.subTest(options=options):
-                result, report = self.lane('mirae', image=b'broken', skip_screenshots=True, **options)
+                result, report = self.lane(
+                    "mirae", image=b"broken", skip_screenshots=True, **options
+                )
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(report['uploads'], [])
-                self.assertEqual(report['review_reads'], 0)
-                self.assertIn('Provide plan and expected_digest', result.stderr)
+                self.assertEqual(report["uploads"], [])
+                self.assertEqual(report["review_reads"], 0)
+                self.assertIn("Provide plan and expected_digest", result.stderr)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

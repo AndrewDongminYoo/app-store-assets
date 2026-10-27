@@ -81,10 +81,15 @@ def main(argv=None):
                     elif path.is_dir():
                         requested_directories.add(name)
                     else:
-                        raise ValueError("missing bound input or unsupported input type")
+                        raise ValueError(
+                            "missing bound input or unsupported input type"
+                        )
                 paths = [
-                    name for name in sorted(requested)
-                    if not any(parent.as_posix() in requested for parent in Path(name).parents)
+                    name
+                    for name in sorted(requested)
+                    if not any(
+                        parent.as_posix() in requested for parent in Path(name).parents
+                    )
                 ]
             result = {
                 "runtime": runtime,
@@ -97,7 +102,9 @@ def main(argv=None):
             }
             if not requested_files.issubset(result["inputs"]):
                 raise ValueError("missing bound input after inventory")
-            if any(not safe_path(root, name).is_dir() for name in requested_directories):
+            if any(
+                not safe_path(root, name).is_dir() for name in requested_directories
+            ):
                 raise ValueError("missing bound input directory after inventory")
             for path, sha in captures.items():
                 if result["inputs"].get(path.relative_to(root).as_posix()) != sha:

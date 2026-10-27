@@ -88,9 +88,7 @@ def image_bytes(file, *, expected_sha256=None):
     fmt = (
         "PNG"
         if data.startswith(b"\x89PNG\r\n\x1a\n")
-        else "JPEG"
-        if data.startswith(b"\xff\xd8\xff")
-        else None
+        else "JPEG" if data.startswith(b"\xff\xd8\xff") else None
     )
     if file.suffix not in FORMAT_EXTENSIONS.get(fmt, set()) or file.name.startswith(
         "."
