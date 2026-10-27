@@ -4,14 +4,14 @@ Prepare, validate, review, and transfer App Store screenshots from your app's ex
 The tool preserves source images, binds a reviewable plan to the exact image bytes and app version, and checks App Store Connect after a transfer.
 Your app keeps ownership of capture, composition, authentication, and release lanes.
 
-| Capability | Support |
-| --- | --- |
-| Prepare and validate local iOS and Android phone screenshot bundles | Python CLI; no account or network required |
-| Inspect inputs and plan changes | Offline `doctor`, `plan`, and `diff` commands |
-| Publish immutable local metadata and image snapshots | Python local APIs and import/export commands |
-| Read and transfer App Store screenshots | Ruby bridge using an authenticated Fastlane Spaceship session; Apple iOS only |
-| Capture screens, build/sign apps, upload binaries, or submit review | Outside the transfer adapter's scope |
-| Transfer Google Play images, macOS screenshots, or App Previews | Not implemented |
+| Capability                                                          | Support                                                                       |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Prepare and validate local iOS and Android phone screenshot bundles | Python CLI; no account or network required                                    |
+| Inspect inputs and plan changes                                     | Offline `doctor`, `plan`, and `diff` commands                                 |
+| Publish immutable local metadata and image snapshots                | Python local APIs and import/export commands                                  |
+| Read and transfer App Store screenshots                             | Ruby bridge using an authenticated Fastlane Spaceship session; Apple iOS only |
+| Capture screens, build/sign apps, upload binaries, or submit review | Outside the transfer adapter's scope                                          |
+| Transfer Google Play images, macOS screenshots, or App Previews     | Not implemented                                                               |
 
 ## Requirements
 
@@ -460,17 +460,17 @@ It returns `screenshots_path` without `overwrite_screenshots`.
 
 ## Troubleshooting
 
-| Refusal or symptom | What to check |
-| --- | --- |
-| Runtime commit, URL, inventory, or executing runtime differs | Restore the checkout recorded in the profile; invoke Python from that runtime, keep it clean, and use `-B` or `PYTHONDONTWRITEBYTECODE=1`. Existing caches from another Python version still cause refusal; use a fresh checkout without those caches. |
-| Image format, dimensions, alpha, or slot rejected | Check decoded bytes against the catalog; fix the owning composer or select the correct slot. |
-| Apple version locale unavailable | Create that localization on the selected version, then export a fresh snapshot and plan again. |
-| Version/build differs, active review, or version not editable | Select the intended build and an editable version before taking a new snapshot. |
-| Snapshot output already exists | Choose a new output filename and update the selection's `remote` path; preserve the old observation. |
-| Plan, approval, or live snapshot differs | Rebuild the plan from current inputs and obtain a new approval; do not edit a digest to bypass verification. |
-| A non-empty group differs and deletion is not allowed | Review whether replacement is intended; enable deletion only in a newly reviewed plan. |
-| Target lock exists | Check whether a run is still active; only an operator should remove a confirmed stale lock. |
-| Provider timeout or partially changed groups | Inspect the result, take a new snapshot, and replan; do not assume a timeout means no write occurred. |
+| Refusal or symptom                                            | What to check                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Runtime commit, URL, inventory, or executing runtime differs  | Restore the checkout recorded in the profile; invoke Python from that runtime, keep it clean, and use `-B` or `PYTHONDONTWRITEBYTECODE=1`. Existing caches from another Python version still cause refusal; use a fresh checkout without those caches. |
+| Image format, dimensions, alpha, or slot rejected             | Check decoded bytes against the catalog; fix the owning composer or select the correct slot.                                                                                                                                                           |
+| Apple version locale unavailable                              | Create that localization on the selected version, then export a fresh snapshot and plan again.                                                                                                                                                         |
+| Version/build differs, active review, or version not editable | Select the intended build and an editable version before taking a new snapshot.                                                                                                                                                                        |
+| Snapshot output already exists                                | Choose a new output filename and update the selection's `remote` path; preserve the old observation.                                                                                                                                                   |
+| Plan, approval, or live snapshot differs                      | Rebuild the plan from current inputs and obtain a new approval; do not edit a digest to bypass verification.                                                                                                                                           |
+| A non-empty group differs and deletion is not allowed         | Review whether replacement is intended; enable deletion only in a newly reviewed plan.                                                                                                                                                                 |
+| Target lock exists                                            | Check whether a run is still active; only an operator should remove a confirmed stale lock.                                                                                                                                                            |
+| Provider timeout or partially changed groups                  | Inspect the result, take a new snapshot, and replan; do not assume a timeout means no write occurred.                                                                                                                                                  |
 
 Provider and local-verifier calls default to 120 seconds each.
 Transfer groups default to a 600-second deadline with 5-second polling and a 60-second request timeout.

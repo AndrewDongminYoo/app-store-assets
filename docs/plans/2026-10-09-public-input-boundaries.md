@@ -30,6 +30,7 @@
 
 Files: new evidence/ledger, tests/test_offline_boundaries.py, tests/test_metadata_write_boundaries.py.
 Interfaces: existing e34b334 APIs; fixtures contain only synthetic public values.
+
 - [ ] Freeze old proof hashes and verify current main/A and source/Mirae states.
 - [ ] Write six mechanism and cross-entry regressions before product changes.
 - [ ] Run against e34b334 in temporary copy: expect assertion failures for all six, not harness import errors.
@@ -39,6 +40,7 @@ Interfaces: existing e34b334 APIs; fixtures contain only synthetic public values
 
 Files: records.py, contracts.py, record_types.py, profiles.py, metadata.py, artifacts.py, catalog.py, snapshots.py, planning.py, cli.py; B1-owned tests/spec/matrix.
 Interfaces: open_read(path) yields a regular-file stream opened by no-follow component traversal; capture_bytes(path, limit, captures) returns the exact bounded bytes and binds their SHA; typed validators return validated public records; snapshot reader validates supported nested record.
+
 - [ ] Run Task 1 reader regressions RED, including helper and CLI routes.
 - [ ] Implement descriptor-safe reads/hash/directory inventory and all-component private checks; migrate direct input opens.
 - [ ] Implement full typed schemas and URL policies; validate records before plan/diff serialization.
@@ -50,6 +52,7 @@ Interfaces: open_read(path) yields a regular-file stream opened by no-follow com
 
 Files: metadata_io.py, publisher.py, staging.py, write_cli.py; B2-owned tests/spec.
 Interfaces: B1 public input/record validators; B2 new-only output reservation and typed publisher using safe directory descriptors.
+
 - [ ] Create local B2 branch/worktree from verified B1 commit.
 - [ ] Run import/provenance/dry-run and parent-race copy regressions RED on reference behavior.
 - [ ] Validate mutable export manifest before access and final metadata/asset records before writing.

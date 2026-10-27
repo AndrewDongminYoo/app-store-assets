@@ -25,11 +25,11 @@ The suite copies these files and nothing else from the consumers.
 The temporary personal root held the mirae file written from `git show 620befe4:ios/fastlane/Fastfile` and the ttush_push file fetched for the 2026-10-13 run, and linked kkomkkomi's existing checkout, whose `fastlane/Fastfile` had no local change.
 mirae `main` at `85da2688` has the same `ios/fastlane/Fastfile` as `620befe4`.
 
-| Consumer | Revision | File | SHA-256 |
-| --- | --- | --- | --- |
-| mirae | `620befe4a1aa433f2c323011b76bcb40d5689ebb` | `ios/fastlane/Fastfile` | `c1c7ba02333f6c1b2dfbdb81394abfe4316cfc785d43e4cbd14bc0910cbc9cde` |
+| Consumer   | Revision                                   | File                    | SHA-256                                                            |
+| ---------- | ------------------------------------------ | ----------------------- | ------------------------------------------------------------------ |
+| mirae      | `620befe4a1aa433f2c323011b76bcb40d5689ebb` | `ios/fastlane/Fastfile` | `c1c7ba02333f6c1b2dfbdb81394abfe4316cfc785d43e4cbd14bc0910cbc9cde` |
 | ttush_push | `8b6d15da77bca2f3eed87335c818c1a60b81f7a9` | `ios/fastlane/Fastfile` | `818653cd86c453510a9548a4ceba05cf812e942bf0a9391f59c137ea5dd95919` |
-| kkomkkomi | `630f26df8c9b91a1476b480d92170a6b6049a8ff` | `fastlane/Fastfile` | `4622d2f25f6992cdcf0d073b772e242f9f14da33474f9d8070c0c2e093d986b4` |
+| kkomkkomi  | `630f26df8c9b91a1476b480d92170a6b6049a8ff` | `fastlane/Fastfile`     | `4622d2f25f6992cdcf0d073b772e242f9f14da33474f9d8070c0c2e093d986b4` |
 
 ## Reconciliation
 

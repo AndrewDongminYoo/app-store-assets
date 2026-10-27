@@ -44,16 +44,16 @@ The operator's local review package preserves the original images, contact sheet
 The following ordered MD5 values were read from App Store Connect after execution and matched the prepared image bytes.
 All screenshot IDs also matched the adapter's successful result.
 
-| Locale | Position | Screenshot ID | Provider MD5 | State |
-| --- | --- | --- | --- | --- |
-| en-US | 1 | `39400019-6709-81e4-8005-b5a992fa8414` | `1ecb1cdf476ae6158579e3e79428345f` | COMPLETE |
-| en-US | 2 | `87000019-6709-81e4-8022-d0c0da21550a` | `dc0f942aa4991b2afe4eb3e8f74863a4` | COMPLETE |
-| en-US | 3 | `c8000019-6709-81e4-8018-b2321bbe9eff` | `c8d00bcede8ab0f49562e96ff0507c18` | COMPLETE |
-| en-US | 4 | `25800019-6709-81e4-803d-7bbfcfdb18ef` | `938e5ae2cd59341a759b206dcd3d9058` | COMPLETE |
-| ko | 1 | `4f800019-6709-81e4-8000-deda8b653bfb` | `96d5f862ebd6c4dad1f71a5edf1596ef` | COMPLETE |
-| ko | 2 | `3b400019-6709-81e4-8037-59a94a549e18` | `95f108b049028de4fcc70ffe5f97eb06` | COMPLETE |
-| ko | 3 | `31800019-6709-81e4-802c-02cb6b35efee` | `d8f79810ace4ddf3e4af967a33d7dc8f` | COMPLETE |
-| ko | 4 | `73400019-6709-81e4-8034-88f2bf4ef15e` | `7f0916f743925deed4179f92a001aaeb` | COMPLETE |
+| Locale | Position | Screenshot ID                          | Provider MD5                       | State    |
+| ------ | -------- | -------------------------------------- | ---------------------------------- | -------- |
+| en-US  | 1        | `39400019-6709-81e4-8005-b5a992fa8414` | `1ecb1cdf476ae6158579e3e79428345f` | COMPLETE |
+| en-US  | 2        | `87000019-6709-81e4-8022-d0c0da21550a` | `dc0f942aa4991b2afe4eb3e8f74863a4` | COMPLETE |
+| en-US  | 3        | `c8000019-6709-81e4-8018-b2321bbe9eff` | `c8d00bcede8ab0f49562e96ff0507c18` | COMPLETE |
+| en-US  | 4        | `25800019-6709-81e4-803d-7bbfcfdb18ef` | `938e5ae2cd59341a759b206dcd3d9058` | COMPLETE |
+| ko     | 1        | `4f800019-6709-81e4-8000-deda8b653bfb` | `96d5f862ebd6c4dad1f71a5edf1596ef` | COMPLETE |
+| ko     | 2        | `3b400019-6709-81e4-8037-59a94a549e18` | `95f108b049028de4fcc70ffe5f97eb06` | COMPLETE |
+| ko     | 3        | `31800019-6709-81e4-802c-02cb6b35efee` | `d8f79810ace4ddf3e4af967a33d7dc8f` | COMPLETE |
+| ko     | 4        | `73400019-6709-81e4-8034-88f2bf4ef15e` | `7f0916f743925deed4179f92a001aaeb` | COMPLETE |
 
 The two declared locales had no additional screenshot sets before or after the run: the preserved sets were `{"en-US": {}, "ko": {}}`.
 This smoke run verifies that empty preserved-set case; it does not demonstrate preservation of a non-empty additional set on the live service.

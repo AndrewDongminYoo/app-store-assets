@@ -10,14 +10,14 @@ Before the pull request opened, the build workflow's review fixed three issues a
 
 ## Rounds
 
-| n | Reviewed head | Findings | Disposition | Fix commit | Files changed by the fix |
-| --- | --- | --- | --- | --- | --- |
-| 1 | `9c673fc` | 6 (Codex 2, CodeRabbit 4) | 6 fixed | `ecd2bd0` | spec, plan |
-| 2 | `ecd2bd0` | 1 (Codex) | fixed | `f8cac0d` | spec, plan |
-| 3 | `f8cac0d` | 2 (Codex) | fixed | `7e22296` | spec, plan |
-| 4 | `7e22296` | 1 (Codex) | fixed | `6a97dc3` | spec, plan |
-| 5 | `6a97dc3` | 3 (Codex 1, CodeRabbit 2) | 1 rejected, 2 fixed | `063b4e3` | spec, plan |
-| 6 | `063b4e3` | 1 (Codex) | fixed, not pushed | `da98e91` | spec |
+| n   | Reviewed head | Findings                  | Disposition         | Fix commit | Files changed by the fix |
+| --- | ------------- | ------------------------- | ------------------- | ---------- | ------------------------ |
+| 1   | `9c673fc`     | 6 (Codex 2, CodeRabbit 4) | 6 fixed             | `ecd2bd0`  | spec, plan               |
+| 2   | `ecd2bd0`     | 1 (Codex)                 | fixed               | `f8cac0d`  | spec, plan               |
+| 3   | `f8cac0d`     | 2 (Codex)                 | fixed               | `7e22296`  | spec, plan               |
+| 4   | `7e22296`     | 1 (Codex)                 | fixed               | `6a97dc3`  | spec, plan               |
+| 5   | `6a97dc3`     | 3 (Codex 1, CodeRabbit 2) | 1 rejected, 2 fixed | `063b4e3`  | spec, plan               |
+| 6   | `063b4e3`     | 1 (Codex)                 | fixed, not pushed   | `da98e91`  | spec                     |
 
 "spec" is `docs/specs/2026-10-14-guarded-screenshot-transfer.md` and "plan" is `docs/plans/2026-10-14-guarded-screenshot-transfer.md`.
 Round one went through the `pr-round` workflow; rounds two to six were handled inline.
