@@ -1,0 +1,29 @@
+version: 0.1
+cli:
+  version: 1.25.0
+plugins:
+  sources:
+    - id: trunk
+      ref: v1.11.0
+      uri: https://github.com/trunk-io/plugins
+runtimes:
+  enabled:
+    - python@3.14.4
+lint:
+  enabled:
+    - actionlint@1.7.12
+    - git-diff-check
+    - pinact@4.1.1!:
+        commands: [lint, upgrade]
+    - trufflehog@3.99.7
+  definitions:
+    - name: trufflehog
+      commands:
+        - name: lint
+          # Do not validate candidate secrets against external accounts.
+          run: trufflehog filesystem --json --fail --no-verification --no-update ${target}
+actions:
+  disabled:
+    - trunk-fmt-pre-commit
+  enabled:
+    - trunk-check-pre-push

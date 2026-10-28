@@ -1,0 +1,4 @@
+# Local Trunk state and downloaded tools.
+*
+!.gitignore
+!trunk.yaml
