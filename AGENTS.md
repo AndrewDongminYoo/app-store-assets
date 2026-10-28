@@ -12,6 +12,8 @@ Select Python 3.14 and Ruby 3.4 for these local checks; the README records the o
 Run `ruby -c` on both `lib/fastlane_assets.rb` and `lib/fastlane_transfer.rb`, plus changed Ruby harnesses.
 Run `trunk check --no-fix` for changed files and `trunk check --all --no-fix --jobs=2` for a full baseline.
 Trunk checks workflows, action pins, Git diff whitespace, and candidate secrets without verifying them against external accounts.
+The local TruffleHog filesystem reader retains decoded findings at file level when their raw value has no literal source location, and fails invalid JSONL conversion.
+Run `python3 -m unittest discover -s .trunk/configs/tests -v` for its command-line regression tests; CI runs these separately from the CLI suite.
 Keep automatic formatting disabled until a scoped preview is accepted.
 Run `APP_STORE_ASSETS_PERSONAL_ROOT=/absolute/personal/root python3 -m unittest discover -s tests -v` for integration verification.
 The integration suite is opt-in and uses personal checkouts of `mirae`, `ttush_push`, and `kkomkkomi` from that root.

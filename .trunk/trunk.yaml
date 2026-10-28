@@ -22,6 +22,11 @@ lint:
         - name: lint
           # Do not validate candidate secrets against external accounts.
           run: trufflehog filesystem --json --fail --no-verification --no-update ${target}
+          direct_configs:
+            - .trunk/configs/trufflehog_to_sarif.py
+          parser:
+            runtime: python
+            run: python3 .trunk/configs/trufflehog_to_sarif.py
 actions:
   disabled:
     - trunk-fmt-pre-commit

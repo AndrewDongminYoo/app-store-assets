@@ -11,10 +11,13 @@ Preserve product APIs, screenshot bytes, consumer pins, and store-operation boun
 Pin Trunk CLI `1.25.0`, its official plugin `v1.11.0`, and the managed Python runtime `3.14.4`.
 Enable `actionlint@1.7.12` for the existing GitHub Actions workflow, `pinact@4.1.1!` with `lint` and `upgrade`, `git-diff-check`, and `trufflehog@3.99.7`.
 TruffleHog scans candidate secrets with `--no-verification --no-update`; it does not authenticate with providers or validate credentials.
+Use the local filesystem JSONL reader through `direct_configs` and the parser override while retaining inherited SARIF output, success codes `0` and `183`, and the `copy_targets` sandbox.
+The reader retains file-level findings when decoded raw values have no literal source location and fails invalid conversion without emitting clean SARIF.
+Its messages omit raw and redacted credential values.
 A single `trufflehog/URI` suppression on the synthetic `example.com` credential fixture preserves its validator regression test.
 Do not add dependency manifests, style formatters, image optimizers, or broad ignores.
 Enable the non-mutating pre-push check and keep automatic pre-commit formatting disabled pending an accepted scoped preview.
-The current CI remains responsible for its existing tests and Ruby syntax checks; this change does not add a hosted Trunk job.
+The current CI remains responsible for its existing tests and Ruby syntax checks and runs the reader's Python command-line tests separately; this change does not add a hosted Trunk job.
 
 ## Acceptance
 
@@ -24,6 +27,8 @@ The current CI remains responsible for its existing tests and Ruby syntax checks
 - `trunk check --all --no-fix --jobs=2` passes with the configured tools.
 - The resolved configuration retains both Pinact commands and the offline secret scanner command.
 - A failing scan on the synthetic URI fixture proves that the scanner executes before its exact-rule suppression is accepted.
+- `python3 -m unittest discover -s .trunk/configs/tests -v` passes all 10 reader boundary tests.
+- Encoded and literal synthetic credential controls fail the configured offline gate, while a clean control passes.
 - Directly affected README and AGENTS gate claims match the implemented configuration and existing CI.
 
 ## Limits and Publication

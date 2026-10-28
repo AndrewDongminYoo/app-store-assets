@@ -5,14 +5,16 @@
 1. Inspect repository instructions, workflow, runtime requirements, and supplied Oracle precedent → verify with direct file reads and Git identity.
 2. Add only the supported Trunk baseline and documented local-state ignores → verify with `trunk config print` and `trunk actions list`.
 3. Prove offline secret detection and suppress only the synthetic URI fixture rule → verify the initial failing scan, unchanged fixture bytes, and the subsequent clean scan.
-4. Run offline regression and syntax checks → verify with the commands below and captured exit statuses.
-5. Reconcile gate claims and review the scoped diff → verify with the full no-fix scan and `git diff --check`.
-6. Return evidence to the root agent for local review, commits, and publication approval.
+4. Add the local filesystem reader and its CI test step → verify with 10 Python boundary tests and offline encoded, literal, and clean controls.
+5. Run offline regression and syntax checks → verify with the commands below and captured exit statuses.
+6. Reconcile gate claims and review the scoped diff → verify with the full no-fix scan and `git diff --check`.
+7. Return evidence to the root agent for local review, commits, and publication approval.
 
 ## Declared Gates
 
 ```bash
 magick -version
+python3 -m unittest discover -s .trunk/configs/tests -v
 env -u APP_STORE_ASSETS_PERSONAL_ROOT -u APP_STORE_ASSETS_FASTLANE_SOURCE PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ruby -c lib/fastlane_assets.rb
 ruby -c lib/fastlane_transfer.rb
@@ -30,3 +32,6 @@ Store command evidence outside this checkout at `/Volumes/dongminyu/Development/
 Do not run real Fastlane, authentication, consumer integration, screenshot regeneration, or store operations.
 A skipped optional integration check remains unverified.
 Automatic pre-commit formatting remains disabled.
+The reader follow-up uses bounded Python and one-file offline controls before the full baseline is rerun.
+The root coordinator may retain the earlier full regression and Ruby syntax evidence when product files and runtime inputs remain unchanged.
+The reader follow-up requires its own command-line tests and full no-fix Trunk baseline before publication.
