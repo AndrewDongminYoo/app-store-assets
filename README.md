@@ -483,7 +483,8 @@ Staging is private and cleaned by the adapter; detected replacements are retaine
 Run the default checks from this repository:
 
 ```bash
-python3 -m unittest discover -s tests -v
+magick -version
+env -u APP_STORE_ASSETS_PERSONAL_ROOT -u APP_STORE_ASSETS_FASTLANE_SOURCE python3 -m unittest discover -s tests -v
 ruby -c lib/fastlane_assets.rb
 ruby -c lib/fastlane_transfer.rb
 ```
@@ -491,6 +492,17 @@ ruby -c lib/fastlane_transfer.rb
 The default suite uses temporary fixtures and fake store providers, with no live upload or credentials.
 Consumer-specific and Fastlane-reader integration checks are opt-in; a skipped check is not live store verification.
 Their setup is in [the integration tests](tests/test_fastlane.py) and [reader tests](tests/test_fastlane_reader.py).
+
+For offline development checks, use Python 3.14 and Ruby 3.4; the affected compatibility controls passed with Python 3.14.9 and Ruby 3.4.1.
+Python 3.15.1 currently fails the source-derived bytecode-cache regression.
+Ruby 4.0.9 cannot load `logger` with `--disable-gems` in the local fake-provider harness.
+Consumer Fastlane compatibility requires its own integration verification.
+
+The pinned Trunk configuration checks GitHub Actions syntax and pins, Git diff whitespace, and candidate secrets.
+Secret scanning uses `--no-verification`: findings require review and do not prove that credentials are valid.
+Run `trunk check --no-fix` for changed files or `trunk check --all --no-fix --jobs=2` for the full baseline.
+The pre-push action runs the changed-file gate; automatic pre-commit formatting is disabled.
+These local checks complement the declared CI tests; CI does not currently run Trunk.
 
 The offline CLI also supports `plan --operation metadata`, `plan --operation binary`, and `diff --before PATH --after PATH`; these remain read-only and do not implement those transfers.
 `python3 -B -m app_store_assets_local --help` describes local metadata import/export; it makes no store call.
