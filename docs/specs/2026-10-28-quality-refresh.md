@@ -27,7 +27,7 @@ The current CI remains responsible for its existing tests and Ruby syntax checks
 - `trunk check --all --no-fix --jobs=2` passes with the configured tools.
 - The resolved configuration retains both Pinact commands and the offline secret scanner command.
 - A failing scan on the synthetic URI fixture proves that the scanner executes before its exact-rule suppression is accepted.
-- `python3 -m unittest discover -s .trunk/configs/tests -v` passes all 10 reader boundary tests.
+- `python3 -m unittest discover -s .trunk/configs/tests -v` passes all 13 reader boundary tests.
 - Encoded and literal synthetic credential controls fail the configured offline gate, while a clean control passes.
 - Directly affected README and AGENTS gate claims match the implemented configuration and existing CI.
 
@@ -44,3 +44,10 @@ Push and PR creation require explicit repository-specific approval.
 
 The supplied Oracle retrieval at source commit `9670d54de3076c5239713f54900c7a855bd18478` has unverified freshness.
 `wiki/concepts/trunk-quality-gate-agent.md` and `wiki/concepts/authoring-time-vs-runtime-verification.md` confirm the chosen direction of preserving repository boundaries and distinguishing static checks from integration proof.
+
+## Source-Line Repair
+
+The current reader uses the independently reviewed `localizations` repair at `b47e59659a886ad673a2f4a9bed6a3bf4986615b`.
+It prefers a positive integer filesystem line only when the literal starts on that line.
+Invalid hints retain literal-search and file-level fallbacks.
+Thirteen CLI tests cover repeated and out-of-order findings in addition to the existing lossless conversion cases.
