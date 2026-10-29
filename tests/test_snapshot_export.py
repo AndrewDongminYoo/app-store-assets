@@ -852,6 +852,7 @@ class SnapshotExportTests(unittest.TestCase):
 
     def test_record_that_fails_the_validators_is_never_written(self):
         cases = [
+            # trunk-ignore(trufflehog/URI): Synthetic credentials exercise URI rejection; example.com is not an account.
             ("marketing_url", "https://user:secret@example.com/"),
             ("promotional_text", "x" * 171),
             ("support_url", "https://example.com/?token=abc"),

@@ -1,0 +1,8 @@
+# Local Trunk state and downloaded tools.
+*
+!.gitignore
+!trunk.yaml
+!/configs/
+!/configs/trufflehog_to_sarif.py
+!/configs/tests/
+!/configs/tests/test_trufflehog_to_sarif.py
