@@ -361,7 +361,7 @@ It does not upload images or certify their processing completion.
 Before transfer, establish an exclusive writer window: no other machine, lane, or App Store Connect user may change screenshots, the selected build, or the version/review state until final verification finishes.
 The local lock only prevents concurrent runs on the same machine.
 
-Run the following only after the operator has authorized the reviewed transfer:
+Run the following only after you have authorized the reviewed transfer:
 
 ```bash
 (cd "$APP_ROOT" && bundle exec fastlane ios store_assets_transfer)
