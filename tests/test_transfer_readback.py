@@ -323,7 +323,7 @@ class TransferReadbackTests(TransferFixture, unittest.TestCase):
     def test_invariant_1_existing_lock_refuses_before_local_verification_and_provider_reads(
         self,
     ):
-        self.lock.write_text("operator-owned existing lock")
+        self.lock.write_text("user-owned existing lock")
         self.addCleanup(self.lock.unlink)
         write_json(self.root / "approval.json", {})
         result, calls = self.run_readback()
@@ -331,7 +331,7 @@ class TransferReadbackTests(TransferFixture, unittest.TestCase):
         self.assertIn("lock exists", result.stderr)
         self.assertEqual(result.stdout, "")
         self.assertEqual(calls, [])
-        self.assertEqual(self.lock.read_text(), "operator-owned existing lock")
+        self.assertEqual(self.lock.read_text(), "user-owned existing lock")
         self.assertEqual(list(self.stage_parent.iterdir()), [])
 
     def test_invariant_1_target_and_approval_mismatches_never_reach_spaceship(self):

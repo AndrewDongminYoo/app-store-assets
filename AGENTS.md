@@ -3,7 +3,7 @@
 Personal projects only.
 Keep project capture and composition in their owning repositories.
 This repository owns bundle preparation, shared validation, and future Asset Library transport.
-Do not upload, delete placements, or submit assets for review without explicit operator authorization for the target app and operation.
+Do not upload, delete placements, or submit assets for review without explicit user authorization for the target app and operation.
 
 ## Checks
 

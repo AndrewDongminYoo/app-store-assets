@@ -1,6 +1,6 @@
 # Additional input-binding repair round
 
-Operator approval Sentinel_1cca874ce95c819187caf17269400f3d (2026-10-09
+Approval Sentinel_1cca874ce95c819187caf17269400f3d (2026-10-09
 22:45:52 UTC) authorizes continuing existing PR6/B1 and PR7/B2. Preserve
 PR3/5, historical budgets and all earlier proof. Add at most two changed
 published candidate heads per PR and a shared 120-minute deadline. The second

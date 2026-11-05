@@ -1,6 +1,6 @@
 # Import resource and preservation guards
 
-The operator approved this bounded follow-up on 2026-10-11 together with the reader parser resource repairs.
+This bounded follow-up was approved on 2026-10-11 together with the reader parser resource repairs.
 The existing stacked PRs remain the delivery units: reader resources in PR 6, local import preservation and budgets in PR 7.
 
 Import rejects either-direction overlap between its editing source and listing or history root before any publication.

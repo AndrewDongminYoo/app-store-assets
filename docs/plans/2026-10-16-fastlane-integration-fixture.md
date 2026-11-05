@@ -1,7 +1,7 @@
 # Fastlane Integration Fixture Plan
 
 The [specification](../specs/2026-10-16-fastlane-integration-fixture.md) defines the correction for [issue #41](https://github.com/AndrewDongminYoo/app-store-assets/issues/41).
-The operator requested this PR loop after the current Mirae contract conflict was reported.
+This PR loop was requested after the current Mirae contract conflict was reported.
 
 ## Owned Paths
 
@@ -20,7 +20,7 @@ The operator requested this PR loop after the current Mirae contract conflict wa
    Use a fresh temporary source copy if local interpreter caches conflict with runtime-integrity tests.
    Compare the tested files with the candidate before committing.
 4. Perform one structured local review of the complete diff and the unchanged Ruby harness boundaries.
-   Commit the fixture correction as one concern, publish the PR, and observe current-head CI and hosted reviews until the operator merge boundary.
+   Commit the fixture correction as one concern, publish the PR, and observe current-head CI and hosted reviews until the user merge boundary.
 
 ## Verification
 

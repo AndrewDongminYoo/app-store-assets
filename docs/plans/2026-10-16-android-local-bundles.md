@@ -2,7 +2,7 @@
 
 ## Scope and approval
 
-The operator requested Android local bundle preparation and validation after the Prism Defense iOS integration.
+Android local bundle preparation and validation were requested after the Prism Defense iOS integration.
 Extend the shared standalone CLI and the existing Prism Defense adapter in their current primary checkouts.
 Preserve source images, previous bundles, existing iOS behavior, and app-owned capture and composition.
 Google Play reads, uploads, release operations, native builds, tablet assets, icons and feature graphics are outside this change.

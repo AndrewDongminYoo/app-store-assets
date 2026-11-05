@@ -33,4 +33,4 @@ are not passes. The PR3-only CodeRabbit waiver does not transfer here.
 
 Existing six Ttush safety failure reports remain visible; native/signing/actual
 transfer and live remote freshness remain unverified. No visual product output
-is changed by this parser/validation fix; operator visual judgment is inapplicable.
+is changed by this parser/validation fix; user visual judgment is inapplicable.

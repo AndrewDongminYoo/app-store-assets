@@ -205,7 +205,7 @@ module AppStoreAssets
     begin
       lock = File.open(path, File::WRONLY | File::CREAT | File::EXCL | File::NOFOLLOW, 0o600)
     rescue Errno::EEXIST
-      raise transfer_error("target lock exists; only the operator may remove an existing lock")
+      raise transfer_error("target lock exists; only the user may remove an existing lock")
     end
     owned = lock.stat
     same_lock = lambda do
@@ -235,7 +235,7 @@ module AppStoreAssets
   end
 
   # Isolate the entry before deletion, then check what the rename actually moved.
-  # A raced replacement is retained for operator recovery, never restored over a new lock.
+  # A raced replacement is retained for user recovery, never restored over a new lock.
   def self.transfer_remove_owned(path, owned, label)
     same_entry = lambda do |candidate|
       observed = File.lstat(candidate)

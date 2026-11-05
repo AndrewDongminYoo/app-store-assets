@@ -1,6 +1,6 @@
 # Approved local review completion
 
-The operator approved the remaining five P2s and four minor comments at 07:56 UTC on 2026-10-11.
+The remaining five P2s and four minor comments were approved at 07:56 UTC on 2026-10-11.
 The reader findings are delivered in PR6 and received through a normal stack merge.
 This scope retains the prior stop history and the reader continuation's candidate/deadline limits.
 

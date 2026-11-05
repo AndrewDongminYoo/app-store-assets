@@ -1,9 +1,9 @@
 # Guarded Screenshot Transfer Plan
 
-Operator-approved plan, 2026-10-14, for [issue #28](https://github.com/AndrewDongminYoo/app-store-assets/issues/28).
+Approved plan, 2026-10-14, for [issue #28](https://github.com/AndrewDongminYoo/app-store-assets/issues/28).
 [The specification](../specs/2026-10-14-guarded-screenshot-transfer.md) owns the contract as numbered invariants; this plan owns the order of work, the provider details, and the acceptance tests that hold each unit to those invariants.
 As of 2026-10-15, U2 ([PR #38](https://github.com/AndrewDongminYoo/app-store-assets/pull/38)), U3 ([PR #39](https://github.com/AndrewDongminYoo/app-store-assets/pull/39)) and U4 ([PR #42](https://github.com/AndrewDongminYoo/app-store-assets/pull/42)) are merged.
-U5 completed on 2026-10-16 under separate operator authorization for kkomkkomi `1.1.1 (5)`; [the live evidence](../notes/2026-10-16-kkomkkomi-u5-smoke.md) records the exact plan, readback and limits.
+U5 completed on 2026-10-16 under separate authorization for kkomkkomi `1.1.1 (5)`; [the live evidence](../notes/2026-10-16-kkomkkomi-u5-smoke.md) records the exact plan, readback and limits.
 The implementation sections below describe the shipped entrypoints and helpers.
 
 ## Decisions
@@ -11,7 +11,7 @@ The implementation sections below describe the shipped entrypoints and helpers.
 - Scope of the first pull request: the specification and this plan only, with no code.
 - Transport: Ruby Spaceship from fastlane 2.240.1 as the implementation baseline, with 2.241.0 verified for U5, with entrypoints in `lib/fastlane_assets.rb` and transfer helpers in `lib/fastlane_transfer.rb`.
 - First target app for offline-profile v1: kkomkkomi.
-- After the first draft (pull request #30) reached the review-loop round limit, the specification keeps only invariants, and step order and provider behavior live here as tests (operator decision, 2026-10-14).
+- After the first draft (pull request #30) reached the review-loop round limit, the specification keeps only invariants, and step order and provider behavior live here as tests (decided 2026-10-14).
 
 ## Rules for every unit
 
@@ -102,7 +102,7 @@ Repository: app-store-assets (Ruby entrypoint, tests driven from Python as `test
 Work:
 
 1. Add the new Ruby entrypoint with a read-only mode that loads Spaceship only inside it.
-2. Take an exclusive lock file for the target's bundle identifier under the system temporary directory, with create-new semantics, before the U2 command and the live read, and remove it when the run ends; an existing lock refuses the run and is removed only by the operator.
+2. Take an exclusive lock file for the target's bundle identifier under the system temporary directory, with create-new semantics, before the U2 command and the live read, and remove it when the run ends; an existing lock refuses the run and is removed only by the user.
    The entrypoint creates the U2 staging directory and passes it to the U2 command, so it owns that directory and removes it in an `ensure` on every exit.
 3. Call the U2 command through `Open3`, then read the app, the version, its attached build, the localizations of the declared locales, the declared groups and the preserved sets.
 4. Compare with the supplied snapshot (invariant 3), defining and testing the mapping of each snapshot field to a Spaceship value, and print the per-group result as JSON with provider output on standard error (invariant 8).
@@ -148,7 +148,7 @@ Create-new semantics refuse an existing lock before U2 or any provider read.
 The run checks the lock inode before and after live reads.
 Cleanup checks the owned inode, atomically renames the entry into a private sibling quarantine, and checks the captured inode before deletion.
 A mismatch before rename leaves the entry in place; a mismatch after rename retains the quarantine and reports its path without restoring it over a possible new lock.
-The private U2 staging directory is removed on success or failure unless external replacement prevents safe cleanup, in which case the run refuses and retains the entry for operator recovery.
+The private U2 staging directory is removed on success or failure unless external replacement prevents safe cleanup, in which case the run refuses and retains the entry for user recovery.
 This handles ordinary pathname replacement races; deliberate same-UID mutation inside the private quarantine after its final check is outside the guarantee because portable Ruby/POSIX has no atomic compare-and-unlink operation.
 
 Each provider call and each Python verification has its own positive deadline capped at 600 seconds.
@@ -217,12 +217,12 @@ Repository: app-store-assets, run against the U1 kkomkkomi profile.
 Preconditions:
 
 - U1 to U4 have merged.
-- The operator meets the [specification's operator preconditions](../specs/2026-10-14-guarded-screenshot-transfer.md#operator-preconditions) for kkomkkomi: authorization for each operation of this run, and the writer window for the whole run.
+- The user meets the [specification's user preconditions](../specs/2026-10-14-guarded-screenshot-transfer.md#user-preconditions) for kkomkkomi: authorization for each operation of this run, and the writer window for the whole run.
 - A fresh supplied snapshot, a fresh plan and a new approval record exist for this run.
 
 Work:
 
-1. Run the read-only mode and review its result with the operator.
+1. Run the read-only mode and review its result with the user.
 2. Run the transfer once.
 3. Record the plan digest, the per-group readback and the remote screenshot IDs in a dated note under `docs/notes/`.
 
@@ -242,19 +242,19 @@ There were no additional screenshot sets in either declared locale, so the live 
 
 ## Reconciliation 2026-10-14: U0 and the U1 runtime pin
 
-The operator made two decisions on 2026-10-14 while starting U1.
+Two decisions were made on 2026-10-14 while starting U1.
 This section adds to the steps above and does not rewrite them; for U0, the shipped `AppStoreAssets.export_snapshot` in `lib/fastlane_assets.rb` and its tests in `tests/test_snapshot_export.py` are the authority.
 
 1. The U1 profile's runtime is a git submodule of app-store-assets inside kkomkkomi, pinned at a `main` commit.
    The current profile contract already requires `runtime.path` to be a clean checkout inside the consumer root, so the contract does not change.
 2. A U1 plan needs a supplied `metadata-snapshot` of the real App Store Connect state, but no command produced one and U1 makes no store call.
-   A new unit, U0, adds a read-only snapshot export, and the operator runs it once for kkomkkomi with their own login before U1 finishes.
+   A new unit, U0, adds a read-only snapshot export, and the user runs it once for kkomkkomi with their own login before U1 finishes.
 
 Effect on the units:
 
 - U0 precedes U1.
 - U0 lives in app-store-assets: `AppStoreAssets.export_snapshot(target:, output:)` makes read calls only and writes one `metadata-snapshot` record that passes `validate_public_metadata` and `remote_observation`.
-  Its tests use the fake App Store Connect, as the rules for every unit require; only the operator's own run reaches App Store Connect, with read calls only.
+  Its tests use the fake App Store Connect, as the rules for every unit require; only the user's own run reaches App Store Connect, with read calls only.
 - U1 now also adds the app-store-assets submodule to kkomkkomi and a kkomkkomi lane that authenticates Spaceship and calls `export_snapshot`.
 
 Lines above that these decisions supersede:
@@ -262,4 +262,4 @@ Lines above that these decisions supersede:
 - U1 step 3, "Keep the existing file and lanes unchanged", and the U1 acceptance line "no change to the kkomkkomi Fastfile lanes": the new export lane is now in U1's scope, and the existing lanes stay unchanged.
   The plan could not supply a snapshot without a lane that reads App Store Connect, and the lane belongs to the consumer, not to app-store-assets.
 - The rule "No unit except U5 makes a real App Store Connect call" and the U1 acceptance line "No store call, no credential": they still hold for every pull request's code and verification, which use the fake.
-  The operator's one read-only export run for kkomkkomi is the single exception; it happens outside any pull request's verification, with the operator's own login, and makes no remote write.
+  The user's one read-only export run for kkomkkomi is the single exception; it happens outside any pull request's verification, with the user's own login, and makes no remote write.
