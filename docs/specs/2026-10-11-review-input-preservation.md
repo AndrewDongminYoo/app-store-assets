@@ -1,7 +1,7 @@
 # Approved review repair boundary
 
-The operator resumed PR6/PR7 review and approved finding verification and
-repairs at 2026-10-11 02:34 UTC through the parent delegation. Preserve all
+PR6/PR7 review was resumed, and finding verification and
+repairs were approved at 2026-10-11 02:34 UTC through the parent delegation. Preserve all
 historical budgets, source PR3/PR5, existing user work and earlier evidence.
 This task prepares one changed published head per PR on their existing branches,
 using an ordinary merge of B1 into B2 rather than rewriting either history.

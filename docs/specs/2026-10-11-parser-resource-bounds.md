@@ -1,6 +1,6 @@
 # Parser resource bounds
 
-The operator approved this bounded follow-up on 2026-10-11 after the first review repair exposed parser resource gaps.
+This bounded follow-up was approved on 2026-10-11 after the first review repair exposed parser resource gaps.
 It preserves the existing offline reader and transport HOLD.
 
 Before `ZipFile` constructs a directory, the captured APK/AAB/IPA stream must declare at most 100,000 entries and at most 64 MiB of central-directory bytes.

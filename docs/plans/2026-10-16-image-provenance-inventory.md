@@ -1,7 +1,7 @@
 # Image Provenance Inventory Plan
 
 The [specification](../specs/2026-10-16-image-provenance-inventory.md) defines the bounded correction for [issue #40](https://github.com/AndrewDongminYoo/app-store-assets/issues/40).
-The operator requested the next issue's PR loop on 2026-10-16.
+The next issue's PR loop was requested on 2026-10-16.
 
 ## Owned Paths
 

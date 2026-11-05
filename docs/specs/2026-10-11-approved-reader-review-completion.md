@@ -1,6 +1,6 @@
 # Approved reader review completion
 
-The operator approved the remaining findings at 07:56 UTC on 2026-10-11.
+The remaining findings were approved at 07:56 UTC on 2026-10-11.
 This continues the earlier bounded history; it does not claim a clean review or reset the prior stopped rounds.
 
 Apple field-level and selected release notes must agree for overlapping locales; equal values and non-overlapping locales remain accepted, including empty notes.

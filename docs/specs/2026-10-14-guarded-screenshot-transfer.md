@@ -3,7 +3,7 @@
 ## Status and scope
 
 This specification answers [issue #28](https://github.com/AndrewDongminYoo/app-store-assets/issues/28), "Build the guarded screenshot transfer adapter".
-The operator approved the plan on 2026-10-14 and, after the first draft (pull request #30) did not converge in review, chose to narrow it to the invariants below.
+The plan was approved on 2026-10-14 and, after the first draft (pull request #30) did not converge in review, it was narrowed to the invariants below.
 It adds no code; [the implementation plan](../plans/2026-10-14-guarded-screenshot-transfer.md) splits the code into separate pull requests and owns step order, provider details and their tests.
 
 The adapter transfers App Store screenshots for one Apple iOS target from a reviewed offline plan.
@@ -32,7 +32,7 @@ The legacy `AppStoreAssets.prepare` stays blocked, and loading `lib/fastlane_ass
 ## Approval record
 
 The offline plan type does not change: `type: offline-release-plan`, `executable: false` and `effects: []`, which `verify_plan` keeps enforcing.
-Execution authority comes from a separate record that the operator writes for one plan:
+Execution authority comes from a separate record that the user writes for one plan:
 
 ```json
 {
@@ -73,7 +73,7 @@ Each invariant holds for every run, whatever the step order or provider behavior
    Reaching a bound is a failure.
 7. **Readback or fail.** A run succeeds only when a final live read shows, for every declared group, the planned count, the planned MD5 values in order, and every screenshot processed; the approved build still attached and the version still editable with no active review; and every preserved set unchanged.
    Anything else exits non-zero and names the groups that changed before the failure.
-   This read sees only changes that remain visible, so a concurrent edit that the transfer overwrote cannot be detected; the [writer window](#operator-preconditions) prevents it instead.
+   This read sees only changes that remain visible, so a concurrent edit that the transfer overwrote cannot be detected; the [writer window](#user-preconditions) prevents it instead.
 8. **One result.** Standard output carries exactly one JSON result (plan digest, target, and per declared group its action, readback result and remote screenshot IDs); provider output goes to standard error.
    The run writes no file into the repository and no record of its own.
 9. **No promotion, no secrets.** Asset provenance stays `unverified-import`, and no key material, key path or token appears in the repository, a plan, an approval record or a result.
@@ -81,11 +81,11 @@ Each invariant holds for every run, whatever the step order or provider behavior
 An approval record therefore authorizes a run only while the live remote state still equals the supplied snapshot: once a run has written, invariant 3 refuses the same record again, and a run that wrote nothing can be repeated.
 A retry after a partial failure needs a new snapshot, a new plan and a new approval record.
 
-## Operator preconditions
+## User preconditions
 
-The adapter cannot verify these; like the authorization that `AGENTS.md` requires, the operator declares them before a run.
+The adapter cannot verify these; like the authorization that `AGENTS.md` requires, the user declares them before a run.
 
-- **Authorization**: explicit operator authorization for the target app and for each operation of the run (upload, and deletion when `allow_delete` is `true`).
+- **Authorization**: explicit user authorization for the target app and for each operation of the run (upload, and deletion when `allow_delete` is `true`).
 - **Writer window**: App Store Connect has no conditional write, so from the live read to the final read no other tool, machine, fastlane or deliver run, or App Store Connect web edit may write the target's screenshots, select a different build, or change the version's state, including a review submission.
 - **Credentials**: Spaceship's existing login, an App Store Connect API key or an Apple ID session, configured outside this repository; the personal lanes use an Apple ID (`FASTLANE_APPLE_ID`) today.
 

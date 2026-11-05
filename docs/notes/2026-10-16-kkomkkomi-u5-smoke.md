@@ -18,26 +18,26 @@ The machine-readable [execution and final-read evidence](2026-10-16-kkomkkomi-u5
 - Asset snapshot ID: `8238321d2e504886df09520f4ccadfcc0e40464e83758b4e63e6eae25edb3091`.
 - Asset provenance: `unverified-import`, unchanged after transfer.
 
-The binary prerequisite was completed under separate operator authorization: build 5 was uploaded, processed, and attached before screenshot execution.
+The binary prerequisite was completed under separate authorization: build 5 was uploaded, processed, and attached before screenshot execution.
 The screenshot run did not upload a binary, change metadata text, submit review, or publish a release.
 The target remained editable with no active review in the final live read.
 
 ## Approval and observed refusal
 
-The operator first approved a read-only-verified, upload-only run with `allow_delete: false` and an exclusive writer window.
+A read-only-verified, upload-only run with `allow_delete: false` and an exclusive writer window was approved first.
 That run refused before any remote write because the populated English group differed from the planned checksums.
 A separate read confirmed the full supplied snapshot was unchanged.
 In both locales the first two image checksums differed, while the last two matched.
 
 The existing adapter replaces an entire declared group, so four differing positions required replacement of eight placements.
-The operator reviewed the proposed images and new plan, then explicitly authorized one replacement and the exclusive writer window.
+The proposed images and new plan were reviewed, then one replacement and the exclusive writer window were explicitly authorized.
 The new plan set `allow_delete: true` for the two declared groups only.
 Its read-only check passed before execution; the old approval was not reused.
 Each approved plan was executed once, and the replacement succeeded on its only attempt.
 
 The eight prepared image bytes, dimensions, and order matched the earlier intended asset manifest.
 No native-capture claim was added.
-The operator's local review package preserves the original images, contact sheet, both plans, approval records, and full live observations; the committed JSON contains the public result without credentials or local credential paths.
+The local review package preserves the original images, contact sheet, both plans, approval records, and full live observations; the committed JSON contains the public result without credentials or local credential paths.
 
 ## Final provider readback
 
@@ -94,4 +94,4 @@ The source and signature checks support the version-specific contract; the separ
 
 This completes [U5 of the approved plan](../plans/2026-10-14-guarded-screenshot-transfer.md#u5-authorized-smoke-upload-for-kkomkkomi) under the [transfer specification](../specs/2026-10-14-guarded-screenshot-transfer.md).
 It is evidence for this target, plan, provider version, and observation time, not permission to repeat the run or transfer another app's assets.
-Any future operation needs its own current snapshot, matching plan/approval, and operator-authorized scope.
+Any future operation needs its own current snapshot, matching plan/approval, and user-authorized scope.

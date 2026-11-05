@@ -54,7 +54,7 @@ prior snapshots and existing editing trees are preserved. Import is not a
 cross-directory transaction, store upload, or release executor. Provider/account,
 native/signing and remote freshness remain unverified.
 
-The later operator approval Sentinel_a0e39ae66ff0819180b97a50701f69aa authorizes
+The later approval Sentinel_a0e39ae66ff0819180b97a50701f69aa authorizes
 normal PR publication with Draft conversion for blockers/nonconvergence. B2
 targets B1's branch for a writer-only stacked diff. Before merge it must update
 onto main after B1 merges and repeat exact-head gates. The current CI runs

@@ -1,8 +1,8 @@
 # Final review round for PR6 and PR7
 
-The operator approved one more bounded repair round on 2026-10-12 for the findings left open at PR6 `cc2e2d1` and PR7 `e6c6e1e`.
+One more bounded repair round was approved on 2026-10-12 for the findings left open at PR6 `cc2e2d1` and PR7 `e6c6e1e`.
 It supersedes the earlier "no further repair" boundary in both PR bodies; merge still requires clean exact-head gates.
-The same day the operator approved a second round, for the gaps found at PR6 `9ab4763` and PR7 `22e8207`, and set a total image entry limit; the sections below state the contract after both rounds.
+The same day a second round was approved, for the gaps found at PR6 `9ab4763` and PR7 `22e8207`, and a total image entry limit was set; the sections below state the contract after both rounds.
 
 ## Image platform contract
 

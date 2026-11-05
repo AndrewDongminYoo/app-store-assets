@@ -322,7 +322,7 @@ Review the target, version/build, ordered image paths and hashes, locales/slots,
 The plan contains no visual preview.
 Open each file named by `payload.listing.images` in an image viewer, resolving its `file` path relative to the app root, and check the screenshots in array order.
 These are the immutable snapshot images that will be transferred; check their content and localization, and confirm which remote sets must remain untouched.
-An operator must authorize the target and upload operation, plus deletion if `allow_delete` is true.
+A user must authorize the target and upload operation, plus deletion if `allow_delete` is true.
 After that review, create `store-assets/approval.json` by copying the plan's `digest` and complete `payload.target` into this structure:
 
 ```json
@@ -469,7 +469,7 @@ It returns `screenshots_path` without `overwrite_screenshots`.
 | Snapshot output already exists                                | Choose a new output filename and update the selection's `remote` path; preserve the old observation.                                                                                                                                                   |
 | Plan, approval, or live snapshot differs                      | Rebuild the plan from current inputs and obtain a new approval; do not edit a digest to bypass verification.                                                                                                                                           |
 | A non-empty group differs and deletion is not allowed         | Review whether replacement is intended; enable deletion only in a newly reviewed plan.                                                                                                                                                                 |
-| Target lock exists                                            | Check whether a run is still active; only an operator should remove a confirmed stale lock.                                                                                                                                                            |
+| Target lock exists                                            | Check whether a run is still active; only a user should remove a confirmed stale lock.                                                                                                                                                                 |
 | Provider timeout or partially changed groups                  | Inspect the result, take a new snapshot, and replan; do not assume a timeout means no write occurred.                                                                                                                                                  |
 
 Provider and local-verifier calls default to 120 seconds each.

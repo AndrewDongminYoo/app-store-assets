@@ -38,5 +38,5 @@ The other option is to reopen #30 with `da98e91` pushed and merge it as it is, t
 
 ## Outcome
 
-The operator chose the narrower specification on 2026-10-14.
+The narrower specification was chosen on 2026-10-14.
 It replaces the first draft on the branch `feat/guarded-transfer-invariants`, and the round-six fix (`da98e91`) is carried as invariant 2 there.
